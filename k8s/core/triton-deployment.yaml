@@ -36,11 +36,11 @@ spec:
           mountPath: /models
         resources:
           requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
             memory: "2Gi"
             cpu: "1000m"
-          limits:
-            memory: "4Gi"
-            cpu: "2000m"
         livenessProbe:
           httpGet:
             path: /v2/health/live
@@ -55,8 +55,9 @@ spec:
           periodSeconds: 5
       volumes:
       - name: model-repository
-        configMap:
-          name: triton-models-config
+        hostPath:
+          path: /home/noda.linux/ImageFlowCanvas/models
+          type: Directory
 ---
 apiVersion: v1
 kind: Service
@@ -77,43 +78,3 @@ spec:
     port: 8002
     targetPort: 8002
   type: ClusterIP
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: triton-models-config
-  namespace: default
-data:
-  config.pbtxt: |
-    name: "yolo"
-    platform: "onnxruntime_onnx"
-    max_batch_size: 8
-    input [
-      {
-        name: "images"
-        data_type: TYPE_FP32
-        dims: [ 3, 640, 640 ]
-      }
-    ]
-    output [
-      {
-        name: "output0"
-        data_type: TYPE_FP32
-        dims: [ 84, 8400 ]
-      }
-    ]
-
-    instance_group [
-      {
-        count: 1
-        kind: KIND_CPU
-      }
-    ]
-
-    optimization {
-      execution_accelerators {
-        cpu_execution_accelerator : [ {
-          name : "openvino"
-        } ]
-      }
-    }

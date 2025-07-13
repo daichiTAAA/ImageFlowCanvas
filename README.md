@@ -51,6 +51,39 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 ##### Linux環境（直接インストール）
 1. **K3sとArgo Workflowsのセットアップ**
    ```bash
+   # アーキテクチャの確認
+   uname -m  # x86_64 または aarch64 を確認
+   
+   # miniforgeのインストール（アーキテクチャ別）
+   # x86_64の場合
+   curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
+   
+   # ARM64 (aarch64) の場合
+   # curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -o miniforge.sh
+   
+   # または自動判定でインストール
+   # ARCH=$(uname -m)
+   # if [ "$ARCH" = "x86_64" ]; then
+   #   curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
+   # elif [ "$ARCH" = "aarch64" ]; then
+   #   curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -o miniforge.sh
+   # else
+   #   echo "Unsupported architecture: $ARCH"
+   #   exit 1
+   # fi
+   
+   bash miniforge.sh -b -p $HOME/miniforge
+   echo "export PATH=\$HOME/miniforge/bin:\$PATH" >> ~/.bashrc
+   source ~/.bashrc
+   conda init
+
+   # conda環境の作成
+   conda create -n imageflowcanvas python=3.12 -y
+   conda activate imageflowcanvas
+
+   # YOLO11 ONNXモデルをセットアップ（自動ダウンロード・変換）
+   pip install requests ultralytics
+   python scripts/setup-yolo11.py
    sudo ./scripts/setup-k3s.sh
    ```
 
