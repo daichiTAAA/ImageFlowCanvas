@@ -278,9 +278,10 @@ class ArgoWorkflowService:
             ])
         elif component_type in ["ai_detection", "object_detection"]:
             base_params.extend([
-                {"name": "model", "value": component_params.get("model", "yolo11n.pt")},
+                {"name": "model", "value": component_params.get("model", "yolo")},
                 {"name": "confidence", "value": str(component_params.get("confidence", 0.5))},
-                {"name": "draw-boxes", "value": str(component_params.get("draw_boxes", True)).lower()}
+                {"name": "draw-boxes", "value": str(component_params.get("draw_boxes", True)).lower()},
+                {"name": "triton-url", "value": "triton-service.default.svc.cluster.local:8000"}
             ])
         elif component_type == "filter":
             base_params.extend([

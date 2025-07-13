@@ -153,7 +153,7 @@ spec:
       - name: input-path
       - name: output-path
       - name: model
-        value: "yolo11n.pt"
+        value: "yolo"
       - name: confidence
         value: "0.5"
       - name: draw-boxes
@@ -166,8 +166,8 @@ spec:
       - name: result
         path: /tmp/result.json
     container:
-      image: imageflow/object-detection-app:latest
-      command: [python, detect.py]
+      image: imageflow/triton-detection-app:latest
+      command: [python, triton_detect.py]
       args:
         - "--input-bucket=imageflow-files"
         - "--input-path={{inputs.parameters.input-path}}"
@@ -176,6 +176,7 @@ spec:
         - "--model={{inputs.parameters.model}}"
         - "--confidence={{inputs.parameters.confidence}}"
         - "--draw-boxes={{inputs.parameters.draw-boxes}}"
+        - "--triton-url=triton-service.default.svc.cluster.local:8000"
       env:
         - name: MINIO_ENDPOINT
           value: "minio-service.default.svc.cluster.local:9000"
@@ -183,6 +184,8 @@ spec:
           value: "minioadmin"
         - name: MINIO_SECRET_KEY
           value: "minioadmin"
+        - name: TRITON_URL
+          value: "triton-service.default.svc.cluster.local:8000"
 
   - name: filter-component
     inputs:

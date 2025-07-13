@@ -41,15 +41,15 @@ class ComponentService:
             },
             "ai_detection": {
                 "name": "AI Object Detection",
-                "description": "Detect objects in images using AI models",
+                "description": "Detect objects in images using AI models via Triton Inference Server",
                 "parameters": {
-                    "model": {"type": "string", "default": "yolo11n.pt", "options": ["yolo11n.pt", "yolo11s.pt", "yolo11m.pt"]},
+                    "model": {"type": "string", "default": "yolo", "options": ["yolo"]},
                     "confidence": {"type": "float", "default": 0.5, "min": 0.0, "max": 1.0},
                     "draw_boxes": {"type": "boolean", "default": True}
                 },
                 "input_formats": ["jpg", "jpeg", "png"],
                 "output_formats": ["jpg", "json"],
-                "container_image": "imageflow/object-detection-app:latest"
+                "container_image": "imageflow/triton-detection-app:latest"
             },
             "filter": {
                 "name": "Image Filter",
@@ -121,6 +121,7 @@ class ComponentService:
             metadata = await self.get_component_metadata(component_type)
             if metadata:
                 components.append({
+                    "id": component_type,
                     "type": component_type,
                     **metadata
                 })

@@ -40,19 +40,11 @@ export const PipelineBuilder: React.FC = () => {
   const [pipelineDescription, setPipelineDescription] = useState('')
   const [components, setComponents] = useState<PipelineComponent[]>([])
   const [selectedComponent, setSelectedComponent] = useState<ComponentDefinition | null>(null)
+  const [selectedComponentInstanceId, setSelectedComponentInstanceId] = useState<string | null>(null)
   const [parameterDialogOpen, setParameterDialogOpen] = useState(false)
   const [drawerOpen] = useState(true)
   const [testDialogOpen, setTestDialogOpen] = useState(false)
   const [testFiles, setTestFiles] = useState<File[]>([])
-
-  // 認証の読み込み中は何も表示しない
-  if (loading) {
-    return <div>読み込み中...</div>
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
 
   const { data: availableComponents = [], error, isLoading } = useQuery<ComponentDefinition[], Error>(
     'components', 
@@ -65,6 +57,15 @@ export const PipelineBuilder: React.FC = () => {
       }
     }
   )
+
+  // 認証の読み込み中は何も表示しない
+  if (loading) {
+    return <div>読み込み中...</div>
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
 
   // デバッグ用ログ
   console.log('Auth state:', { isAuthenticated, loading })
@@ -92,20 +93,22 @@ export const PipelineBuilder: React.FC = () => {
     const componentDef = availableComponents.find(c => c.id === component.component_type)
     if (componentDef) {
       setSelectedComponent(componentDef)
+      setSelectedComponentInstanceId(component.id)
       setParameterDialogOpen(true)
     }
   }
 
   const handleParameterSave = (parameters: Record<string, any>) => {
-    if (!selectedComponent) return
+    if (!selectedComponent || !selectedComponentInstanceId) return
     
     setComponents(prev => prev.map(comp => 
-      comp.component_type === selectedComponent.id && comp.id === selectedComponent.id
+      comp.id === selectedComponentInstanceId
         ? { ...comp, parameters }
         : comp
     ))
     setParameterDialogOpen(false)
     setSelectedComponent(null)
+    setSelectedComponentInstanceId(null)
   }
 
   const handleSavePipeline = async () => {
