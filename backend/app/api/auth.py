@@ -19,19 +19,29 @@ class LoginResponse(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 async def login(login_request: LoginRequest):
     """ログイン"""
-    user = await auth_service.authenticate_user(login_request.username, login_request.password)
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+    try:
+        user = await auth_service.authenticate_user(login_request.username, login_request.password)
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        access_token = auth_service.create_access_token(data={"sub": user["username"]})
+        return LoginResponse(
+            access_token=access_token,
+            expires_in=3600  # 1時間
         )
-    
-    access_token = auth_service.create_access_token(data={"sub": user["username"]})
-    return LoginResponse(
-        access_token=access_token,
-        expires_in=3600  # 1時間
-    )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        print(f"Unexpected error during login: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during authentication"
+        )
 
 @router.post("/logout")
 async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):

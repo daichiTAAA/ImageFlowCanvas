@@ -33,31 +33,47 @@ class AuthService:
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """パスワードを検証"""
-        return pwd_context.verify(plain_password, hashed_password)
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except Exception as e:
+            print(f"Error verifying password: {e}")
+            return False
     
     def get_password_hash(self, password: str) -> str:
         """パスワードをハッシュ化"""
-        return pwd_context.hash(password)
+        try:
+            return pwd_context.hash(password)
+        except Exception as e:
+            print(f"Error hashing password: {e}")
+            raise
     
     async def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """ユーザー認証"""
-        user = fake_users_db.get(username)
-        if not user:
+        try:
+            user = fake_users_db.get(username)
+            if not user:
+                return None
+            if not self.verify_password(password, user["hashed_password"]):
+                return None
+            return user
+        except Exception as e:
+            print(f"Error during user authentication: {e}")
             return None
-        if not self.verify_password(password, user["hashed_password"]):
-            return None
-        return user
     
     def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
         """アクセストークンを作成"""
-        to_encode = data.copy()
-        if expires_delta:
-            expire = datetime.utcnow() + expires_delta
-        else:
-            expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-        return encoded_jwt
+        try:
+            to_encode = data.copy()
+            if expires_delta:
+                expire = datetime.utcnow() + expires_delta
+            else:
+                expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            to_encode.update({"exp": expire})
+            encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+            return encoded_jwt
+        except Exception as e:
+            print(f"Error creating access token: {e}")
+            raise
     
     async def get_current_user(self, credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
         """現在のユーザーを取得"""
@@ -71,7 +87,11 @@ class AuthService:
             username: str = payload.get("sub")
             if username is None:
                 raise credentials_exception
-        except JWTError:
+        except JWTError as e:
+            print(f"JWT decode error: {e}")
+            raise credentials_exception
+        except Exception as e:
+            print(f"Unexpected error in get_current_user: {e}")
             raise credentials_exception
         
         user = fake_users_db.get(username)
