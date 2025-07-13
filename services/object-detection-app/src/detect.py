@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--input-path", required=True)
     parser.add_argument("--output-bucket", required=True)
     parser.add_argument("--output-path", required=True)
-    parser.add_argument("--model", default="yolov8n.pt", help="YOLO model to use")
+    parser.add_argument("--model", default="yolo11n.pt", help="YOLO11 model to use")
     parser.add_argument("--confidence", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--draw-boxes", type=bool, default=True, help="Draw bounding boxes on output")
     args = parser.parse_args()

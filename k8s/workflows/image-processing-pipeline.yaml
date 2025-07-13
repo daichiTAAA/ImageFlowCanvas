@@ -33,7 +33,7 @@ spec:
               "name": "ai_detection",
               "type": "ai_detection",
               "parameters": {
-                "model": "yolov8n.pt",
+                "model": "yolo11n.pt",
                 "confidence": 0.5,
                 "draw_boxes": true
               },
@@ -141,7 +141,7 @@ spec:
         - "--input-path={{inputs.parameters.input-path}}"
         - "--output-bucket=imageflow-files"
         - "--output-path={{outputs.parameters.output-path}}"
-        - "--model=yolov8n.pt"
+        - "--model=yolo11n.pt"
         - "--confidence=0.5"
         - "--draw-boxes=true"
       env:
