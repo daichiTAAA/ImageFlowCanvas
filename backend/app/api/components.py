@@ -23,7 +23,7 @@ AVAILABLE_COMPONENTS = [
         "name": "AI物体検出",
         "description": "画像内の物体を検出します",
         "parameters": {
-            "model": {"type": "string", "default": "yolo_v8", "options": ["yolo_v5", "yolo_v8"], "description": "使用するAIモデル"},
+            "model": {"type": "string", "default": "yolo11", "options": ["yolo11"], "description": "使用するAIモデル"},
             "confidence": {"type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "description": "検出信頼度の閾値"},
             "draw_boxes": {"type": "boolean", "default": True, "description": "検出結果を画像に描画"}
         },
