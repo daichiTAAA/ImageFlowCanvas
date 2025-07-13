@@ -24,6 +24,6 @@ COPY src/detect.py .
 RUN chmod +x detect.py
 
 # 事前にモデルをダウンロード（オプション）
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+RUN python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
 
 ENTRYPOINT ["python", "detect.py"]

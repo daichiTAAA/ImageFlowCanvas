@@ -2,12 +2,12 @@
 
 ## Overview
 
-This guide explains how to set up and use Triton Inference Server for YOLO object detection in the ImageFlowCanvas project.
+This guide explains how to set up and use Triton Inference Server for YOLO11 object detection in the ImageFlowCanvas project.
 
 ## Architecture
 
 The Triton Inference Server serves as the AI inference backend, providing:
-- High-performance YOLO model inference
+- High-performance YOLO11 model inference
 - Model versioning and management
 - Health monitoring and metrics
 - Support for multiple model formats (ONNX, PyTorch, TensorRT)
@@ -16,20 +16,21 @@ The Triton Inference Server serves as the AI inference backend, providing:
 
 ### 1. Model Preparation
 
-Download a YOLOv8 ONNX model and place it in the correct directory:
+Download and convert YOLO11 model and place it in the correct directory:
 
 ```bash
-# Create the model directory structure
+# Use the automated setup script (recommended)
+python scripts/setup-yolo11.py
+
+# Or manually:
+# 1. Create the model directory structure
 mkdir -p models/yolo/1
 
-# Download YOLOv8n ONNX model (smallest, fastest)
-wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx -O models/yolo/1/model.onnx
-
-# Or download other variants:
-# YOLOv8s: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.onnx
-# YOLOv8m: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.onnx
-# YOLOv8l: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8l.onnx
-# YOLOv8x: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x.onnx
+# 2. Download and convert YOLO11n model
+pip install ultralytics
+wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
+python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', imgsz=640, dynamic=False)"
+mv yolo11n.onnx models/yolo/1/model.onnx
 ```
 
 ### 2. Development Environment
@@ -135,7 +136,7 @@ The inference is handled automatically by the backend API through the `TritonYOL
 
 2. **Out of memory errors**
    - Reduce batch size in `config.pbtxt`
-   - Use a smaller model variant (e.g., yolov8n instead of yolov8x)
+   - Use the YOLO11n model (already optimized for efficiency)
    - Adjust container memory limits
 
 3. **Connection errors**
@@ -200,11 +201,12 @@ docker run -v /path/to/models:/models tritonserver --model-repository=/models
 
 ```bash
 # Convert ONNX to TensorRT (requires NVIDIA GPU)
-trtexec --onnx=yolov8n.onnx --saveEngine=yolov8n.trt --fp16
+trtexec --onnx=yolo11n.onnx --saveEngine=yolo11n.trt --fp16
 ```
 
 ## References
 
 - [Triton Inference Server Documentation](https://docs.nvidia.com/deeplearning/triton-inference-server/)
-- [YOLOv8 Model Zoo](https://github.com/ultralytics/ultralytics)
+- [YOLO11 Model Zoo](https://github.com/ultralytics/ultralytics)
+- [Ultralytics Documentation](https://docs.ultralytics.com/)
 - [ONNX Model Format](https://onnx.ai/)

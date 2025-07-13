@@ -278,7 +278,7 @@ class ExecutionWorker:
             {
                 "name": "物体検出", 
                 "type": "ai_detection",
-                "parameters": {"confidence": 0.5, "model": "yolov8n"}
+                "parameters": {"confidence": 0.5, "model": "yolo11"}
             },
             {
                 "name": "フィルタ処理", 

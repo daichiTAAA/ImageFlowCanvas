@@ -21,7 +21,7 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 - **Container Platform**: Kubernetes (K3s)
 - **Object Storage**: MinIO
 - **AI Inference**: Triton Inference Server
-- **Processing Services**: OpenCV, PyTorch, YOLO
+- **Processing Services**: OpenCV, PyTorch, YOLO11
 
 ## セットアップ
 
@@ -31,9 +31,8 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 
 1. **Triton用モデルの準備**
    ```bash
-   # YOLOv8 ONNXモデルをダウンロード（例）
-   mkdir -p models/yolo/1
-   wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx -O models/yolo/1/model.onnx
+   # YOLO11 ONNXモデルをセットアップ（自動ダウンロード・変換）
+   python scripts/setup-yolo11.py
    ```
 
 2. **Docker Composeでの起動**
@@ -85,3 +84,45 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 2. **パイプライン作成**: コンポーネントをドラッグ&ドロップで配置
 3. **実行**: 画像をアップロードしてパイプラインを実行
 4. **監視**: リアルタイムで進捗を確認
+
+## YOLO11の初期設定
+
+ImageFlowCanvasはYOLO11を使用して高精度な物体検出を提供します。
+
+### YOLO11モデルのセットアップ
+
+1. **自動セットアップ（推奨）**:
+   ```bash
+   python scripts/setup-yolo11.py
+   ```
+   
+   このスクリプトは以下を自動実行します：
+   - YOLO11n.ptモデルのダウンロード
+   - ONNX形式への変換
+   - Tritonサーバー用の配置
+
+2. **手動セットアップ**:
+   ```bash
+   # ultralytics パッケージをインストール
+   pip install ultralytics
+   
+   # YOLO11n.ptをダウンロード
+   wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
+   
+   # ONNX形式に変換
+   python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', imgsz=640, dynamic=False)"
+   
+   # 変換されたモデルを配置
+   mv yolo11n.onnx models/yolo/1/model.onnx
+   ```
+
+### YOLO11の特徴
+
+- **高精度な物体検出**: COCO 80クラスの物体を検出
+- **改善されたパフォーマンス**: 前世代YOLOより高速・高精度  
+- **小物体検出の向上**: 細かい物体の検出精度が向上
+- **CPU/GPU対応**: 環境に応じて最適化
+
+### 使用可能な検出クラス
+
+person, bicycle, car, motorcycle, airplane, bus, train, truck, boat, traffic light, fire hydrant, stop sign, parking meter, bench, bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe, backpack, umbrella, handbag, tie, suitcase, frisbee, skis, snowboard, sports ball, kite, baseball bat, baseball glove, skateboard, surfboard, tennis racket, bottle, wine glass, cup, fork, knife, spoon, bowl, banana, apple, sandwich, orange, broccoli, carrot, hot dog, pizza, donut, cake, chair, couch, potted plant, bed, dining table, toilet, tv, laptop, mouse, remote, keyboard, cell phone, microwave, oven, toaster, sink, refrigerator, book, clock, vase, scissors, teddy bear, hair drier, toothbrush

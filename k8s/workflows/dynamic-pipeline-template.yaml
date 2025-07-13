@@ -153,7 +153,7 @@ spec:
       - name: input-path
       - name: output-path
       - name: model
-        value: "yolov8n.pt"
+        value: "yolo11n.pt"
       - name: confidence
         value: "0.5"
       - name: draw-boxes
