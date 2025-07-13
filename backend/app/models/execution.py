@@ -45,6 +45,7 @@ class Execution(BaseModel):
     progress: ExecutionProgress
     steps: List[ExecutionStep] = Field(default_factory=list)
     output_files: List[OutputFile] = Field(default_factory=list)
+    workflow_name: Optional[str] = None  # Argo Workflow name
     created_at: datetime = Field(default_factory=datetime.utcnow)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

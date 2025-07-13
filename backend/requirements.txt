@@ -5,6 +5,7 @@ aiofiles==23.2.1
 pydantic==2.5.0
 pydantic-settings==2.1.0
 httpx==0.25.2
+argo-workflows==6.4.8
 kafka-python==2.0.2
 minio==7.2.0
 websockets==12.0
@@ -13,8 +14,4 @@ python-jose[cryptography]==3.3.0
 passlib==1.7.4
 bcrypt==4.1.2
 python-dotenv==1.0.0
-opencv-python==4.8.1.78
-numpy==1.24.3
-tritonclient[http]==2.41.1
-ultralytics==8.3.0
 requests==2.31.0

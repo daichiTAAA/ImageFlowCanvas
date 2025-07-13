@@ -120,6 +120,14 @@ class ExecutionService:
                 pending_executions.append(execution)
         return pending_executions
     
+    async def get_running_executions(self) -> List[Execution]:
+        """実行中の実行を取得（ワークフロー監視用）"""
+        running_executions = []
+        for execution in self.executions.values():
+            if execution.status == ExecutionStatus.RUNNING:
+                running_executions.append(execution)
+        return running_executions
+    
     async def update_execution_status(self, execution_id: str, status: ExecutionStatus, progress_data: dict = None):
         """実行状況を更新（Kafkaコンシューマーから呼び出される）"""
         execution = self.executions.get(execution_id)
