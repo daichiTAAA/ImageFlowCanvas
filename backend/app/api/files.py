@@ -22,6 +22,21 @@ async def upload_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/{file_id}/download")
+async def download_file_direct(file_id: str, user=Depends(get_current_user)):
+    """ファイルを直接ダウンロード（ブラウザ表示用）"""
+    try:
+        file_stream, filename, content_type = await file_service.download_file(file_id)
+        return StreamingResponse(
+            file_stream,
+            media_type=content_type,
+            headers={"Content-Disposition": f"inline; filename={filename}"}
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{file_id}")
 async def download_file(file_id: str, user=Depends(get_current_user)):
     """ファイルをダウンロード"""

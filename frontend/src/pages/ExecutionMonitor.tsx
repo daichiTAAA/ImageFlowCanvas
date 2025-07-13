@@ -39,7 +39,8 @@ export const ExecutionMonitor: React.FC = () => {
     ['execution', id],
     () => apiService.getExecution(id),
     {
-      refetchInterval: (data) => data?.status === 'running' ? 2000 : false
+      refetchInterval: (data) => 
+        data?.status === 'running' || data?.status === 'pending' ? 2000 : false
     }
   )
 
@@ -248,13 +249,13 @@ export const ExecutionMonitor: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 出力ファイル */}
-      {execution.output_files.length > 0 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              出力ファイル
-            </Typography>
+      {/* 出力ファイル / 処理結果 */}
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            処理結果
+          </Typography>
+          {execution.output_files.length > 0 ? (
             <TableContainer>
               <Table>
                 <TableHead>
@@ -286,9 +287,23 @@ export const ExecutionMonitor: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <Alert 
+              severity={execution.status === 'completed' ? 'warning' : 'info'}
+              sx={{ mt: 1 }}
+            >
+              {execution.status === 'completed' 
+                ? '実行は完了しましたが、処理結果ファイルが生成されませんでした。エラーが発生している可能性があります。'
+                : execution.status === 'failed'
+                ? '実行が失敗したため、処理結果ファイルは生成されませんでした。'
+                : execution.status === 'cancelled'
+                ? '実行がキャンセルされたため、処理結果ファイルは生成されませんでした。'
+                : '処理結果ファイルがまだ生成されていません。実行が完了するまでお待ちください。'
+              }
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   )
 }
