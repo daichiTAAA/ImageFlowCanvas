@@ -201,12 +201,12 @@ export const PipelineBuilder: React.FC = () => {
             {availableComponents.map((component) => (
               <ListItem
                 key={component.id}
-                button
                 onClick={() => handleComponentDrop(component)}
                 sx={{ 
                   border: '1px solid #e0e0e0', 
                   borderRadius: 1, 
                   mb: 1,
+                  cursor: 'pointer',
                   '&:hover': { backgroundColor: '#f5f5f5' }
                 }}
               >
@@ -240,7 +240,7 @@ export const PipelineBuilder: React.FC = () => {
                       fullWidth
                       label="パイプライン名"
                       value={pipelineName}
-                      onChange={(e) => setPipelineName(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPipelineName(e.target.value)}
                       required
                     />
                   </Grid>
@@ -251,7 +251,7 @@ export const PipelineBuilder: React.FC = () => {
                       multiline
                       rows={2}
                       value={pipelineDescription}
-                      onChange={(e) => setPipelineDescription(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPipelineDescription(e.target.value)}
                     />
                   </Grid>
                 </Grid>
@@ -455,8 +455,8 @@ const ParameterDialog: React.FC<ParameterDialogProps> = ({ open, onClose, compon
                     value={parameters[key] || param.default}
                     onChange={(e) => setParameters(prev => ({ ...prev, [key]: e.target.value }))}
                   >
-                    {param.options.map(option => (
-                      <MenuItem key={option} value={option}>
+                    {param.options.map((option, index) => (
+                      <MenuItem key={`${key}-${option}-${index}`} value={option}>
                         {option}
                       </MenuItem>
                     ))}
@@ -467,7 +467,7 @@ const ParameterDialog: React.FC<ParameterDialogProps> = ({ open, onClose, compon
                   fullWidth
                   label={param.description}
                   value={parameters[key] || param.default}
-                  onChange={(e) => setParameters(prev => ({ ...prev, [key]: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setParameters(prev => ({ ...prev, [key]: e.target.value }))}
                 />
               )
             )}
@@ -477,7 +477,7 @@ const ParameterDialog: React.FC<ParameterDialogProps> = ({ open, onClose, compon
                 type="number"
                 label={param.description}
                 value={parameters[key] || param.default}
-                onChange={(e) => setParameters(prev => ({ ...prev, [key]: parseInt(e.target.value) }))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setParameters(prev => ({ ...prev, [key]: parseInt(e.target.value) }))}
               />
             )}
             {param.type === 'float' && (
@@ -485,7 +485,7 @@ const ParameterDialog: React.FC<ParameterDialogProps> = ({ open, onClose, compon
                 <Typography gutterBottom>{param.description}</Typography>
                 <Slider
                   value={parameters[key] || param.default}
-                  onChange={(_, value) => setParameters(prev => ({ ...prev, [key]: value }))}
+                  onChange={(_: Event, value: number | number[]) => setParameters(prev => ({ ...prev, [key]: value }))}
                   min={param.min || 0}
                   max={param.max || 1}
                   step={0.1}
@@ -498,7 +498,7 @@ const ParameterDialog: React.FC<ParameterDialogProps> = ({ open, onClose, compon
                 control={
                   <Checkbox
                     checked={parameters[key] || param.default}
-                    onChange={(e) => setParameters(prev => ({ ...prev, [key]: e.target.checked }))}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setParameters(prev => ({ ...prev, [key]: e.target.checked }))}
                   />
                 }
                 label={param.description}
