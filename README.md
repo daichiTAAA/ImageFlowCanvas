@@ -48,6 +48,7 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 
 #### オプション2: K3s + Argo Workflows（本格的な開発用）
 
+##### Linux環境（直接インストール）
 1. **K3sとArgo Workflowsのセットアップ**
    ```bash
    sudo ./scripts/setup-k3s.sh
@@ -61,6 +62,82 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 3. **ポートフォワーディングの開始**
    ```bash
    ./scripts/port-forward.sh
+   ```
+
+##### macOS環境（Lima使用）
+1. **Limaのインストール**
+   ```bash
+   # Homebrewでインストール
+   brew install lima
+   
+   # または手動インストール
+   curl -fsSL https://get.lima.sh | sh
+   ```
+
+2. **Ubuntu VMの作成と起動**
+   ```bash
+   # Ubuntu 22.04 VMを作成
+   limactl create --name=k3s template://ubuntu-lts
+   
+   # VMを起動
+   limactl start k3s
+   ```
+
+3. **VM内でK3sをセットアップ**
+   ```bash
+   # VMにシェル接続
+   lima k3s
+   
+   # VM内でプロジェクトをクローン
+   git clone <your-repo-url>
+   cd ImageFlowCanvas
+   
+   # K3sセットアップ
+   sudo ./scripts/setup-k3s.sh
+   ```
+
+4. **ポートフォワーディング設定**
+   ```bash
+   # Lima VM設定ファイルを編集（ホストマシンで実行）
+   limactl edit k3s
+   ```
+   
+   以下の設定を追加：
+   ```yaml
+   portForwards:
+   - guestPort: 6443
+     hostPort: 6443
+   - guestPort: 2746
+     hostPort: 2746
+   - guestPort: 8000
+     hostPort: 8000
+   - guestPort: 9001
+     hostPort: 9001
+   ```
+
+5. **VM再起動とサービス確認**
+   ```bash
+   # VM再起動
+   limactl stop k3s
+   limactl start k3s
+   
+   # VM内でサービス起動
+   lima k3s
+   ./scripts/dev-start.sh
+   ```
+
+##### Windows環境（WSL2使用）
+1. **WSL2のセットアップ**
+   ```bash
+   # PowerShellで実行
+   wsl --install Ubuntu-22.04
+   ```
+
+2. **WSL2内でLinux手順を実行**
+   ```bash
+   # WSL2シェルで実行
+   sudo ./scripts/setup-k3s.sh
+   ./scripts/dev-start.sh
    ```
 
 4. **フロントエンドの起動**
