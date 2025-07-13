@@ -8,12 +8,36 @@ import json
 import asyncio
 import os
 
+# グローバル ExecutionService インスタンス
+_execution_service_instance = None
+
+def get_global_execution_service():
+    """グローバル ExecutionService インスタンスを取得"""
+    global _execution_service_instance
+    if _execution_service_instance is None:
+        _execution_service_instance = ExecutionService()
+    return _execution_service_instance
+
 class ExecutionService:
     def __init__(self):
         self.executions = {}
         self.file_service = FileService()
         self.kafka_service = KafkaService()
         self.dev_mode = os.getenv("DEV_MODE", "true").lower() == "true"
+        self.websocket_manager = None  # 遅延初期化
+    
+    def get_websocket_manager(self):
+        """WebSocket マネージャーを遅延初期化"""
+        if self.websocket_manager is None:
+            try:
+                from app.services.websocket_manager import ConnectionManager
+                # グローバルインスタンスを取得（main.py で作成されているもの）
+                import app.main
+                self.websocket_manager = app.main.manager
+            except Exception as e:
+                print(f"Could not get WebSocket manager: {e}")
+                self.websocket_manager = None
+        return self.websocket_manager
     
     async def execute_pipeline(self, execution_request: ExecutionRequest, input_files: List[UploadFile]) -> Execution:
         """パイプラインを実行"""
@@ -48,7 +72,13 @@ class ExecutionService:
             "priority": execution_request.priority
         }
         
-        await self.kafka_service.send_message("image-processing-requests", message)
+        try:
+            await self.kafka_service.send_message("image-processing-requests", message)
+        except Exception as e:
+            print(f"Failed to send message to Kafka: {e}")
+            # Kafka が利用できない場合でも実行オブジェクトは作成し、
+            # 直接実行モードのワーカーが処理する
+            print("Execution will be processed by direct execution mode")
         
         return execution
     
@@ -82,6 +112,14 @@ class ExecutionService:
         all_executions.sort(key=lambda x: x.created_at, reverse=True)
         return all_executions[offset:offset + limit]
     
+    async def get_pending_executions(self) -> List[Execution]:
+        """実行待ちの実行を取得（直接実行モード用）"""
+        pending_executions = []
+        for execution in self.executions.values():
+            if execution.status == ExecutionStatus.PENDING:
+                pending_executions.append(execution)
+        return pending_executions
+    
     async def update_execution_status(self, execution_id: str, status: ExecutionStatus, progress_data: dict = None):
         """実行状況を更新（Kafkaコンシューマーから呼び出される）"""
         execution = self.executions.get(execution_id)
@@ -94,3 +132,21 @@ class ExecutionService:
             execution.progress.current_step = progress_data.get("current_step", execution.progress.current_step)
             execution.progress.completed_steps = progress_data.get("completed_steps", execution.progress.completed_steps)
             execution.progress.percentage = progress_data.get("percentage", execution.progress.percentage)
+        
+        # WebSocket で進捗をリアルタイム通知
+        websocket_manager = self.get_websocket_manager()
+        if websocket_manager:
+            try:
+                update_data = {
+                    "execution_id": execution_id,
+                    "status": status.value,
+                    "progress": {
+                        "current_step": execution.progress.current_step,
+                        "completed_steps": execution.progress.completed_steps,
+                        "total_steps": execution.progress.total_steps,
+                        "percentage": execution.progress.percentage
+                    }
+                }
+                await websocket_manager.send_execution_update(execution_id, update_data)
+            except Exception as e:
+                print(f"Failed to send WebSocket update: {e}")

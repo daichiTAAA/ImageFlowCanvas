@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
 import asyncio
+import json
 from app.api import pipelines, executions, components, files, auth
 from app.services.websocket_manager import ConnectionManager
 from app.services.execution_worker import execution_worker
@@ -33,8 +34,28 @@ app.include_router(executions.router, prefix="/v1/executions", tags=["executions
 app.include_router(components.router, prefix="/v1/components", tags=["components"])
 app.include_router(files.router, prefix="/v1/files", tags=["files"])
 
+@app.websocket("/v1/ws/{execution_id}")
+async def websocket_endpoint(websocket: WebSocket, execution_id: str):
+    await manager.connect(websocket)
+    # 特定の実行IDの進捗更新を購読
+    manager.subscribe_to_execution(execution_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # クライアントからのメッセージを処理
+            try:
+                message = json.loads(data)
+                message_type = message.get("type")
+                if message_type == "ping":
+                    await manager.send_personal_json({"type": "pong"}, websocket)
+            except json.JSONDecodeError:
+                await manager.send_personal_message(f"Echo: {data}", websocket)
+    except WebSocketDisconnect:
+        manager.unsubscribe_from_execution(execution_id, websocket)
+        manager.disconnect(websocket)
+
 @app.websocket("/v1/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_general_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
@@ -56,8 +77,11 @@ async def health_check():
 async def startup_event():
     """アプリケーション起動時にワーカーを開始"""
     print("Starting execution worker...")
-    # バックグラウンドタスクとしてワーカーを起動
-    asyncio.create_task(execution_worker.start())
+    try:
+        # バックグラウンドタスクとしてワーカーを起動
+        asyncio.create_task(execution_worker.start())
+    except Exception as e:
+        print(f"Error starting worker: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
