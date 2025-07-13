@@ -54,7 +54,8 @@ export const ExecutionMonitor: React.FC = () => {
     ['execution', id],
     () => apiService.getExecution(id),
     {
-      refetchInterval: (data) => data?.status === 'running' ? 2000 : false
+      refetchInterval: (data) => 
+        data?.status === 'running' || data?.status === 'pending' ? 2000 : false
     }
   )
 
@@ -300,8 +301,6 @@ export const ExecutionMonitor: React.FC = () => {
           </TableContainer>
         </CardContent>
       </Card>
-
-      {/* 処理結果 */}
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>

@@ -63,6 +63,7 @@ services:
       MINIO_SECRET_KEY: minioadmin
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SECRET_KEY: your-secret-key-change-in-production
+      TRITON_URL: triton:8000
     depends_on:
       - minio
       - kafka
@@ -71,6 +72,30 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - imageflow-network
+
+  # Triton Inference Server
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    command: tritonserver --model-repository=/models --strict-model-config=false --log-verbose=1
+    ports:
+      - "8001:8000"  # HTTP endpoint
+      - "8002:8001"  # GRPC endpoint
+      - "8003:8002"  # Metrics endpoint
+    volumes:
+      - ./models:/models
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    restart: unless-stopped
+    networks:
+      - imageflow-network
+    # Note: GPU support requires nvidia-docker runtime
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   # Frontend (Development mode)
   frontend:
