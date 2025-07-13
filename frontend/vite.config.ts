@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Use localhost for local development, backend for Docker environment
+const backendTarget = process.env.VITE_BACKEND_URL || 'http://localhost:8000'
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -8,7 +11,7 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: backendTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/v1'),
         configure: (proxy, _options) => {
