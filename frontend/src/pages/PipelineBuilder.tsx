@@ -39,7 +39,7 @@ export const PipelineBuilder: React.FC = () => {
   const [components, setComponents] = useState<PipelineComponent[]>([])
   const [selectedComponent, setSelectedComponent] = useState<ComponentDefinition | null>(null)
   const [parameterDialogOpen, setParameterDialogOpen] = useState(false)
-  const [drawerOpen, setDrawerOpen] = useState(true)
+  const [drawerOpen] = useState(true)
 
   // 認証の読み込み中は何も表示しない
   if (loading) {
@@ -50,7 +50,7 @@ export const PipelineBuilder: React.FC = () => {
     return <Navigate to="/login" replace />
   }
 
-  const { data: availableComponents = [], error, isLoading } = useQuery(
+  const { data: availableComponents = [], error, isLoading } = useQuery<ComponentDefinition[], Error>(
     'components', 
     () => apiService.getComponents(),
     {
@@ -142,7 +142,7 @@ export const PipelineBuilder: React.FC = () => {
           {isLoading && <Typography>読み込み中...</Typography>}
           {error && (
             <Typography color="error">
-              コンポーネント読み込みエラー: {error instanceof Error ? error.message : 'Unknown error'}
+              コンポーネント読み込みエラー: {error.message}
             </Typography>
           )}
           {!isLoading && !error && availableComponents.length === 0 && (

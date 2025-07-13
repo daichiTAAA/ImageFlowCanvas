@@ -13,8 +13,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Paper
+  TableRow
 } from '@mui/material'
 import { Add, PlayArrow, Timeline } from '@mui/icons-material'
 import { useQuery } from 'react-query'
