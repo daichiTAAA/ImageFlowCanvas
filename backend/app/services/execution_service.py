@@ -5,12 +5,15 @@ from app.services.file_service import FileService
 from app.services.kafka_service import KafkaService
 import uuid
 import json
+import asyncio
+import os
 
 class ExecutionService:
     def __init__(self):
         self.executions = {}
         self.file_service = FileService()
         self.kafka_service = KafkaService()
+        self.dev_mode = os.getenv("DEV_MODE", "true").lower() == "true"
     
     async def execute_pipeline(self, execution_request: ExecutionRequest, input_files: List[UploadFile]) -> Execution:
         """パイプラインを実行"""

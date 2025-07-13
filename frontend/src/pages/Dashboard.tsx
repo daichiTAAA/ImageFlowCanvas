@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import {
   Grid,
@@ -13,16 +13,29 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Alert,
+  CircularProgress
 } from '@mui/material'
-import { Add, PlayArrow, Timeline } from '@mui/icons-material'
-import { useQuery } from 'react-query'
+import { Add, PlayArrow, Timeline, Upload } from '@mui/icons-material'
+import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { useAuth } from '../services/AuthContext'
 import { apiService } from '../services/api'
+import { Pipeline } from '../types'
 
 export const Dashboard: React.FC = () => {
   const { isAuthenticated, user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const [executeDialogOpen, setExecuteDialogOpen] = useState(false)
+  const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -30,6 +43,22 @@ export const Dashboard: React.FC = () => {
 
   const { data: pipelines = [] } = useQuery('pipelines', () => apiService.getPipelines())
   const { data: executions = [] } = useQuery('executions', () => apiService.getExecutions(10))
+
+  const executePipelineMutation = useMutation(
+    ({ pipelineId, files }: { pipelineId: string; files: File[] }) =>
+      apiService.executePipeline(pipelineId, files),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('executions')
+        setExecuteDialogOpen(false)
+        setSelectedPipeline(null)
+        setSelectedFiles([])
+      },
+      onError: (error) => {
+        console.error('Pipeline execution failed:', error)
+      }
+    }
+  )
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -49,6 +78,27 @@ export const Dashboard: React.FC = () => {
       case 'failed': return '失敗'
       case 'cancelled': return 'キャンセル'
       default: return status
+    }
+  }
+
+  const handleExecutePipeline = (pipeline: Pipeline) => {
+    setSelectedPipeline(pipeline)
+    setExecuteDialogOpen(true)
+  }
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files) {
+      setSelectedFiles(Array.from(files))
+    }
+  }
+
+  const handleExecuteSubmit = () => {
+    if (selectedPipeline && selectedFiles.length > 0) {
+      executePipelineMutation.mutate({
+        pipelineId: selectedPipeline.id,
+        files: selectedFiles
+      })
     }
   }
 
@@ -160,7 +210,7 @@ export const Dashboard: React.FC = () => {
                         size="small"
                         variant="outlined"
                         startIcon={<PlayArrow />}
-                        onClick={() => {/* TODO: 実行画面へ */}}
+                        onClick={() => handleExecutePipeline(pipeline)}
                       >
                         実行
                       </Button>
@@ -223,6 +273,73 @@ export const Dashboard: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* パイプライン実行ダイアログ */}
+      <Dialog open={executeDialogOpen} onClose={() => setExecuteDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          パイプライン実行: {selectedPipeline?.name}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" gutterBottom>
+              処理対象のファイルを選択してください
+            </Typography>
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+              id="file-input"
+            />
+            <label htmlFor="file-input">
+              <Button
+                component="span"
+                variant="outlined"
+                startIcon={<Upload />}
+                fullWidth
+                sx={{ mt: 1, mb: 2 }}
+              >
+                ファイルを選択
+              </Button>
+            </label>
+            
+            {selectedFiles.length > 0 && (
+              <Box>
+                <Typography variant="body2" gutterBottom>
+                  選択されたファイル ({selectedFiles.length}件):
+                </Typography>
+                {selectedFiles.map((file, index) => (
+                  <Typography key={index} variant="body2" color="textSecondary">
+                    • {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                  </Typography>
+                ))}
+              </Box>
+            )}
+            
+            {executePipelineMutation.isError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                実行に失敗しました: {executePipelineMutation.error instanceof Error 
+                  ? executePipelineMutation.error.message 
+                  : '不明なエラー'}
+              </Alert>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExecuteDialogOpen(false)}>
+            キャンセル
+          </Button>
+          <Button
+            onClick={handleExecuteSubmit}
+            variant="contained"
+            disabled={selectedFiles.length === 0 || executePipelineMutation.isLoading}
+            startIcon={executePipelineMutation.isLoading ? <CircularProgress size={20} /> : <PlayArrow />}
+          >
+            実行開始
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

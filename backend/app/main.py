@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
+import asyncio
 from app.api import pipelines, executions, components, files, auth
 from app.services.websocket_manager import ConnectionManager
+from app.services.execution_worker import execution_worker
 
 app = FastAPI(
     title="ImageFlowCanvas API",
@@ -49,6 +51,19 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.on_event("startup")
+async def startup_event():
+    """アプリケーション起動時にワーカーを開始"""
+    print("Starting execution worker...")
+    # バックグラウンドタスクとしてワーカーを起動
+    asyncio.create_task(execution_worker.start())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """アプリケーション終了時にワーカーを停止"""
+    print("Stopping execution worker...")
+    await execution_worker.stop()
 
 if __name__ == "__main__":
     uvicorn.run(

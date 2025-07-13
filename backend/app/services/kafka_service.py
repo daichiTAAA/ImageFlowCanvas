@@ -78,13 +78,24 @@ class KafkaService:
             consumer = self.create_consumer(topics, group_id)
             if consumer:
                 try:
+                    print(f"Starting Kafka consumer for topics: {topics}")
                     for message in consumer:
-                        asyncio.create_task(message_handler(message))
+                        print(f"Received message from topic {message.topic}: {message.value}")
+                        # 新しいイベントループでハンドラーを実行
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            loop.run_until_complete(message_handler(message))
+                        finally:
+                            loop.close()
+                except Exception as e:
+                    print(f"Error in Kafka consumer: {e}")
                 finally:
                     consumer.close()
         
+        # 専用スレッドでコンシューマーを実行
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(self.executor, _consume)
+        loop.run_in_executor(self.executor, _consume)
     
     def close(self):
         """リソースをクリーンアップ"""

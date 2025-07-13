@@ -22,10 +22,12 @@ import {
   MenuItem,
   FormControlLabel,
   Checkbox,
-  Slider
+  Slider,
+  Alert,
+  CircularProgress
 } from '@mui/material'
-import { Save, PlayArrow } from '@mui/icons-material'
-import { useQuery } from 'react-query'
+import { Save, PlayArrow, Upload } from '@mui/icons-material'
+import { useQuery, useMutation } from 'react-query'
 import { useAuth } from '../services/AuthContext'
 import { apiService } from '../services/api'
 import { ComponentDefinition, PipelineComponent } from '../types'
@@ -40,6 +42,8 @@ export const PipelineBuilder: React.FC = () => {
   const [selectedComponent, setSelectedComponent] = useState<ComponentDefinition | null>(null)
   const [parameterDialogOpen, setParameterDialogOpen] = useState(false)
   const [drawerOpen] = useState(true)
+  const [testDialogOpen, setTestDialogOpen] = useState(false)
+  const [testFiles, setTestFiles] = useState<File[]>([])
 
   // 認証の読み込み中は何も表示しない
   if (loading) {
@@ -114,6 +118,49 @@ export const PipelineBuilder: React.FC = () => {
       navigate('/')
     } catch (error) {
       console.error('Failed to save pipeline:', error)
+    }
+  }
+
+  const testExecutionMutation = useMutation(
+    (files: File[]) => {
+      // まずパイプラインを一時的に作成してからテスト実行
+      const tempPipeline = {
+        name: pipelineName || 'テスト用パイプライン',
+        description: pipelineDescription || 'テスト実行用の一時パイプライン',
+        components
+      }
+      return apiService.createPipeline(tempPipeline).then(pipeline => 
+        apiService.executePipeline(pipeline.id, files)
+      )
+    },
+    {
+      onSuccess: (result) => {
+        console.log('Test execution started:', result)
+        setTestDialogOpen(false)
+        setTestFiles([])
+        // 実行監視画面に遷移する場合
+        // navigate(`/execution-monitor/${result.execution_id}`)
+      },
+      onError: (error) => {
+        console.error('Test execution failed:', error)
+      }
+    }
+  )
+
+  const handleTestExecution = () => {
+    setTestDialogOpen(true)
+  }
+
+  const handleTestFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files) {
+      setTestFiles(Array.from(files))
+    }
+  }
+
+  const handleTestExecute = () => {
+    if (testFiles.length > 0) {
+      testExecutionMutation.mutate(testFiles)
     }
   }
 
@@ -276,6 +323,7 @@ export const PipelineBuilder: React.FC = () => {
                 variant="outlined"
                 startIcon={<PlayArrow />}
                 disabled={!pipelineName || components.length === 0}
+                onClick={handleTestExecution}
               >
                 テスト実行
               </Button>
@@ -283,6 +331,77 @@ export const PipelineBuilder: React.FC = () => {
           </Grid>
         </Grid>
       </Box>
+
+      {/* テスト実行ダイアログ */}
+      <Dialog open={testDialogOpen} onClose={() => setTestDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          パイプラインテスト実行
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" gutterBottom>
+              テスト用のファイルを選択してください
+            </Typography>
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleTestFileSelect}
+              style={{ display: 'none' }}
+              id="test-file-input"
+            />
+            <label htmlFor="test-file-input">
+              <Button
+                component="span"
+                variant="outlined"
+                startIcon={<Upload />}
+                fullWidth
+                sx={{ mt: 1, mb: 2 }}
+              >
+                ファイルを選択
+              </Button>
+            </label>
+            
+            {testFiles.length > 0 && (
+              <Box>
+                <Typography variant="body2" gutterBottom>
+                  選択されたファイル ({testFiles.length}件):
+                </Typography>
+                {testFiles.map((file, index) => (
+                  <Typography key={index} variant="body2" color="textSecondary">
+                    • {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                  </Typography>
+                ))}
+              </Box>
+            )}
+            
+            {testExecutionMutation.isError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                テスト実行に失敗しました: {testExecutionMutation.error instanceof Error 
+                  ? testExecutionMutation.error.message 
+                  : '不明なエラー'}
+              </Alert>
+            )}
+            
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+              ※ テスト実行では一時的なパイプラインが作成され、実行されます
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTestDialogOpen(false)}>
+            キャンセル
+          </Button>
+          <Button
+            onClick={handleTestExecute}
+            variant="contained"
+            disabled={testFiles.length === 0 || testExecutionMutation.isLoading}
+            startIcon={testExecutionMutation.isLoading ? <CircularProgress size={20} /> : <PlayArrow />}
+          >
+            テスト実行
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* パラメータ設定ダイアログ */}
       <ParameterDialog
