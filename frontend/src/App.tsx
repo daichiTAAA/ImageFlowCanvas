@@ -1,4 +1,3 @@
-import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AppBar, Toolbar, Typography, Container, Box } from '@mui/material'
 import { Dashboard } from './pages/Dashboard'

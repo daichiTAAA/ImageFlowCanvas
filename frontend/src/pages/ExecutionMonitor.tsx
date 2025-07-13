@@ -13,7 +13,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Button,
   Alert
 } from '@mui/material'
@@ -21,11 +20,12 @@ import { Cancel, Download, Refresh } from '@mui/icons-material'
 import { useQuery } from 'react-query'
 import { useAuth } from '../services/AuthContext'
 import { apiService } from '../services/api'
+import { Execution } from '../types'
 
 export const ExecutionMonitor: React.FC = () => {
   const { isAuthenticated } = useAuth()
   const { id } = useParams<{ id: string }>()
-  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null)
+  const [, setWsConnection] = useState<WebSocket | null>(null)
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -35,11 +35,11 @@ export const ExecutionMonitor: React.FC = () => {
     return <Navigate to="/" replace />
   }
 
-  const { data: execution, refetch } = useQuery(
+  const { data: execution, refetch } = useQuery<Execution>(
     ['execution', id],
     () => apiService.getExecution(id),
     {
-      refetchInterval: execution?.status === 'running' ? 2000 : false
+      refetchInterval: (data) => data?.status === 'running' ? 2000 : false
     }
   )
 

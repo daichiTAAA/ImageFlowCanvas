@@ -2,7 +2,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosE
 import { Pipeline, Execution, ComponentDefinition, LoginRequest, LoginResponse, User } from '../types'
 
 class ApiService {
-  private api: AxiosInstance
+  private api!: AxiosInstance
 
   constructor() {
     console.log('=== API Service Constructor Start ===')
