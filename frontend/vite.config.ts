@@ -28,7 +28,17 @@ export default defineConfig({
       '/api': {
         target: backendTarget,
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '/v1'),
+        rewrite: (path) => {
+          // Add trailing slash for routes that need it to avoid FastAPI redirects
+          const newPath = path.replace(/^\/api/, '/v1')
+          
+          // Check if this is a base route that needs trailing slash
+          if (newPath.match(/^\/v1\/(pipelines|executions|components|files|auth)($|\?)/)) {
+            return newPath.replace(/^(\/v1\/[^\/\?]+)($|\?)/, '$1/$2')
+          }
+          
+          return newPath
+        },
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             console.log('Proxy error:', err.message)
