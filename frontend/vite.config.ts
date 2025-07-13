@@ -7,16 +7,14 @@ import react from '@vitejs/plugin-react'
 const getBackendTarget = () => {
   const envUrl = process.env.VITE_BACKEND_URL
   
-  // If VITE_BACKEND_URL contains 'backend:8000', we're likely in Docker
-  // For local development, always use localhost
-  if (envUrl && envUrl.includes('backend:8000')) {
-    // Check if we're actually running in Docker by looking for Docker-specific indicators
-    // If not, fallback to localhost
-    const isDocker = process.env.DOCKER_ENV === 'true' || process.env.NODE_ENV === 'docker'
-    return isDocker ? envUrl : 'http://localhost:8000'
+  // If VITE_BACKEND_URL is set, use it directly
+  // This handles both Docker (backend:8000) and local development properly
+  if (envUrl) {
+    return envUrl
   }
   
-  return envUrl || 'http://localhost:8000'
+  // Fallback to localhost for local development
+  return 'http://localhost:8000'
 }
 
 const backendTarget = getBackendTarget()
