@@ -1,0 +1,45 @@
+{
+  "name": "imageflow-canvas-frontend",
+  "version": "1.0.0",
+  "description": "ImageFlowCanvas Frontend Application",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.0",
+    "axios": "^1.6.0",
+    "react-query": "^3.39.3",
+    "@mui/material": "^5.14.0",
+    "@mui/icons-material": "^5.14.0",
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "react-dropzone": "^14.2.3",
+    "react-flow-renderer": "^10.3.17",
+    "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/node": "^20.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^4.4.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

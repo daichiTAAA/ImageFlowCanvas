@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # MinIO - Object Storage
+  minio:
+    image: minio/minio:RELEASE.2023-09-04T19-57-37Z
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - imageflow-network
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - imageflow-network
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - imageflow-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SECRET_KEY: your-secret-key-change-in-production
+    depends_on:
+      - minio
+      - kafka
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - imageflow-network
+
+  # Frontend (Development mode)
+  frontend:
+    image: node:18-alpine
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - backend
+    networks:
+      - imageflow-network
+networks:
+  imageflow-network:
+    driver: bridge
+    name: imageflow-network
+
+volumes:
+  minio_data:
+  frontend_node_modules:
