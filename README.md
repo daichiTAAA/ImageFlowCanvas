@@ -20,21 +20,64 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 - **Workflow Engine**: Argo Workflows
 - **Container Platform**: Kubernetes (K3s)
 - **Object Storage**: MinIO
+- **AI Inference**: Triton Inference Server
 - **Processing Services**: OpenCV, PyTorch, YOLO
 
 ## セットアップ
 
 ### 開発環境での起動
 
-1. **Docker Composeでの起動**
+#### オプション1: Docker Compose（簡単な開発用）
+
+1. **Triton用モデルの準備**
+   ```bash
+   # YOLOv8 ONNXモデルをダウンロード（例）
+   mkdir -p models/yolo/1
+   wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx -O models/yolo/1/model.onnx
+   ```
+
+2. **Docker Composeでの起動**
    ```bash
    docker compose up -d
    ```
 
-2. **サービスの確認**
+3. **サービスの確認**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - MinIO Console: http://localhost:9001
+   - Triton Inference Server: http://localhost:8001
+
+#### オプション2: K3s + Argo Workflows（本格的な開発用）
+
+1. **K3sとArgo Workflowsのセットアップ**
+   ```bash
+   sudo ./scripts/setup-k3s.sh
+   ```
+
+2. **開発環境の起動**
+   ```bash
+   ./scripts/dev-start.sh
+   ```
+
+3. **ポートフォワーディングの開始**
+   ```bash
+   ./scripts/port-forward.sh
+   ```
+
+4. **フロントエンドの起動**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+### アクセスポイント
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Argo Workflows UI**: http://localhost:2746
+- **MinIO Console**: http://localhost:9001 (admin/admin123)
+- **Triton Inference Server**: http://localhost:8001
 
 ### 使用方法
 

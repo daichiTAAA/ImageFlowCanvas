@@ -29,6 +29,8 @@ spec:
           value: "kafka-service:29092"
         - name: SECRET_KEY
           value: "your-secret-key-change-in-production"
+        - name: TRITON_URL
+          value: "triton-service:8000"
         livenessProbe:
           httpGet:
             path: /health

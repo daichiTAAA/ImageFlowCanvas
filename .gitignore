@@ -377,3 +377,11 @@ secrets/
 # config.json
 # settings.json
 
+# Model files (too large for git)
+models/*/1/*.onnx
+models/*/1/*.pt
+models/*/1/*.pth
+models/*/1/*.pb
+models/*/1/*.trt
+models/*/1/*.engine
+

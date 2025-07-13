@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton-inference-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triton-inference-server
+  template:
+    metadata:
+      labels:
+        app: triton-inference-server
+    spec:
+      containers:
+      - name: triton
+        image: nvcr.io/nvidia/tritonserver:23.10-py3
+        command: 
+          - tritonserver
+          - --model-repository=/models
+          - --strict-model-config=false
+          - --log-verbose=1
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 8001
+          name: grpc
+        - containerPort: 8002
+          name: metrics
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        volumeMounts:
+        - name: model-repository
+          mountPath: /models
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /v2/health/live
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /v2/health/ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: model-repository
+        configMap:
+          name: triton-models-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triton-service
+  namespace: default
+spec:
+  selector:
+    app: triton-inference-server
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  - name: grpc
+    port: 8001
+    targetPort: 8001
+  - name: metrics
+    port: 8002
+    targetPort: 8002
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triton-models-config
+  namespace: default
+data:
+  config.pbtxt: |
+    name: "yolo"
+    platform: "onnxruntime_onnx"
+    max_batch_size: 8
+    input [
+      {
+        name: "images"
+        data_type: TYPE_FP32
+        dims: [ 3, 640, 640 ]
+      }
+    ]
+    output [
+      {
+        name: "output0"
+        data_type: TYPE_FP32
+        dims: [ 84, 8400 ]
+      }
+    ]
+
+    instance_group [
+      {
+        count: 1
+        kind: KIND_CPU
+      }
+    ]
+
+    optimization {
+      execution_accelerators {
+        cpu_execution_accelerator : [ {
+          name : "openvino"
+        } ]
+      }
+    }
