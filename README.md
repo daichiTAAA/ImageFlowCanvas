@@ -76,7 +76,7 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 
 2. **Ubuntu VMの作成と起動**
    ```bash
-   # Ubuntu 22.04 VMを作成
+   # Ubuntu 24.04 VMを作成
    limactl create --name=k3s template://ubuntu-lts
    
    # VMを起動
@@ -86,7 +86,7 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 3. **VM内でK3sをセットアップ**
    ```bash
    # VMにシェル接続
-   lima k3s
+   limactl shell k3s
    
    # VM内でプロジェクトをクローン
    git clone <your-repo-url>
