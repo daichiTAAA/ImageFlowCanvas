@@ -16,6 +16,7 @@ spec:
       containers:
       - name: backend
         image: imageflow/backend:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8000
         env:
@@ -75,6 +76,7 @@ spec:
       containers:
       - name: frontend
         image: imageflow/frontend:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 80
 ---

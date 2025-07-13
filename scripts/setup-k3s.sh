@@ -63,10 +63,20 @@ kubectl wait --for=condition=available --timeout=300s deployment/minio -n defaul
 kubectl wait --for=condition=available --timeout=300s deployment/kafka -n default
 kubectl wait --for=condition=available --timeout=300s deployment/triton-inference-server -n default
 
-# Build and deploy backend
-echo "Building and deploying backend..."
+# Build and import backend image
+echo "Building backend image..."
 docker build -t imageflow/backend:latest ./backend
-k3s ctr images import - < <(docker save imageflow/backend:latest)
+echo "Importing backend image to K3s..."
+docker save imageflow/backend:latest | sudo k3s ctr images import -
+
+# Build and import frontend image
+echo "Building frontend image..."
+docker build -t imageflow/frontend:latest ./frontend
+echo "Importing frontend image to K3s..."
+docker save imageflow/frontend:latest | sudo k3s ctr images import -
+
+# Deploy backend and frontend
+echo "Deploying backend and frontend..."
 kubectl apply -f k8s/core/backend-deployment.yaml
 
 # Wait for backend to be ready

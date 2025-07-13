@@ -17,7 +17,7 @@ echo "Checking deployment status..."
 kubectl get deployments -n default
 
 # Check if services need to be started
-DEPLOYMENTS=("minio" "kafka" "triton-inference-server" "backend")
+DEPLOYMENTS=("minio" "kafka" "triton-inference-server" "backend" "frontend")
 for deployment in "${DEPLOYMENTS[@]}"; do
     if ! kubectl get deployment $deployment -n default &> /dev/null; then
         echo "Deployment $deployment not found, applying configurations..."
@@ -42,20 +42,26 @@ for deployment in "${DEPLOYMENTS[@]}"; do
     kubectl wait --for=condition=available --timeout=300s deployment/$deployment -n default
 done
 
-# Start frontend in development mode
-echo "Starting frontend development server..."
-cd frontend
-if [ ! -d "node_modules" ]; then
-    echo "Installing frontend dependencies..."
-    npm install
+# Check Argo Workflows
+echo "Checking Argo Workflows..."
+if ! kubectl wait --for=condition=available --timeout=300s deployment/argo-server -n argo 2>/dev/null; then
+    echo "Warning: Argo Workflows may not be ready. Check with: kubectl get pods -n argo"
 fi
 
 echo ""
-echo "Development environment is ready!"
+echo "✅ Development environment is ready!"
 echo ""
-echo "In separate terminals, run:"
-echo "1. ./scripts/port-forward.sh  # To access services"
-echo "2. cd frontend && npm run dev  # To start frontend"
+echo "Access points:"
+echo "- Frontend (NodePort): http://192.168.5.15:30080"
+echo "- Frontend (port-forward): http://localhost:3000 (run ./scripts/port-forward.sh)"
+echo "- Backend API: http://localhost:8000 (via port-forward)"
+echo "- Argo Workflows UI: http://localhost:2746 (via port-forward)"
+echo "- MinIO Console: http://localhost:9001 (via port-forward, admin/admin123)"
+echo "- Triton Server: http://localhost:8001 (via port-forward)"
 echo ""
-echo "Or use docker-compose for simpler local development:"
-echo "docker-compose up -d"
+echo "Next steps:"
+echo "1. ./scripts/port-forward.sh  # To enable local access via localhost"
+echo ""
+echo "Login credentials:"
+echo "- Admin: admin/admin123"
+echo "- User: user/user123"
