@@ -179,7 +179,7 @@ export const Dashboard: React.FC = () => {
             <Button
               variant="outlined"
               startIcon={<Timeline />}
-              onClick={() => {/* TODO: 監視画面へ */}}
+              onClick={() => navigate('/executions')}
             >
               実行監視
             </Button>
@@ -227,9 +227,23 @@ export const Dashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                最近の実行履歴
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  最近の実行履歴
+                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => navigate('/executions')}
+                >
+                  すべて表示
+                </Button>
+              </Box>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  💡 実行IDまたは「詳細」ボタンをクリックして処理結果の画像を確認できます
+                </Typography>
+              </Alert>
               {executions.length === 0 ? (
                 <Typography color="textSecondary">
                   実行履歴がありません
@@ -243,13 +257,27 @@ export const Dashboard: React.FC = () => {
                         <TableCell>ステータス</TableCell>
                         <TableCell>進捗</TableCell>
                         <TableCell>作成日時</TableCell>
+                        <TableCell>アクション</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {executions.slice(0, 5).map((execution) => (
-                        <TableRow key={execution.execution_id}>
+                        <TableRow 
+                          key={execution.execution_id}
+                          sx={{ 
+                            '&:hover': { backgroundColor: '#f5f5f5' },
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => navigate(`/execution/${execution.execution_id}`)}
+                        >
                           <TableCell>
-                            {execution.execution_id.substring(0, 8)}...
+                            <Typography 
+                              variant="body2" 
+                              color="primary"
+                              sx={{ textDecoration: 'underline' }}
+                            >
+                              {execution.execution_id.substring(0, 8)}...
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             <Chip
@@ -263,6 +291,16 @@ export const Dashboard: React.FC = () => {
                           </TableCell>
                           <TableCell>
                             {new Date(execution.created_at).toLocaleString()}
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Timeline />}
+                              onClick={() => navigate(`/execution/${execution.execution_id}`)}
+                            >
+                              詳細
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}

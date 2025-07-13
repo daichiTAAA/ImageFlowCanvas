@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Navigate, useParams } from 'react-router-dom'
+import { Navigate, useParams, useNavigate } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -14,9 +14,16 @@ import {
   TableHead,
   TableRow,
   Button,
-  Alert
+  Alert,
+  Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tabs,
+  Tab
 } from '@mui/material'
-import { Cancel, Download, Refresh } from '@mui/icons-material'
+import { Cancel, Download, Refresh, ArrowBack, Visibility } from '@mui/icons-material'
 import { useQuery } from 'react-query'
 import { useAuth } from '../services/AuthContext'
 import { apiService } from '../services/api'
@@ -25,7 +32,15 @@ import { Execution } from '../types'
 export const ExecutionMonitor: React.FC = () => {
   const { isAuthenticated } = useAuth()
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [, setWsConnection] = useState<WebSocket | null>(null)
+  const [previewDialog, setPreviewDialog] = useState<{
+    open: boolean
+    fileId: string
+    filename: string
+    imageUrl: string
+  }>({ open: false, fileId: '', filename: '', imageUrl: '' })
+  const [resultsTabValue, setResultsTabValue] = useState(0)
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -108,6 +123,33 @@ export const ExecutionMonitor: React.FC = () => {
     }
   }
 
+  const handlePreview = async (fileId: string, filename: string) => {
+    try {
+      const blob = await apiService.downloadFile(fileId)
+      const imageUrl = window.URL.createObjectURL(blob)
+      setPreviewDialog({
+        open: true,
+        fileId,
+        filename,
+        imageUrl
+      })
+    } catch (error) {
+      console.error('Failed to preview file:', error)
+    }
+  }
+
+  const handleClosePreview = () => {
+    if (previewDialog.imageUrl) {
+      window.URL.revokeObjectURL(previewDialog.imageUrl)
+    }
+    setPreviewDialog({ open: false, fileId: '', filename: '', imageUrl: '' })
+  }
+
+  const isImageFile = (filename: string) => {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+    return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext))
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'success'
@@ -135,12 +177,23 @@ export const ExecutionMonitor: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        実行監視
-      </Typography>
-      <Typography variant="subtitle1" color="textSecondary" gutterBottom>
-        実行ID: {execution.execution_id}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBack />}
+          onClick={() => navigate('/executions')}
+        >
+          実行監視一覧に戻る
+        </Button>
+        <Box>
+          <Typography variant="h4">
+            実行監視
+          </Typography>
+          <Typography variant="subtitle1" color="textSecondary">
+            実行ID: {execution.execution_id}
+          </Typography>
+        </Box>
+      </Box>
 
       {/* 実行状況サマリ */}
       <Card sx={{ mb: 3 }}>
@@ -248,47 +301,274 @@ export const ExecutionMonitor: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 出力ファイル */}
-      {execution.output_files.length > 0 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              出力ファイル
-            </Typography>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ファイル名</TableCell>
-                    <TableCell>サイズ</TableCell>
-                    <TableCell>アクション</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {execution.output_files.map((file) => (
-                    <TableRow key={file.file_id}>
-                      <TableCell>{file.filename}</TableCell>
-                      <TableCell>
-                        {(file.file_size / 1024 / 1024).toFixed(2)} MB
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          startIcon={<Download />}
-                          onClick={() => handleDownload(file.file_id, file.filename)}
-                        >
-                          ダウンロード
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
+      {/* 処理結果 */}
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            処理結果
+          </Typography>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={resultsTabValue} onChange={(_, newValue) => setResultsTabValue(newValue)}>
+              <Tab 
+                label={`画像プレビュー ${execution.output_files.filter(f => isImageFile(f.filename)).length > 0 ? `(${execution.output_files.filter(f => isImageFile(f.filename)).length})` : ''}`}
+              />
+              <Tab 
+                label={`ファイル一覧 ${execution.output_files.length > 0 ? `(${execution.output_files.length})` : ''}`}
+              />
+              <Tab label="処理詳細" />
+            </Tabs>
+          </Box>
+
+          {/* 画像プレビュータブ */}
+          {resultsTabValue === 0 && (
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                処理結果画像
+              </Typography>
+              {execution.output_files.length === 0 ? (
+                <Alert severity="info">
+                  処理結果ファイルがまだ生成されていません。実行が完了するまでお待ちください。
+                </Alert>
+              ) : execution.output_files.filter(file => isImageFile(file.filename)).length === 0 ? (
+                <Alert severity="warning">
+                  画像ファイルが見つかりませんでした。「ファイル一覧」タブで他の出力ファイルを確認してください。
+                </Alert>
+              ) : (
+                <Grid container spacing={2}>
+                  {execution.output_files
+                    .filter(file => isImageFile(file.filename))
+                    .map((file) => (
+                      <Grid item xs={12} sm={6} md={4} key={file.file_id}>
+                        <Card>
+                          <CardContent>
+                            <Typography variant="subtitle2" gutterBottom noWrap>
+                              {file.filename}
+                            </Typography>
+                            <Box
+                              sx={{
+                                width: '100%',
+                                height: 200,
+                                backgroundColor: '#f5f5f5',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                border: '1px dashed #ccc',
+                                borderRadius: 1
+                              }}
+                              onClick={() => handlePreview(file.file_id, file.filename)}
+                            >
+                              <Typography color="textSecondary">
+                                クリックで画像を表示
+                              </Typography>
+                            </Box>
+                            <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Visibility />}
+                                onClick={() => handlePreview(file.file_id, file.filename)}
+                              >
+                                プレビュー
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Download />}
+                                onClick={() => handleDownload(file.file_id, file.filename)}
+                              >
+                                DL
+                              </Button>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                </Grid>
+              )}
+            </Box>
+          )}
+
+          {/* ファイル一覧タブ */}
+          {resultsTabValue === 1 && (
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                出力ファイル一覧
+              </Typography>
+              {execution.output_files.length === 0 ? (
+                <Alert severity="info">
+                  処理結果ファイルがまだ生成されていません。実行が完了するまでお待ちください。
+                </Alert>
+              ) : (
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ファイル名</TableCell>
+                        <TableCell>タイプ</TableCell>
+                        <TableCell>サイズ</TableCell>
+                        <TableCell>アクション</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {execution.output_files.map((file) => (
+                        <TableRow key={file.file_id}>
+                          <TableCell>{file.filename}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={isImageFile(file.filename) ? '画像' : 'その他'}
+                              color={isImageFile(file.filename) ? 'primary' : 'default'}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {(file.file_size / 1024 / 1024).toFixed(2)} MB
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              {isImageFile(file.filename) && (
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  startIcon={<Visibility />}
+                                  onClick={() => handlePreview(file.file_id, file.filename)}
+                                >
+                                  プレビュー
+                                </Button>
+                              )}
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Download />}
+                                onClick={() => handleDownload(file.file_id, file.filename)}
+                              >
+                                ダウンロード
+                              </Button>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          )}
+
+          {/* 処理詳細タブ */}
+          {resultsTabValue === 2 && (
+            <Box>
+                <Typography variant="h6" gutterBottom>
+                  処理詳細情報
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" gutterBottom>
+                          実行統計
+                        </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="body2">
+                            総実行時間: {execution.completed_at && execution.started_at 
+                              ? `${Math.round((new Date(execution.completed_at).getTime() - new Date(execution.started_at).getTime()) / 1000)}秒`
+                              : '実行中または未開始'
+                            }
+                          </Typography>
+                          <Typography variant="body2">
+                            処理ステップ数: {execution.steps.length}
+                          </Typography>
+                          <Typography variant="body2">
+                            完了ステップ数: {execution.steps.filter(s => s.status === 'completed').length}
+                          </Typography>
+                          <Typography variant="body2">
+                            出力ファイル数: {execution.output_files.length}
+                          </Typography>
+                          <Typography variant="body2">
+                            総出力サイズ: {(execution.output_files.reduce((sum, f) => sum + f.file_size, 0) / 1024 / 1024).toFixed(2)} MB
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" gutterBottom>
+                          リソース使用量
+                        </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          {execution.steps.some(s => s.resource_usage) ? (
+                            execution.steps
+                              .filter(s => s.resource_usage)
+                              .map((step, index) => (
+                                <Box key={index} sx={{ mb: 1 }}>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {step.component_name}:
+                                  </Typography>
+                                  <Typography variant="body2" color="textSecondary">
+                                    CPU: {step.resource_usage?.cpu_usage}%
+                                    {step.resource_usage?.memory_usage && `, MEM: ${step.resource_usage.memory_usage}MB`}
+                                    {step.resource_usage?.gpu_usage && `, GPU: ${step.resource_usage.gpu_usage}%`}
+                                  </Typography>
+                                </Box>
+                              ))
+                          ) : (
+                            <Typography variant="body2" color="textSecondary">
+                              リソース使用量データがありません
+                            </Typography>
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 画像プレビューダイアログ */}
+      <Dialog
+        open={previewDialog.open}
+        onClose={handleClosePreview}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {previewDialog.filename}
+        </DialogTitle>
+        <DialogContent>
+          {previewDialog.imageUrl && (
+            <Box
+              component="img"
+              src={previewDialog.imageUrl}
+              alt={previewDialog.filename}
+              sx={{
+                width: '100%',
+                height: 'auto',
+                maxHeight: '70vh',
+                objectFit: 'contain'
+              }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePreview}>
+            閉じる
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Download />}
+            onClick={() => {
+              handleDownload(previewDialog.fileId, previewDialog.filename)
+              handleClosePreview()
+            }}
+          >
+            ダウンロード
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
