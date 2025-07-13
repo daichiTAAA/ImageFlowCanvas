@@ -1,6 +1,9 @@
 name: "yolo"
 platform: "onnxruntime_onnx"
 max_batch_size: 8
+
+# YOLO11 model configuration
+# Compatible with YOLO11n.onnx converted from yolo11n.pt
 input [
   {
     name: "images"

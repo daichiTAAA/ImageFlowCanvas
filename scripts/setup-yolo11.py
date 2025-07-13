@@ -13,7 +13,7 @@ def download_yolo11_pt(url: str, output_path: str) -> bool:
     """Download YOLO11n.pt model from the specified URL."""
     try:
         print(f"Downloading YOLO11n.pt from {url}...")
-        response = requests.get(url, stream=True)
+        response = requests.get(url, stream=True, allow_redirects=True)
         response.raise_for_status()
         
         os.makedirs(os.path.dirname(output_path), exist_ok=True)

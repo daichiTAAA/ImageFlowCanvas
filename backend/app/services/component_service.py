@@ -76,7 +76,7 @@ class ComponentService:
                         "detections_count": len(detections),
                         "detections": detections,
                         "confidence_threshold": confidence_threshold,
-                        "model_type": "yolo_triton"
+                        "model_type": "yolo11_triton"
                     }
                     
                     with open(result_json_path, 'w') as f:
