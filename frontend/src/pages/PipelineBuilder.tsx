@@ -138,8 +138,8 @@ export const PipelineBuilder: React.FC = () => {
         console.log('Test execution started:', result)
         setTestDialogOpen(false)
         setTestFiles([])
-        // 実行監視画面に遷移する場合
-        // navigate(`/execution-monitor/${result.execution_id}`)
+        // 実行監視画面に遷移して結果を確認
+        navigate(`/execution/${result.execution_id}`)
       },
       onError: (error) => {
         console.error('Test execution failed:', error)

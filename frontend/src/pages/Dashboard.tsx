@@ -47,11 +47,13 @@ export const Dashboard: React.FC = () => {
     ({ pipelineId, files }: { pipelineId: string; files: File[] }) =>
       apiService.executePipeline(pipelineId, files),
     {
-      onSuccess: () => {
+      onSuccess: (result) => {
         queryClient.invalidateQueries('executions')
         setExecuteDialogOpen(false)
         setSelectedPipeline(null)
         setSelectedFiles([])
+        // 実行監視画面に遷移して結果を確認
+        navigate(`/execution/${result.execution_id}`)
       },
       onError: (error) => {
         console.error('Pipeline execution failed:', error)
