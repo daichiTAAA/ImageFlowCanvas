@@ -50,7 +50,7 @@ export const PipelineBuilder: React.FC = () => {
     'components', 
     () => apiService.getComponents(),
     {
-      enabled: true, // Always enable for testing
+      enabled: isAuthenticated, // 認証済みの場合のみクエリを実行
       retry: 1,
       onError: (error) => {
         console.error('Components fetch error:', error)
@@ -63,10 +63,9 @@ export const PipelineBuilder: React.FC = () => {
     return <div>読み込み中...</div>
   }
 
-  // Temporarily bypass authentication for testing
-  // if (!isAuthenticated) {
-  //   return <Navigate to="/login" replace />
-  // }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
 
   // デバッグ用ログ
   console.log('Auth state:', { isAuthenticated, loading })

@@ -7,7 +7,7 @@ router = APIRouter()
 component_service = ComponentService()
 
 @router.get("/", response_model=List[Dict[str, Any]])
-async def get_components():
+async def get_components(user=Depends(get_current_user)):
     """利用可能なコンポーネント一覧を取得"""
     return await component_service.get_available_components()
 
