@@ -23,17 +23,14 @@ class ExecutionWorker:
         """ワーカーを開始"""
         self.running = True
         logger.info("Execution worker started")
-        print("Execution worker started - DEBUG")
         
         # 常に直接実行モードで開始（Kafkaの問題を回避）
         logger.info("Starting direct execution mode")
-        print("Starting direct execution mode - DEBUG")
         
         try:
             await self.start_direct_execution_mode()
         except Exception as e:
             logger.error(f"Error starting direct execution mode: {e}")
-            print(f"Error starting direct execution mode: {e} - DEBUG")
     
     async def stop(self):
         """ワーカーを停止"""
@@ -43,25 +40,19 @@ class ExecutionWorker:
     async def start_direct_execution_mode(self):
         """直接実行モード（Kafkaが利用できない場合）"""
         logger.info("Starting direct execution mode")
-        print("Starting direct execution mode - DEBUG")
         execution_service = self.get_execution_service()
         
         # 実行待ちのタスクを定期的にチェック
         while self.running:
             try:
-                print(f"Direct execution mode: checking for pending executions... - DEBUG")
                 # 実行待ちのタスクがあるかチェック
                 pending_executions = await execution_service.get_pending_executions()
                 
-                print(f"Found {len(pending_executions)} pending executions - DEBUG")
-                
                 if pending_executions:
                     logger.info(f"Found {len(pending_executions)} pending executions")
-                    print(f"Found {len(pending_executions)} pending executions - DEBUG")
                 
                 for execution in pending_executions:
                     logger.info(f"Processing execution {execution.execution_id} in direct mode")
-                    print(f"Processing execution {execution.execution_id} in direct mode - DEBUG")
                     await self.process_execution_direct(execution)
                 
                 # 5秒間隔でチェック
@@ -69,12 +60,10 @@ class ExecutionWorker:
                 
             except Exception as e:
                 logger.error(f"Error in direct execution mode: {e}")
-                print(f"Error in direct execution mode: {e} - DEBUG")
                 await asyncio.sleep(10)  # エラー時は長めに待機
     
     async def process_execution_direct(self, execution):
         """直接実行モードでの実行処理"""
-        print(f"process_execution_direct called for {execution.execution_id} - DEBUG")
         try:
             execution_service = self.get_execution_service()
             
@@ -91,7 +80,6 @@ class ExecutionWorker:
             
         except Exception as e:
             logger.error(f"Error in direct execution: {e}")
-            print(f"Error in direct execution: {e} - DEBUG")
             execution_service = self.get_execution_service()
             await execution_service.update_execution_status(
                 execution.execution_id,
@@ -132,12 +120,10 @@ class ExecutionWorker:
         input_files = execution_data.get("input_files", [])
         parameters = execution_data.get("parameters", {})
         
-        print(f"process_execution_message_internal called for {execution_id} - DEBUG")
         logger.info(f"Processing execution {execution_id} for pipeline {pipeline_id}")
         
         # 実行状況を「実行中」に更新
         execution_service = self.get_execution_service()
-        print(f"Updating execution status to RUNNING - DEBUG")
         await execution_service.update_execution_status(
             execution_id, 
             ExecutionStatus.RUNNING,
@@ -148,7 +134,6 @@ class ExecutionWorker:
             }
         )
         
-        print(f"Starting simulate_image_processing - DEBUG")
         # 実際の画像処理をシミュレート
         await self.simulate_image_processing(execution_id, input_files, parameters)
     

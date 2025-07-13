@@ -79,8 +79,7 @@ async def startup_event():
     print("Starting execution worker...")
     try:
         # バックグラウンドタスクとしてワーカーを起動
-        task = asyncio.create_task(execution_worker.start())
-        print(f"Worker task created: {task}")
+        asyncio.create_task(execution_worker.start())
     except Exception as e:
         print(f"Error starting worker: {e}")
 

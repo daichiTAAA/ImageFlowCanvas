@@ -122,21 +122,16 @@ class ExecutionService:
     
     async def update_execution_status(self, execution_id: str, status: ExecutionStatus, progress_data: dict = None):
         """実行状況を更新（Kafkaコンシューマーから呼び出される）"""
-        print(f"update_execution_status called for {execution_id}, status: {status} - DEBUG")
         execution = self.executions.get(execution_id)
         if not execution:
-            print(f"Execution {execution_id} not found in executions dict - DEBUG")
             return
         
-        print(f"Updating execution {execution_id} from {execution.status} to {status} - DEBUG")
         execution.status = status
         
         if progress_data:
             execution.progress.current_step = progress_data.get("current_step", execution.progress.current_step)
             execution.progress.completed_steps = progress_data.get("completed_steps", execution.progress.completed_steps)
             execution.progress.percentage = progress_data.get("percentage", execution.progress.percentage)
-        
-        print(f"Execution {execution_id} updated successfully - DEBUG")
         
         # WebSocket で進捗をリアルタイム通知
         websocket_manager = self.get_websocket_manager()
@@ -153,6 +148,5 @@ class ExecutionService:
                     }
                 }
                 await websocket_manager.send_execution_update(execution_id, update_data)
-                print(f"WebSocket update sent for {execution_id} - DEBUG")
             except Exception as e:
                 print(f"Failed to send WebSocket update: {e}")
