@@ -481,15 +481,33 @@ EOF
 
 ### **4.3. 動的ジョブ生成バックエンドAPI**
 
-#### **4.3.1. Flask APIサーバー**
+#### **4.3.1. FastAPI APIサーバー**
 
 ```python
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict, Optional
 import json
 import requests
 from jinja2 import Template
+import uvicorn
 
-app = Flask(__name__)
+app = FastAPI(title="Dynamic Pipeline API", version="1.0.0")
+
+# リクエストモデル定義
+class ComponentConfig(BaseModel):
+    type: str
+    config: Dict[str, str] = {}
+
+class PipelineRequest(BaseModel):
+    pipeline_name: str
+    components: List[ComponentConfig]
+    input_image: str
+
+class PipelineResponse(BaseModel):
+    job_id: str
+    status: str
+    pipeline_name: str
 
 # Nomadジョブテンプレート
 NOMAD_JOB_TEMPLATE = """
@@ -524,15 +542,13 @@ job "{{ pipeline_name }}" {
 }
 """
 
-@app.route('/api/pipeline/submit', methods=['POST'])
-def submit_pipeline():
+@app.post("/api/pipeline/submit", response_model=PipelineResponse)
+async def submit_pipeline(pipeline_request: PipelineRequest):
     """パイプライン実行リクエストを受け取り、Nomadジョブを生成・投入"""
-    
-    pipeline_request = request.json
     
     # パイプライン定義の検証
     if not _validate_pipeline_request(pipeline_request):
-        return jsonify({'error': 'Invalid pipeline definition'}), 400
+        raise HTTPException(status_code=400, detail="Invalid pipeline definition")
     
     try:
         # Nomadジョブ定義の生成
@@ -541,38 +557,48 @@ def submit_pipeline():
         # Nomadへのジョブ投入
         job_id = _submit_to_nomad(nomad_job)
         
-        return jsonify({
-            'job_id': job_id,
-            'status': 'submitted',
-            'pipeline_name': pipeline_request['pipeline_name']
-        })
+        return PipelineResponse(
+            job_id=job_id,
+            status="submitted",
+            pipeline_name=pipeline_request.pipeline_name
+        )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-def _generate_nomad_job(pipeline_request):
+def _validate_pipeline_request(pipeline_request: PipelineRequest) -> bool:
+    """パイプライン定義の検証"""
+    if not pipeline_request.pipeline_name:
+        return False
+    if not pipeline_request.components:
+        return False
+    if not pipeline_request.input_image:
+        return False
+    return True
+
+def _generate_nomad_job(pipeline_request: PipelineRequest) -> str:
     """パイプライン定義からNomadジョブを動的生成"""
     
     # フロー文字列の生成
-    pipeline_flow = ','.join([comp['type'] for comp in pipeline_request['components']])
+    pipeline_flow = ','.join([comp.type for comp in pipeline_request.components])
     
     # 設定パラメータの展開
     config = {}
-    for component in pipeline_request['components']:
-        for key, value in component.get('config', {}).items():
-            config[f"{component['type'].upper()}_{key.upper()}"] = value
+    for component in pipeline_request.components:
+        for key, value in component.config.items():
+            config[f"{component.type.upper()}_{key.upper()}"] = value
     
     # リソース要件の動的計算
-    cpu_requirement = _calculate_cpu_requirement(pipeline_request['components'])
-    memory_requirement = _calculate_memory_requirement(pipeline_request['components'])
+    cpu_requirement = _calculate_cpu_requirement(pipeline_request.components)
+    memory_requirement = _calculate_memory_requirement(pipeline_request.components)
     
     # テンプレート展開
     template = Template(NOMAD_JOB_TEMPLATE)
     nomad_job_hcl = template.render(
-        pipeline_name=pipeline_request['pipeline_name'],
+        pipeline_name=pipeline_request.pipeline_name,
         pipeline_flow=pipeline_flow,
-        input_image=pipeline_request['input_image'],
-        output_path=f"processed/{pipeline_request['pipeline_name']}/",
+        input_image=pipeline_request.input_image,
+        output_path=f"processed/{pipeline_request.pipeline_name}/",
         config=config,
         cpu_requirement=cpu_requirement,
         memory_requirement=memory_requirement
@@ -580,7 +606,27 @@ def _generate_nomad_job(pipeline_request):
     
     return nomad_job_hcl
 
-def _submit_to_nomad(nomad_job_hcl):
+def _calculate_cpu_requirement(components: List[ComponentConfig]) -> int:
+    """処理コンポーネントに基づいてCPU要件を計算"""
+    base_cpu = 1000  # 1 CPU core
+    for component in components:
+        if component.type in ['object_detection', 'face_recognition']:
+            base_cpu += 1000
+        elif component.type in ['resize', 'blur_faces']:
+            base_cpu += 500
+    return base_cpu
+
+def _calculate_memory_requirement(components: List[ComponentConfig]) -> int:
+    """処理コンポーネントに基づいてメモリ要件を計算"""
+    base_memory = 1024  # 1GB
+    for component in components:
+        if component.type in ['object_detection', 'face_recognition']:
+            base_memory += 2048
+        elif component.type in ['resize', 'blur_faces']:
+            base_memory += 512
+    return base_memory
+
+def _submit_to_nomad(nomad_job_hcl: str) -> str:
     """Nomadクラスタにジョブを投入"""
     
     # HCLをJSONに変換（実際の実装では外部ツールを使用）
@@ -598,7 +644,7 @@ def _submit_to_nomad(nomad_job_hcl):
         raise Exception(f"Nomad job submission failed: {response.text}")
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5000, reload=True)
 ```
 
 ## **第5章：運用監視とスケーリング戦略**
