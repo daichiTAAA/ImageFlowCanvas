@@ -81,6 +81,12 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
    
    # VMを起動
    limactl start k3s
+
+   # VMの状態確認
+   limactl status k3s
+
+   # VMの停止
+   limactl stop k3s
    ```
 
 3. **VM内でK3sをセットアップ**
@@ -89,40 +95,82 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
    limactl shell k3s
    
    # VM内でプロジェクトをクローン
+   cd ~
    git clone <your-repo-url>
-   cd ImageFlowCanvas
+   cd ~/ImageFlowCanvas
    
    # K3sセットアップ
    sudo ./scripts/setup-k3s.sh
+
+   # 立ち上がっているか確認
+   kubectl get pods -A
    ```
+   * 【参考】VSCode Remote-SSHでLima VMに接続する方法
+     1. VSCode拡張機能「Remote - SSH」をインストール
+     2. ターミナルで下記コマンドを実行し、SSH設定内容を確認
+        ```bash
+        limactl show-ssh k3s
+        ```
+        出力例：
+        ```
+        Host lima-k3s
+          HostName 127.0.0.1
+          User lima
+          Port 60022
+          IdentityFile /Users/ユーザー名/.lima/_config/user
+          StrictHostKeyChecking no
+          UserKnownHostsFile=/dev/null
+        ```
+     3. 上記内容を `~/.ssh/config` に追記
+     4. VSCodeで「Remote-SSH: Connect to Host...」を実行し、`lima-k3s` を選択
+     5. VM内のディレクトリ（例: `~/ImageFlowCanvas`）を開いて作業
+
+※ `limactl show-ssh k3s` の内容は環境ごとに異なるので、必ず自分の出力を使ってください。
 
 4. **ポートフォワーディング設定**
    ```bash
    # Lima VM設定ファイルを編集（ホストマシンで実行）
+   limactl stop k3s
    limactl edit k3s
    ```
    
-   以下の設定を追加：
-   ```yaml
-   portForwards:
-   - guestPort: 6443
-     hostPort: 6443
-   - guestPort: 2746
-     hostPort: 2746
-   - guestPort: 8000
-     hostPort: 8000
-   - guestPort: 9001
-     hostPort: 9001
-   ```
+以下の設定を追加：
+```yaml
+portForwards:
+  - guestPort: 6443
+    hostPort: 6443
+  - guestPort: 2746
+    hostPort: 2746
+  - guestPort: 8000
+    hostPort: 8000
+  - guestPort: 9001
+    hostPort: 9001
+```
+
+   #### 【参考】vimで設定を編集する手順
+   1. 設定ファイルを開く
+      ```bash
+      vim ~/.lima/k3s.yaml
+      ```
+   2. カーソルを追加したい位置に移動
+   3. `i` キーを押して挿入モードに入る（画面左下に -- INSERT -- と表示）
+   4. 上記の設定内容を貼り付けまたは入力
+   5. 編集が終わったら `Esc` キーでコマンドモードに戻る
+   6. `:wq` と入力してEnterで保存して終了
+   
+   ※間違えた場合は `:q!` で保存せず終了できます。
 
 5. **VM再起動とサービス確認**
    ```bash
    # VM再起動
    limactl stop k3s
    limactl start k3s
+
+   # VMにシェル接続
+   limactl shell k3s
+   cd ~/ImageFlowCanvas
    
    # VM内でサービス起動
-   lima k3s
    ./scripts/dev-start.sh
    ```
 
