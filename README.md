@@ -175,3 +175,15 @@ WindowsではWSL2を使用してLinux環境を作成し、その中で開発を�
 2. **パイプライン作成**: コンポーネントをドラッグ&ドロップで配置
 3. **実行**: 画像をアップロードしてパイプラインを実行
 4. **監視**: リアルタイムで進捗を確認
+
+
+## 開発ガイド
+### コンテナイメージのビルド
+各サービスのDockerイメージをビルドするには、リポジトリのルートディレクトリから以下のコマンドを実行します。
+```bash
+# Frontend
+docker build -f frontend/Dockerfile -t imageflow/frontend:latest frontend/
+
+# Backend
+docker build -f backend/Dockerfile -t imageflow/backend:latest backend/
+```
