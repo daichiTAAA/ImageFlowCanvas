@@ -202,7 +202,7 @@ cpus: 4
 memory: "8GiB"
 
 # ディスク容量の増加
-disk: "50GiB"
+disk: "100GiB"
 ```
 
 設定変更後はVMの再起動が必要：
