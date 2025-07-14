@@ -25,79 +25,60 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 
 ## セットアップ
 
-### 開発環境での起動
+開発環境のセットアップは、お使いのOS（Linux, macOS, Windows）に応じて手順が異なります。
 
-#### オプション1: Docker Compose（簡単な開発用）
+### 共通設定（全OS共通）
 
-1. **Triton用モデルの準備**
-   ```bash
-   # YOLO11 ONNXモデルをセットアップ（自動ダウンロード・変換）
-   python scripts/setup-yolo11.py
-   ```
+以下の手順は、Linux（直接）、macOS（Lima VM内）、Windows（WSL2内）すべてで実行します。
 
-2. **Docker Composeでの起動**
-   ```bash
-   docker compose up -d
-   ```
+```bash
+# アーキテクチャの確認
+uname -m  # x86_64 または aarch64 を確認
 
-3. **サービスの確認**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - MinIO Console: http://localhost:9001
-   - Triton Inference Server: http://localhost:8001
+# miniforgeのインストール（アーキテクチャ別）
+# x86_64の場合
+curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
 
-#### オプション2: K3s + Argo Workflows（本格的な開発用）
+# ARM64 (aarch64) の場合
+# curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -o miniforge.sh
 
-##### Linux環境（直接インストール）
-1. **K3sとArgo Workflowsのセットアップ**
-   ```bash
-   # アーキテクチャの確認
-   uname -m  # x86_64 または aarch64 を確認
-   
-   # miniforgeのインストール（アーキテクチャ別）
-   # x86_64の場合
-   curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
-   
-   # ARM64 (aarch64) の場合
-   # curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -o miniforge.sh
-   
-   # または自動判定でインストール
-   # ARCH=$(uname -m)
-   # if [ "$ARCH" = "x86_64" ]; then
-   #   curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
-   # elif [ "$ARCH" = "aarch64" ]; then
-   #   curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -o miniforge.sh
-   # else
-   #   echo "Unsupported architecture: $ARCH"
-   #   exit 1
-   # fi
-   
-   bash miniforge.sh -b -p $HOME/miniforge
-   echo "export PATH=\$HOME/miniforge/bin:\$PATH" >> ~/.bashrc
-   source ~/.bashrc
-   conda init
+bash miniforge.sh -b -p $HOME/miniforge
+echo "export PATH=\$HOME/miniforge/bin:\$PATH" >> ~/.bashrc
+source ~/.bashrc
+conda init
 
-   # conda環境の作成
-   conda create -n imageflowcanvas python=3.12 -y
-   conda activate imageflowcanvas
+# conda環境の作成
+conda create -n imageflowcanvas python=3.12 -y
+conda activate imageflowcanvas
 
-   # YOLO11 ONNXモデルをセットアップ（自動ダウンロード・変換）
-   pip install requests ultralytics
-   python scripts/setup-yolo11.py
-   sudo ./scripts/setup-k3s.sh
-   ```
+# 必要なPythonパッケージのインストール
+pip install requests ultralytics
 
-2. **開発環境の起動**
-   ```bash
-   ./scripts/dev-start.sh
-   ```
+# YOLO11 ONNXモデルをセットアップ（自動ダウンロード・変換）
+python scripts/setup-yolo11.py
 
-3. **ポートフォワーディングの開始**
-   ```bash
-   ./scripts/port-forward.sh
-   ```
+# K3sとArgo Workflowsのセットアップスクリプトを実行
+sudo ./scripts/setup-k3s.sh
 
-##### macOS環境（Lima使用）
+# 立ち上がっているか確認
+kubectl get pods -A
+
+# 開発用サーバーの起動
+./scripts/dev-start.sh
+
+# 別のターミナルを開いて、ポートフォワーディングを開始
+./scripts/port-forward.sh
+```
+
+### Linux環境（直接インストール）
+
+Linuxでは、上記の「共通設定」をそのまま実行してください。
+
+### macOS環境（Lima使用）
+
+macOSでは、Lima VMを使用してLinux環境を作成し、その中で開発を行います。
+
+**Lima固有の準備手順**:
 1. **Limaのインストール**
    ```bash
    # Homebrewでインストール
@@ -114,16 +95,34 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
    
    # VMを起動
    limactl start k3s
-
-   # VMの状態確認
-   limactl status k3s
-
-   # VMの停止
-   limactl stop k3s
    ```
 
-3. **VM内でK3sをセットアップ**
+3. **ポートフォワーディング設定**
    ```bash
+   # Lima VM設定ファイルを編集（ホストマシンで実行）
+   limactl stop k3s
+   limactl edit k3s
+   ```
+   
+   以下の `portForwards` 設定を追加します。これにより、ホストPCからVM内のサービスにアクセスできるようになります。
+   ```yaml
+   portForwards:
+     - guestPort: 3000 # Frontend
+       hostPort: 3000
+     - guestPort: 8000 # Backend
+       hostPort: 8000
+     - guestPort: 9001 # MinIO Console
+       hostPort: 9001
+     - guestPort: 2746 # Argo Workflows UI
+       hostPort: 2746
+   ```
+
+4. **VM再起動と共通設定の実行**
+   ```bash
+   # VM再起動
+   limactl stop k3s
+   limactl start k3s
+
    # VMにシェル接続
    limactl shell k3s
    
@@ -132,109 +131,43 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
    git clone <your-repo-url>
    cd ~/ImageFlowCanvas
    
-   # K3sセットアップ
-   sudo ./scripts/setup-k3s.sh
-
-   # 立ち上がっているか確認
-   kubectl get pods -A
+   # ここで「共通設定」の手順をすべて実行
    ```
+
    * 【参考】VSCode Remote-SSHでLima VMに接続する方法
      1. VSCode拡張機能「Remote - SSH」をインストール
      2. ターミナルで下記コマンドを実行し、SSH設定内容を確認
         ```bash
         limactl show-ssh k3s
         ```
-        出力例：
-        ```
-        Host lima-k3s
-          HostName 127.0.0.1
-          User lima
-          Port 60022
-          IdentityFile /Users/ユーザー名/.lima/_config/user
-          StrictHostKeyChecking no
-          UserKnownHostsFile=/dev/null
-        ```
-     3. 上記内容を `~/.ssh/config` に追記
+     3. 出力内容を `~/.ssh/config` に追記
      4. VSCodeで「Remote-SSH: Connect to Host...」を実行し、`lima-k3s` を選択
-     5. VM内のディレクトリ（例: `~/ImageFlowCanvas`）を開いて作業
 
-※ `limactl show-ssh k3s` の内容は環境ごとに異なるので、必ず自分の出力を使ってください。
+### Windows環境（WSL2使用）
 
-4. **ポートフォワーディング設定**
-   ```bash
-   # Lima VM設定ファイルを編集（ホストマシンで実行）
-   limactl stop k3s
-   limactl edit k3s
-   ```
-   
-以下の設定を追加：
-```yaml
-portForwards:
-  - guestPort: 6443
-    hostPort: 6443
-  - guestPort: 2746
-    hostPort: 2746
-  - guestPort: 8000
-    hostPort: 8000
-  - guestPort: 9001
-    hostPort: 9001
-```
+WindowsではWSL2を使用してLinux環境を作成し、その中で開発を行います。
 
-   #### 【参考】vimで設定を編集する手順
-   1. 設定ファイルを開く
-      ```bash
-      vim ~/.lima/k3s.yaml
-      ```
-   2. カーソルを追加したい位置に移動
-   3. `i` キーを押して挿入モードに入る（画面左下に -- INSERT -- と表示）
-   4. 上記の設定内容を貼り付けまたは入力
-   5. 編集が終わったら `Esc` キーでコマンドモードに戻る
-   6. `:wq` と入力してEnterで保存して終了
-   
-   ※間違えた場合は `:q!` で保存せず終了できます。
-
-5. **VM再起動とサービス確認**
-   ```bash
-   # VM再起動
-   limactl stop k3s
-   limactl start k3s
-
-   # VMにシェル接続
-   limactl shell k3s
-   cd ~/ImageFlowCanvas
-   
-   # VM内でサービス起動
-   ./scripts/dev-start.sh
-   ```
-
-##### Windows環境（WSL2使用）
+**WSL2固有の準備手順**:
 1. **WSL2のセットアップ**
    ```bash
    # PowerShellで実行
    wsl --install Ubuntu-22.04
    ```
 
-2. **WSL2内でLinux手順を実行**
+2. **WSL2での共通設定の実行**
    ```bash
-   # WSL2シェルで実行
-   sudo ./scripts/setup-k3s.sh
-   ./scripts/dev-start.sh
-   ```
-
-4. **フロントエンドの起動**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
+   # WSL2シェルを起動し、「共通設定」の手順をすべて実行
+   # プロジェクトを適切なディレクトリにクローンしてから実行してください
    ```
 
 ### アクセスポイント
 
+セットアップ完了後、以下のURLにブラウザでアクセスしてください。
+
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
+- **Backend API (Swagger UI)**: http://localhost:8000/docs
 - **Argo Workflows UI**: http://localhost:2746
-- **MinIO Console**: http://localhost:9001 (admin/admin123)
-- **Triton Inference Server**: http://localhost:8001
+- **MinIO Console**: http://localhost:9001 (ID: `minioadmin`, PW: `minioadmin`)
 
 ### 使用方法
 
@@ -242,45 +175,3 @@ portForwards:
 2. **パイプライン作成**: コンポーネントをドラッグ&ドロップで配置
 3. **実行**: 画像をアップロードしてパイプラインを実行
 4. **監視**: リアルタイムで進捗を確認
-
-## YOLO11の初期設定
-
-ImageFlowCanvasはYOLO11を使用して高精度な物体検出を提供します。
-
-### YOLO11モデルのセットアップ
-
-1. **自動セットアップ（推奨）**:
-   ```bash
-   python scripts/setup-yolo11.py
-   ```
-   
-   このスクリプトは以下を自動実行します：
-   - YOLO11n.ptモデルのダウンロード
-   - ONNX形式への変換
-   - Tritonサーバー用の配置
-
-2. **手動セットアップ**:
-   ```bash
-   # ultralytics パッケージをインストール
-   pip install ultralytics
-   
-   # YOLO11n.ptをダウンロード
-   wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
-   
-   # ONNX形式に変換
-   python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', imgsz=640, dynamic=False)"
-   
-   # 変換されたモデルを配置
-   mv yolo11n.onnx models/yolo/1/model.onnx
-   ```
-
-### YOLO11の特徴
-
-- **高精度な物体検出**: COCO 80クラスの物体を検出
-- **改善されたパフォーマンス**: 前世代YOLOより高速・高精度  
-- **小物体検出の向上**: 細かい物体の検出精度が向上
-- **CPU/GPU対応**: 環境に応じて最適化
-
-### 使用可能な検出クラス
-
-person, bicycle, car, motorcycle, airplane, bus, train, truck, boat, traffic light, fire hydrant, stop sign, parking meter, bench, bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe, backpack, umbrella, handbag, tie, suitcase, frisbee, skis, snowboard, sports ball, kite, baseball bat, baseball glove, skateboard, surfboard, tennis racket, bottle, wine glass, cup, fork, knife, spoon, bowl, banana, apple, sandwich, orange, broccoli, carrot, hot dog, pizza, donut, cake, chair, couch, potted plant, bed, dining table, toilet, tv, laptop, mouse, remote, keyboard, cell phone, microwave, oven, toaster, sink, refrigerator, book, clock, vase, scissors, teddy bear, hair drier, toothbrush

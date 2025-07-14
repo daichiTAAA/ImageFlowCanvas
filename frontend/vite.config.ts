@@ -1,54 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Determine backend target based on environment
-// In Docker: VITE_BACKEND_URL is set to http://backend:8000
-// In local development: Use localhost:8000
-const getBackendTarget = () => {
-  const envUrl = process.env.VITE_BACKEND_URL
-  
-  // If VITE_BACKEND_URL is set, use it directly
-  // This handles both Docker (backend:8000) and local development properly
-  if (envUrl) {
-    return envUrl
-  }
-  
-  // Fallback to localhost for local development
-  return 'http://localhost:8000'
-}
-
-const backendTarget = getBackendTarget()
-
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
     host: '0.0.0.0',
-    proxy: {
-      '/api': {
-        target: backendTarget,
-        changeOrigin: true,
-        rewrite: (path) => {
-          // Add trailing slash for routes that need it to avoid FastAPI redirects
-          const newPath = path.replace(/^\/api/, '/v1')
-          
-          // Check if this is a base route that needs trailing slash
-          if (newPath.match(/^\/v1\/(pipelines|executions|components|files|auth)($|\?)/)) {
-            return newPath.replace(/^(\/v1\/[^\/\?]+)($|\?)/, '$1/$2')
-          }
-          
-          return newPath
-        },
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
-            console.log('Proxy error:', err.message)
-          })
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Proxy request:', req.method, req.url, '->', proxyReq.path)
-          })
-        }
-      }
-    }
+    // Nginxでプロキシするため、Viteのプロキシ設定は削除
   },
   build: {
     outDir: 'dist',
