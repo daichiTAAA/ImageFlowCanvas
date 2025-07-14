@@ -178,12 +178,52 @@ WindowsではWSL2を使用してLinux環境を作成し、その中で開発を�
 
 
 ## 開発ガイド
+
+### ⚠️ Lima VM使用時の注意事項
+
+Lima VMでDockerビルドを行う際は、以下の点にご注意ください：
+
+#### リソース不足でVMがスタックする場合
+```bash
+# Dockerキャッシュを定期的にクリア
+sudo docker system prune -af --volumes
+
+# ディスク使用量の確認
+df -h
+sudo docker system df
+```
+
+#### Lima VM設定の最適化
+Lima VMの設定ファイル（`~/.lima/k3s/lima.yaml`）で以下を調整することを推奨：
+
+```yaml
+# CPUとメモリの増加
+cpus: 4
+memory: "8GiB"
+
+# ディスク容量の増加
+disk: "100GiB"
+```
+
+設定変更後はVMの再起動が必要：
+```bash
+limactl stop k3s
+limactl start k3s
+```
+
 ### コンテナイメージのビルド
 各サービスのDockerイメージをビルドするには、リポジトリのルートディレクトリから以下のコマンドを実行します。
+
 ```bash
+# ビルド前にディスク容量を確認
+df -h
+
 # Frontend
 docker build -f frontend/Dockerfile -t imageflow/frontend:latest frontend/
 
-# Backend
+# Backend  
 docker build -f backend/Dockerfile -t imageflow/backend:latest backend/
+
+# ビルド後の不要なキャッシュを削除
+docker system prune -f
 ```
