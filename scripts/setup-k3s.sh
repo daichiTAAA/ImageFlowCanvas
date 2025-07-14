@@ -77,7 +77,7 @@ docker save imageflow/frontend:latest | sudo k3s ctr images import -
 
 # Deploy backend and frontend
 echo "Deploying backend and frontend..."
-kubectl apply -f k8s/core/backend-deployment.yaml
+kubectl apply -f k8s/core/app-deployments.yaml
 
 # Wait for backend to be ready
 echo "Waiting for backend to be ready..."

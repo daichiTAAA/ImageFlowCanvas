@@ -227,3 +227,16 @@ docker build -f backend/Dockerfile -t imageflow/backend:latest backend/
 # ビルド後の不要なキャッシュを削除
 docker system prune -f
 ```
+
+### K3sへのデプロイ
+K3sにデプロイするには、以下のコマンドを実行します。
+```bash
+# Frontendのデプロイ
+# アプリケーション（Backend & Frontend）のデプロイ
+kubectl apply -f k8s/core/app-deployments.yaml
+```
+
+新しいコンテナイメージを強制的に反映する場合は、以下のコマンドを使用します。
+```bash
+kubectl rollout restart deployment/backend deployment/frontend
+```
