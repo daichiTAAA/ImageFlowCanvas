@@ -120,7 +120,7 @@ class ApiService {
       const api = this.ensureApiInitialized()
       console.log('API Service - getPipelines using API instance:', !!api)
       
-      const response = await api.get('/pipelines')
+      const response = await api.get('/pipelines/')
       console.log('Pipelines response:', response.data)
       return response.data
     } catch (error) {
@@ -131,25 +131,25 @@ class ApiService {
 
   async getPipeline(id: string): Promise<Pipeline> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/pipelines/${id}`)
+    const response = await api.get(`/pipelines/${id}/`)
     return response.data
   }
 
   async createPipeline(pipeline: Omit<Pipeline, 'id' | 'created_at' | 'updated_at'>): Promise<Pipeline> {
     const api = this.ensureApiInitialized()
-    const response = await api.post('/pipelines', pipeline)
+    const response = await api.post('/pipelines/', pipeline)
     return response.data
   }
 
   async updatePipeline(id: string, pipeline: Partial<Pipeline>): Promise<Pipeline> {
     const api = this.ensureApiInitialized()
-    const response = await api.put(`/pipelines/${id}`, pipeline)
+    const response = await api.put(`/pipelines/${id}/`, pipeline)
     return response.data
   }
 
   async deletePipeline(id: string): Promise<void> {
     const api = this.ensureApiInitialized()
-    await api.delete(`/pipelines/${id}`)
+    await api.delete(`/pipelines/${id}/`)
   }
 
   // Execution APIs
@@ -164,7 +164,7 @@ class ApiService {
       formData.append('input_files', file)
     })
 
-    const response = await api.post('/executions', formData, {
+    const response = await api.post('/executions/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -174,7 +174,7 @@ class ApiService {
 
   async getExecution(id: string): Promise<Execution> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/executions/${id}`)
+    const response = await api.get(`/executions/${id}/`)
     return response.data
   }
 
@@ -183,7 +183,7 @@ class ApiService {
       const api = this.ensureApiInitialized()
       console.log('API Service - getExecutions using API instance:', !!api)
       
-      const response = await api.get(`/executions?limit=${limit}&offset=${offset}`)
+      const response = await api.get(`/executions/?limit=${limit}&offset=${offset}`)
       console.log('Executions response:', response.data)
       return response.data
     } catch (error) {
@@ -194,7 +194,7 @@ class ApiService {
 
   async cancelExecution(id: string): Promise<void> {
     const api = this.ensureApiInitialized()
-    await api.post(`/executions/${id}/cancel`)
+    await api.post(`/executions/${id}/cancel/`)
   }
 
   // Component APIs
@@ -204,7 +204,7 @@ class ApiService {
       console.log('API Service - getComponents using API instance:', !!api)
       console.log('Attempting to call GET /components')
       
-      const response = await api.get('/components')
+      const response = await api.get('/components/')
       console.log('Components response:', response.data)
       return response.data
     } catch (error) {
@@ -215,7 +215,7 @@ class ApiService {
 
   async getComponent(id: string): Promise<ComponentDefinition> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/components/${id}`)
+    const response = await api.get(`/components/${id}/`)
     return response.data
   }
 
@@ -225,7 +225,7 @@ class ApiService {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await api.post('/files', formData, {
+    const response = await api.post('/files/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -235,7 +235,7 @@ class ApiService {
 
   async downloadFile(fileId: string): Promise<Blob> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/files/${fileId}`, {
+    const response = await api.get(`/files/${fileId}/`, {
       responseType: 'blob',
     })
     return response.data
@@ -243,7 +243,7 @@ class ApiService {
 
   async deleteFile(fileId: string): Promise<void> {
     const api = this.ensureApiInitialized()
-    await api.delete(`/files/${fileId}`)
+    await api.delete(`/files/${fileId}/`)
   }
 }
 

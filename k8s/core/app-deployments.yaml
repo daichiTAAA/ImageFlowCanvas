@@ -4,7 +4,7 @@ metadata:
   name: backend
   namespace: default
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: backend
@@ -16,10 +16,12 @@ spec:
       containers:
       - name: backend
         image: imageflow/backend:latest
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
         env:
+        - name: DATABASE_URL
+          value: "postgresql+asyncpg://imageflow:imageflow123@postgres-service:5432/imageflow"
         - name: MINIO_ENDPOINT
           value: "minio-service:9000"
         - name: MINIO_ACCESS_KEY
@@ -76,7 +78,7 @@ spec:
       containers:
       - name: frontend
         image: imageflow/frontend:latest
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
 ---

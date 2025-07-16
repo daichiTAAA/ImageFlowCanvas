@@ -1,5 +1,6 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
@@ -8,12 +9,20 @@ import json
 from app.api import pipelines, executions, components, files, auth
 from app.services.websocket_manager import ConnectionManager
 from app.services.execution_worker import execution_worker
+from app.database import init_db
 
 app = FastAPI(
     title="ImageFlowCanvas API",
     description="Dynamic image processing pipeline API",
-    version="1.0.0"
+    version="1.0.0",
 )
+
+
+# データベース初期化
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+
 
 # CORS設定
 app.add_middleware(
@@ -27,12 +36,30 @@ app.add_middleware(
 # WebSocket接続マネージャー
 manager = ConnectionManager()
 
+
+# カスタムCORSミドルウェア（リダイレクト時にもCORSヘッダーを追加）
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    response = await call_next(request)
+
+    # すべてのレスポンスにCORSヘッダーを追加
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    )
+    response.headers["Access-Control-Expose-Headers"] = "Content-Length,Content-Range"
+
+    return response
+
+
 # APIルーターの登録
 app.include_router(auth.router, prefix="/v1/auth", tags=["authentication"])
 app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["executions"])
 app.include_router(components.router, prefix="/v1/components", tags=["components"])
 app.include_router(files.router, prefix="/v1/files", tags=["files"])
+
 
 @app.websocket("/v1/ws/{execution_id}")
 async def websocket_endpoint(websocket: WebSocket, execution_id: str):
@@ -54,6 +81,7 @@ async def websocket_endpoint(websocket: WebSocket, execution_id: str):
         manager.unsubscribe_from_execution(execution_id, websocket)
         manager.disconnect(websocket)
 
+
 @app.websocket("/v1/ws")
 async def websocket_general_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -65,13 +93,16 @@ async def websocket_general_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+
 @app.get("/")
 async def root():
     return {"message": "ImageFlowCanvas API Server"}
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -83,16 +114,13 @@ async def startup_event():
     except Exception as e:
         print(f"Error starting worker: {e}")
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """アプリケーション終了時にワーカーを停止"""
     print("Stopping execution worker...")
     await execution_worker.stop()
 
+
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

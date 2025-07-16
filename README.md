@@ -229,14 +229,117 @@ docker system prune -f
 ```
 
 ### K3sへのデプロイ
+
+#### 初回デプロイ
 K3sにデプロイするには、以下のコマンドを実行します。
 ```bash
-# Frontendのデプロイ
 # アプリケーション（Backend & Frontend）のデプロイ
 kubectl apply -f k8s/core/app-deployments.yaml
 ```
 
-新しいコンテナイメージを強制的に反映する場合は、以下のコマンドを使用します。
+#### デプロイメントファイルの変更を反映
+設定ファイル（YAML）を変更した場合：
 ```bash
-kubectl rollout restart deployment/backend deployment/frontend
+# 変更をクラスターに適用
+kubectl apply -f k8s/core/app-deployments.yaml
+
+# デプロイメントの状態を確認
+kubectl get deployments
+kubectl get pods
 ```
+
+#### コンテナイメージの変更を反映
+新しいコンテナイメージを反映する場合は、以下の手順を実行します：
+
+**方法1: イメージをK3sに直接インポート（推奨）**
+```bash
+# 1. イメージを再ビルド
+docker build -t imageflow/frontend:latest ./frontend/
+docker build -t imageflow/backend:latest ./backend/
+
+# 2. K3sにイメージをインポート
+docker save imageflow/frontend:latest | sudo k3s ctr images import -
+docker save imageflow/backend:latest | sudo k3s ctr images import -
+
+# 3. デプロイメントを再起動（imagePullPolicy: Never の場合）
+kubectl rollout restart deployment/frontend deployment/backend
+```
+
+**方法2: imagePullPolicyを一時的に変更**
+```bash
+# 1. イメージを再ビルド
+docker build -t imageflow/frontend:latest ./frontend/
+docker build -t imageflow/backend:latest ./backend/
+
+# 2. デプロイメントのimagePullPolicyをAlwaysに変更
+kubectl patch deployment frontend -p='{"spec":{"template":{"spec":{"containers":[{"name":"frontend","imagePullPolicy":"Always"}]}}}}'
+kubectl patch deployment backend -p='{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Always"}]}}}}'
+
+# 3. デプロイメントを再起動
+kubectl rollout restart deployment/frontend deployment/backend
+
+# 4. 必要に応じてimagePullPolicyをNeverに戻す
+kubectl patch deployment frontend -p='{"spec":{"template":{"spec":{"containers":[{"name":"frontend","imagePullPolicy":"Never"}]}}}}'
+kubectl patch deployment backend -p='{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Never"}]}}}}'
+```
+
+#### デプロイメントの確認
+```bash
+# ポッドの状態確認
+kubectl get pods -o wide
+
+# ログの確認
+kubectl logs -f deployment/frontend
+kubectl logs -f deployment/backend
+
+# サービスの確認
+kubectl get services
+```
+
+### デプロイメントファイルの変更を反映する場合
+deploymentファイルの変更をK3sクラスターに適用するには、以下のコマンドを実行します。
+```bash
+kubectl apply -f k8s/core/app-deployments.yaml
+```
+
+## トラブルシューティング
+
+### パイプラインが保存されてもダッシュボードに表示されない
+
+**症状**: パイプラインビルダーでパイプラインを保存したが、ダッシュボードページで「パイプラインがありません」と表示される
+
+**原因と対処法**:
+
+1. **認証状態の確認**
+   ```bash
+   # ブラウザでF12キーを押して開発者ツールを開き、Consoleタブで確認
+   # 「Not authenticated」エラーが出ている場合は再ログインが必要
+   ```
+
+2. **ブラウザキャッシュのクリア**
+   ```bash
+   # Ctrl+F5 (Windows/Linux) または Cmd+Shift+R (Mac) でハードリフレッシュ
+   # または開発者ツール > Application > Storage > Clear storage
+   ```
+
+3. **APIの直接テスト**
+   ```bash
+   # ログインしてトークンを取得
+   TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
+     -d '{"username":"admin","password":"admin123"}' \
+     http://localhost:3000/api/auth/login | \
+     grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+
+   # パイプライン一覧を取得
+   curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/pipelines/
+   ```
+
+4. **バックエンドポッドの確認**
+   ```bash
+   # バックエンドポッドが複数ある場合、データが異なるポッドに保存されている可能性
+   kubectl get pods -l app=backend
+   kubectl logs -f deployment/backend
+   ```
+
+**注意**: 現在の実装ではパイプラインはインメモリに保存されるため、バックエンドポッドが再起動されるとデータが失われます。
+
