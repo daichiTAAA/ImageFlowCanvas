@@ -41,6 +41,10 @@ echo "Installing Argo Workflows..."
 kubectl create namespace argo --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.5.4/install.yaml
 
+# Apply custom Argo Server configuration
+echo "Applying custom Argo Server configuration..."
+kubectl apply -f k8s/core/argo-server-deployment.yaml
+
 # Wait for Argo Workflows to be ready
 echo "Waiting for Argo Workflows to be ready..."
 kubectl wait --for=condition=available --timeout=300s deployment/argo-server -n argo

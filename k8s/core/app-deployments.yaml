@@ -36,13 +36,13 @@ spec:
           value: "triton-service:8000"
         livenessProbe:
           httpGet:
-            path: /health
+            path: /v1/health
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /health
+            path: /v1/health
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5

@@ -68,7 +68,7 @@ async def add_cors_header(request: Request, call_next):
 
 
 # APIルーターの登録
-app.include_router(health.router, tags=["health"])
+app.include_router(health.router, prefix="/v1", tags=["health"])
 app.include_router(websocket.router, prefix="/v1", tags=["websocket"])
 app.include_router(auth.router, prefix="/v1/auth", tags=["authentication"])
 app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
