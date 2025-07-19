@@ -1,8 +1,16 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import uuid
+
+# JST = UTC+9
+JST = timezone(timedelta(hours=9))
+
+
+def jst_now():
+    """現在の日本時間を取得"""
+    return datetime.now(JST)
 
 
 class ExecutionStatus(str, Enum):
@@ -72,7 +80,7 @@ class Execution(BaseModel):
     steps: List[ExecutionStep] = Field(default_factory=list)
     output_files: List[OutputFile] = Field(default_factory=list)
     workflow_name: Optional[str] = None  # Argo Workflow name
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=jst_now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None

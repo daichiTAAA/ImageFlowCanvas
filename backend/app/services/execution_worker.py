@@ -502,18 +502,27 @@ class ExecutionWorker:
                 recursive=True,
             )
 
-            for i, obj in enumerate(objects):
+            for obj in objects:
                 # オブジェクトの統計情報を取得
                 stat = file_service.minio_client.stat_object(
                     bucket_name=file_service.bucket_name, object_name=obj.object_name
                 )
 
+                # ファイル拡張子からコンテンツタイプを推定
+                content_type = "application/octet-stream"
+                if obj.object_name.lower().endswith(".png"):
+                    content_type = "image/png"
+                elif obj.object_name.lower().endswith((".jpg", ".jpeg")):
+                    content_type = "image/jpeg"
+                elif obj.object_name.lower().endswith(".tiff"):
+                    content_type = "image/tiff"
+
                 output_files.append(
                     OutputFile(
-                        file_id=f"{execution_id}-output-{i}",
+                        file_id=obj.object_name,  # 実際のオブジェクト名をfile_idとして使用
                         filename=obj.object_name,
                         file_size=stat.size,
-                        content_type=stat.content_type or "application/octet-stream",
+                        content_type=content_type,
                     )
                 )
 

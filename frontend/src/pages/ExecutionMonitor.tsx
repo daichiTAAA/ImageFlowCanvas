@@ -47,6 +47,10 @@ export const ExecutionMonitor: React.FC = () => {
     imageUrl: string;
   }>({ open: false, fileId: "", filename: "", imageUrl: "" });
   const [resultsTabValue, setResultsTabValue] = useState(0);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>(
+    {}
+  );
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -168,6 +172,73 @@ export const ExecutionMonitor: React.FC = () => {
     return imageExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
   };
 
+  const loadImageForDisplay = async (fileId: string) => {
+    if (imageUrls[fileId] || loadingImages[fileId]) {
+      console.log(`Skipping load for ${fileId}: already loaded or loading`);
+      return; // 既に読み込み済みまたは読み込み中
+    }
+
+    console.log(`Loading image for file_id: ${fileId}`);
+    setLoadingImages((prev) => ({ ...prev, [fileId]: true }));
+
+    try {
+      const blob = await apiService.downloadFile(fileId);
+      const imageUrl = window.URL.createObjectURL(blob);
+      console.log(
+        `Successfully loaded image for ${fileId}, blob size: ${
+          blob.size
+        }, URL: ${imageUrl.substring(0, 50)}...`
+      );
+      setImageUrls((prev) => ({ ...prev, [fileId]: imageUrl }));
+    } catch (error) {
+      console.error(`Failed to load image for ${fileId}:`, error);
+    } finally {
+      setLoadingImages((prev) => ({ ...prev, [fileId]: false }));
+    }
+  };
+
+  // 実行が完了した時に画像を自動読み込み
+  React.useEffect(() => {
+    if (execution?.status === "completed" && execution.output_files) {
+      console.log(
+        "Auto-loading images for completed execution, total files:",
+        execution.output_files.length
+      );
+      const imageFiles = execution.output_files.filter((file) =>
+        isImageFile(file.filename)
+      );
+      console.log(
+        "Image files to load:",
+        imageFiles.map((f) => ({ id: f.file_id, name: f.filename }))
+      );
+
+      imageFiles.forEach((file, index) => {
+        // 順次ロードして競合を避ける
+        setTimeout(() => {
+          loadImageForDisplay(file.file_id);
+        }, index * 100); // 100ms間隔でロード
+      });
+    }
+  }, [execution?.status, execution?.output_files]);
+
+  // 画像プレビュータブが表示される時に画像を再読み込み
+  React.useEffect(() => {
+    if (resultsTabValue === 0 && execution?.output_files) {
+      const imageFiles = execution.output_files.filter((file) =>
+        isImageFile(file.filename)
+      );
+
+      imageFiles.forEach((file, index) => {
+        // 既に読み込み済みでないか、URLが無効でないかチェック
+        if (!imageUrls[file.file_id]) {
+          setTimeout(() => {
+            loadImageForDisplay(file.file_id);
+          }, index * 100);
+        }
+      });
+    }
+  }, [resultsTabValue, execution?.output_files, imageUrls]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
@@ -283,9 +354,14 @@ export const ExecutionMonitor: React.FC = () => {
               </Typography>
               {execution.error_details && (
                 <Box sx={{ mt: 1 }}>
-                  {execution.error_details.error_type === 'argo_delegation_failure' && (
+                  {execution.error_details.error_type ===
+                    "argo_delegation_failure" && (
                     <Box sx={{ mt: 1 }}>
-                      <Typography variant="caption" display="block" gutterBottom>
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        gutterBottom
+                      >
                         <strong>Argo Workflows設定:</strong>
                       </Typography>
                       <Typography variant="caption" display="block">
@@ -295,25 +371,40 @@ export const ExecutionMonitor: React.FC = () => {
                         • 名前空間: {execution.error_details.argo_namespace}
                       </Typography>
                       <Typography variant="caption" display="block">
-                        • ワークフローテンプレート: {execution.error_details.workflow_template}
+                        • ワークフローテンプレート:{" "}
+                        {execution.error_details.workflow_template}
                       </Typography>
                       <Typography variant="caption" display="block">
-                        • サーバー状態: {execution.error_details.argo_server_healthy ? '接続可能' : '接続不可'}
+                        • サーバー状態:{" "}
+                        {execution.error_details.argo_server_healthy
+                          ? "接続可能"
+                          : "接続不可"}
                       </Typography>
                     </Box>
                   )}
-                  {execution.error_details.failed_nodes && execution.error_details.failed_nodes.length > 0 && (
-                    <Box sx={{ mt: 1 }}>
-                      <Typography variant="caption" display="block" gutterBottom>
-                        <strong>失敗したステップ:</strong>
-                      </Typography>
-                      {execution.error_details.failed_nodes.map((node, index) => (
-                        <Typography key={index} variant="caption" display="block">
-                          • {node.name}: {node.message}
+                  {execution.error_details.failed_nodes &&
+                    execution.error_details.failed_nodes.length > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          gutterBottom
+                        >
+                          <strong>失敗したステップ:</strong>
                         </Typography>
-                      ))}
-                    </Box>
-                  )}
+                        {execution.error_details.failed_nodes.map(
+                          (node, index) => (
+                            <Typography
+                              key={index}
+                              variant="caption"
+                              display="block"
+                            >
+                              • {node.name}: {node.message}
+                            </Typography>
+                          )
+                        )}
+                      </Box>
+                    )}
                 </Box>
               )}
             </Alert>
@@ -335,7 +426,6 @@ export const ExecutionMonitor: React.FC = () => {
                   <TableCell>ステータス</TableCell>
                   <TableCell>開始時刻</TableCell>
                   <TableCell>完了時刻</TableCell>
-                  <TableCell>リソース使用量</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -358,19 +448,6 @@ export const ExecutionMonitor: React.FC = () => {
                       {step.completed_at
                         ? new Date(step.completed_at).toLocaleString()
                         : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {step.resource_usage ? (
-                        <Typography variant="body2">
-                          CPU: {step.resource_usage.cpu_usage}%
-                          {step.resource_usage.memory_usage &&
-                            `, MEM: ${step.resource_usage.memory_usage}MB`}
-                          {step.resource_usage.gpu_usage &&
-                            `, GPU: ${step.resource_usage.gpu_usage}%`}
-                        </Typography>
-                      ) : (
-                        "-"
-                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -450,14 +527,32 @@ export const ExecutionMonitor: React.FC = () => {
                                 cursor: "pointer",
                                 border: "1px dashed #ccc",
                                 borderRadius: 1,
+                                overflow: "hidden",
+                                position: "relative",
                               }}
                               onClick={() =>
                                 handlePreview(file.file_id, file.filename)
                               }
                             >
-                              <Typography color="textSecondary">
-                                クリックで画像を表示
-                              </Typography>
+                              {loadingImages[file.file_id] ? (
+                                <Typography color="textSecondary">
+                                  読み込み中...
+                                </Typography>
+                              ) : imageUrls[file.file_id] ? (
+                                <img
+                                  src={imageUrls[file.file_id]}
+                                  alt={file.filename}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                />
+                              ) : (
+                                <Typography color="textSecondary">
+                                  クリックで画像を表示
+                                </Typography>
+                              )}
                             </Box>
                             <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
                               <Button
@@ -573,7 +668,7 @@ export const ExecutionMonitor: React.FC = () => {
                 処理詳細情報
               </Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" gutterBottom>
@@ -582,13 +677,79 @@ export const ExecutionMonitor: React.FC = () => {
                       <Box sx={{ mt: 2 }}>
                         <Typography variant="body2">
                           総実行時間:{" "}
-                          {execution.completed_at && execution.started_at
-                            ? `${Math.round(
+                          {(() => {
+                            console.log("=== 総実行時間計算デバッグ ===");
+                            console.log(
+                              "execution.completed_at:",
+                              execution.completed_at
+                            );
+                            console.log(
+                              "execution.started_at:",
+                              execution.started_at
+                            );
+                            console.log("execution.steps:", execution.steps);
+
+                            // 実行レベルのタイムスタンプがある場合はそれを使用
+                            if (
+                              execution.completed_at &&
+                              execution.started_at
+                            ) {
+                              console.log("実行レベルのタイムスタンプを使用");
+                              return `${Math.round(
                                 (new Date(execution.completed_at).getTime() -
                                   new Date(execution.started_at).getTime()) /
                                   1000
-                              )}秒`
-                            : "実行中または未開始"}
+                              )}秒`;
+                            }
+
+                            // 実行レベルのタイムスタンプがない場合、ステップから計算
+                            const completedSteps = execution.steps.filter(
+                              (s) => s.status === "completed"
+                            );
+                            console.log("completedSteps:", completedSteps);
+
+                            if (completedSteps.length === 0) {
+                              console.log("完了したステップが0個");
+                              return "実行中または未開始";
+                            }
+
+                            const stepStartTimes = completedSteps
+                              .map((s) => s.started_at)
+                              .filter((t) => t)
+                              .map((t) => new Date(t).getTime());
+                            const stepEndTimes = completedSteps
+                              .map((s) => s.completed_at)
+                              .filter((t) => t)
+                              .map((t) => new Date(t).getTime());
+
+                            console.log("stepStartTimes:", stepStartTimes);
+                            console.log("stepEndTimes:", stepEndTimes);
+
+                            if (
+                              stepStartTimes.length === 0 ||
+                              stepEndTimes.length === 0
+                            ) {
+                              console.log("ステップのタイムスタンプが不足");
+                              return "実行中または未開始";
+                            }
+
+                            const earliestStart = Math.min(...stepStartTimes);
+                            const latestEnd = Math.max(...stepEndTimes);
+
+                            console.log(
+                              "earliestStart:",
+                              new Date(earliestStart)
+                            );
+                            console.log("latestEnd:", new Date(latestEnd));
+                            console.log(
+                              "計算された時間:",
+                              (latestEnd - earliestStart) / 1000
+                            );
+
+                            return `${Math.round(
+                              (latestEnd - earliestStart) / 1000
+                            )}秒`;
+                          })()}
                         </Typography>
                         <Typography variant="body2">
                           処理ステップ数: {execution.steps.length}
@@ -616,42 +777,6 @@ export const ExecutionMonitor: React.FC = () => {
                           ).toFixed(2)}{" "}
                           MB
                         </Typography>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Typography variant="subtitle1" gutterBottom>
-                        リソース使用量
-                      </Typography>
-                      <Box sx={{ mt: 2 }}>
-                        {execution.steps.some((s) => s.resource_usage) ? (
-                          execution.steps
-                            .filter((s) => s.resource_usage)
-                            .map((step, index) => (
-                              <Box key={index} sx={{ mb: 1 }}>
-                                <Typography variant="body2" fontWeight="bold">
-                                  {step.component_name}:
-                                </Typography>
-                                <Typography
-                                  variant="body2"
-                                  color="textSecondary"
-                                >
-                                  CPU: {step.resource_usage?.cpu_usage}%
-                                  {step.resource_usage?.memory_usage &&
-                                    `, MEM: ${step.resource_usage.memory_usage}MB`}
-                                  {step.resource_usage?.gpu_usage &&
-                                    `, GPU: ${step.resource_usage.gpu_usage}%`}
-                                </Typography>
-                              </Box>
-                            ))
-                        ) : (
-                          <Typography variant="body2" color="textSecondary">
-                            リソース使用量データがありません
-                          </Typography>
-                        )}
                       </Box>
                     </CardContent>
                   </Card>
