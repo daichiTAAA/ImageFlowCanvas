@@ -73,10 +73,54 @@ async def websocket_endpoint(websocket: WebSocket, execution_id: str):
             try:
                 message = json.loads(data)
                 message_type = message.get("type")
+
                 if message_type == "ping":
                     await manager.send_personal_json({"type": "pong"}, websocket)
+                elif message_type == "auth":
+                    # 認証メッセージの処理
+                    token = message.get("token")
+                    if token:
+                        await manager.send_personal_json(
+                            {
+                                "type": "auth_success",
+                                "message": "Authentication successful",
+                            },
+                            websocket,
+                        )
+                    else:
+                        await manager.send_personal_json(
+                            {"type": "auth_error", "message": "Authentication failed"},
+                            websocket,
+                        )
+                elif message_type == "watch":
+                    # 監視開始メッセージの処理
+                    execution_id_watch = message.get("executionId")
+                    if execution_id_watch:
+                        manager.subscribe_to_execution(execution_id_watch, websocket)
+                        await manager.send_personal_json(
+                            {
+                                "type": "watch_started",
+                                "executionId": execution_id_watch,
+                            },
+                            websocket,
+                        )
+                    else:
+                        await manager.send_personal_json(
+                            {"type": "error", "message": "Invalid execution ID"},
+                            websocket,
+                        )
+                else:
+                    await manager.send_personal_json(
+                        {
+                            "type": "error",
+                            "message": f"Unknown message type: {message_type}",
+                        },
+                        websocket,
+                    )
             except json.JSONDecodeError:
-                await manager.send_personal_message(f"Echo: {data}", websocket)
+                await manager.send_personal_json(
+                    {"type": "error", "message": "Invalid JSON format"}, websocket
+                )
     except WebSocketDisconnect:
         manager.unsubscribe_from_execution(execution_id, websocket)
         manager.disconnect(websocket)
@@ -88,8 +132,58 @@ async def websocket_general_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            # メッセージ処理ロジックをここに実装
-            await manager.send_personal_message(f"Echo: {data}", websocket)
+            # クライアントからのメッセージを処理
+            try:
+                message = json.loads(data)
+                message_type = message.get("type")
+
+                if message_type == "ping":
+                    await manager.send_personal_json({"type": "pong"}, websocket)
+                elif message_type == "auth":
+                    # 認証メッセージの処理
+                    token = message.get("token")
+                    if token:
+                        await manager.send_personal_json(
+                            {
+                                "type": "auth_success",
+                                "message": "Authentication successful",
+                            },
+                            websocket,
+                        )
+                    else:
+                        await manager.send_personal_json(
+                            {"type": "auth_error", "message": "Authentication failed"},
+                            websocket,
+                        )
+                elif message_type == "watch":
+                    # 監視開始メッセージの処理
+                    execution_id_watch = message.get("executionId")
+                    if execution_id_watch:
+                        manager.subscribe_to_execution(execution_id_watch, websocket)
+                        await manager.send_personal_json(
+                            {
+                                "type": "watch_started",
+                                "executionId": execution_id_watch,
+                            },
+                            websocket,
+                        )
+                    else:
+                        await manager.send_personal_json(
+                            {"type": "error", "message": "Invalid execution ID"},
+                            websocket,
+                        )
+                else:
+                    await manager.send_personal_json(
+                        {
+                            "type": "error",
+                            "message": f"Unknown message type: {message_type}",
+                        },
+                        websocket,
+                    )
+            except json.JSONDecodeError:
+                await manager.send_personal_json(
+                    {"type": "error", "message": "Invalid JSON format"}, websocket
+                )
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 

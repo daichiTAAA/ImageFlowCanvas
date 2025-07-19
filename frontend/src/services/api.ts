@@ -131,7 +131,7 @@ class ApiService {
 
   async getPipeline(id: string): Promise<Pipeline> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/pipelines/${id}/`)
+    const response = await api.get(`/pipelines/${id}`)
     return response.data
   }
 
@@ -143,13 +143,13 @@ class ApiService {
 
   async updatePipeline(id: string, pipeline: Partial<Pipeline>): Promise<Pipeline> {
     const api = this.ensureApiInitialized()
-    const response = await api.put(`/pipelines/${id}/`, pipeline)
+    const response = await api.put(`/pipelines/${id}`, pipeline)
     return response.data
   }
 
   async deletePipeline(id: string): Promise<void> {
     const api = this.ensureApiInitialized()
-    await api.delete(`/pipelines/${id}/`)
+    await api.delete(`/pipelines/${id}`)
   }
 
   // Execution APIs
@@ -174,7 +174,7 @@ class ApiService {
 
   async getExecution(id: string): Promise<Execution> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/executions/${id}/`)
+    const response = await api.get(`/executions/${id}`)
     return response.data
   }
 
@@ -194,7 +194,7 @@ class ApiService {
 
   async cancelExecution(id: string): Promise<void> {
     const api = this.ensureApiInitialized()
-    await api.post(`/executions/${id}/cancel/`)
+    await api.post(`/executions/${id}/cancel`)
   }
 
   // Component APIs
@@ -215,7 +215,7 @@ class ApiService {
 
   async getComponent(id: string): Promise<ComponentDefinition> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/components/${id}/`)
+    const response = await api.get(`/components/${id}`)
     return response.data
   }
 
@@ -235,7 +235,7 @@ class ApiService {
 
   async downloadFile(fileId: string): Promise<Blob> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/files/${fileId}/`, {
+    const response = await api.get(`/files/${fileId}`, {
       responseType: 'blob',
     })
     return response.data
@@ -243,7 +243,7 @@ class ApiService {
 
   async deleteFile(fileId: string): Promise<void> {
     const api = this.ensureApiInitialized()
-    await api.delete(`/files/${fileId}/`)
+    await api.delete(`/files/${fileId}`)
   }
 }
 
