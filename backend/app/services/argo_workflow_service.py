@@ -14,6 +14,8 @@ class ArgoWorkflowService:
     """Argo Workflows integration service for executing image processing pipelines"""
 
     def __init__(self):
+        # For Kubernetes deployment, use cluster internal service
+        # For local development outside cluster, use localhost with port forwarding
         self.argo_server_url = os.getenv(
             "ARGO_SERVER_URL", "http://argo-server.argo.svc.cluster.local:2746"
         )
@@ -148,11 +150,12 @@ class ArgoWorkflowService:
                 )
 
                 # Submit workflow via Argo Server API
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                headers = self._get_headers()
+                async with httpx.AsyncClient(timeout=self.timeout, verify=not self.insecure) as client:
                     response = await client.post(
                         f"{self.argo_server_url}/api/v1/workflows/{self.namespace}",
-                        json=workflow_payload,
-                        headers={"Content-Type": "application/json"},
+                        json={"workflow": workflow_payload},
+                        headers=headers,
                     )
 
                     if response.status_code == 200:

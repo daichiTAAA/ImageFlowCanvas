@@ -23,7 +23,6 @@ COPY src/detect.py .
 # 実行権限を付与
 RUN chmod +x detect.py
 
-# 事前にモデルをダウンロード（オプション）
-RUN python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
+# Triton Inference Serverを使用するため、モデルのローカルダウンロードは不要
 
 ENTRYPOINT ["python", "detect.py"]

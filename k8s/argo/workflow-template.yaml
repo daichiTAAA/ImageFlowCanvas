@@ -1,0 +1,261 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dynamic-image-processing
+  namespace: argo
+  labels:
+    app.kubernetes.io/name: imageflow-canvas
+    app.kubernetes.io/component: workflow-template
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  
+  # 引数定義
+  arguments:
+    parameters:
+    - name: input-files
+      value: "[]"
+    - name: pipeline-definition
+      value: "{}"
+    - name: execution-id
+      value: ""
+    - name: pipeline-id
+      value: ""
+    - name: additional-parameters
+      value: "{}"
+      
+  # アーティファクト設定
+  artifactRepositoryRef:
+    configMap: artifact-repositories
+    key: minio
+  
+  # テンプレート定義
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: input-files
+      - name: pipeline-definition
+      - name: execution-id
+      - name: pipeline-id
+      - name: additional-parameters
+        default: "{}"
+    dag:
+      tasks:
+      - name: init-execution
+        template: init-execution-step
+        arguments:
+          parameters:
+          - name: execution-id
+            value: "{{inputs.parameters.execution-id}}"
+          - name: pipeline-definition
+            value: "{{inputs.parameters.pipeline-definition}}"
+            
+      - name: resize-step
+        template: resize-component
+        dependencies: [init-execution]
+        arguments:
+          parameters:
+          - name: execution-id
+            value: "{{inputs.parameters.execution-id}}"
+          - name: input-path
+            value: "input"
+          - name: output-path
+            value: "processed/resize"
+          - name: width
+            value: "800"
+          - name: height
+            value: "600"
+          - name: maintain-aspect-ratio
+            value: "true"
+            
+      - name: ai-detection-step
+        template: ai-detection-component
+        dependencies: [resize-step]
+        arguments:
+          parameters:
+          - name: execution-id
+            value: "{{inputs.parameters.execution-id}}"
+          - name: input-path
+            value: "processed/resize"
+          - name: output-path
+            value: "processed/ai-detection"
+          - name: model-name
+            value: "yolo11n.pt"
+          - name: confidence-threshold
+            value: "0.5"
+          - name: draw-boxes
+            value: "true"
+            
+      - name: filter-step
+        template: filter-component
+        dependencies: [ai-detection-step]
+        arguments:
+          parameters:
+          - name: execution-id
+            value: "{{inputs.parameters.execution-id}}"
+          - name: input-path
+            value: "processed/ai-detection"
+          - name: output-path
+            value: "processed/filter"
+          - name: filter-type
+            value: "blur"
+          - name: intensity
+            value: "1.0"
+            
+      - name: finalize-execution
+        template: finalize-execution-step
+        dependencies: [filter-step]
+        arguments:
+          parameters:
+          - name: execution-id
+            value: "{{inputs.parameters.execution-id}}"
+          - name: final-output-path
+            value: "processed/filter"
+
+  # 初期化ステップ
+  - name: init-execution-step
+    inputs:
+      parameters:
+      - name: execution-id
+      - name: pipeline-definition
+    script:
+      image: alpine:latest
+      command: [sh]
+      source: |
+        echo "Starting execution {{inputs.parameters.execution-id}}"
+        echo "Pipeline definition: {{inputs.parameters.pipeline-definition}}"
+        echo "Execution initialized successfully"
+
+  # リサイズコンポーネント
+  - name: resize-component
+    inputs:
+      parameters:
+      - name: execution-id
+      - name: input-path
+      - name: output-path
+      - name: width
+        default: "800"
+      - name: height
+        default: "600"
+      - name: maintain-aspect-ratio
+        default: "true"
+    container:
+      image: resize-app:latest
+      imagePullPolicy: Never
+      command: ["python", "resize.py"]
+      args:
+      - "--input-bucket=imageflow-files"
+      - "--input-path={{inputs.parameters.execution-id}}.png"
+      - "--output-bucket=imageflow-files"
+      - "--output-path={{inputs.parameters.execution-id}}_{{inputs.parameters.output-path}}.png"
+      - "--width={{inputs.parameters.width}}"
+      - "--height={{inputs.parameters.height}}"
+      - "--maintain-aspect={{inputs.parameters.maintain-aspect-ratio}}"
+      env:
+      - name: MINIO_ENDPOINT
+        value: "minio-service.default.svc.cluster.local:9000"
+      - name: MINIO_ACCESS_KEY
+        value: "minioadmin"
+      - name: MINIO_SECRET_KEY
+        value: "minioadmin"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+  # AI検出コンポーネント
+  - name: ai-detection-component
+    inputs:
+      parameters:
+      - name: execution-id
+      - name: input-path
+      - name: output-path
+      - name: model-name
+        default: "yolo11n"
+      - name: confidence-threshold
+        default: "0.5"
+      - name: draw-boxes
+        default: "true"
+    container:
+      image: object-detection-app:latest
+      imagePullPolicy: Never
+      command: ["python", "detect.py"]
+      args:
+      - "--input-bucket=imageflow-files"
+      - "--input-path={{inputs.parameters.execution-id}}.png"
+      - "--output-bucket=imageflow-files"
+      - "--output-path={{inputs.parameters.execution-id}}_{{inputs.parameters.output-path}}.png"
+      - "--model={{inputs.parameters.model-name}}"
+      - "--confidence={{inputs.parameters.confidence-threshold}}"
+      - "--draw-boxes={{inputs.parameters.draw-boxes}}"
+      env:
+      - name: MINIO_ENDPOINT
+        value: "minio-service.default.svc.cluster.local:9000"
+      - name: MINIO_ACCESS_KEY
+        value: "minioadmin"
+      - name: MINIO_SECRET_KEY
+        value: "minioadmin"
+      - name: TRITON_SERVER_URL
+        value: "triton-server:8000"
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2
+          memory: 4Gi
+
+  # フィルタコンポーネント
+  - name: filter-component
+    inputs:
+      parameters:
+      - name: execution-id
+      - name: input-path
+      - name: output-path
+      - name: filter-type
+        default: "blur"
+      - name: intensity
+        default: "1.0"
+    container:
+      image: filter-app:latest
+      imagePullPolicy: Never
+      command: ["python", "filter.py"]
+      args:
+      - "--input-bucket=imageflow-files"
+      - "--input-path={{inputs.parameters.execution-id}}.png"
+      - "--output-bucket=imageflow-files"
+      - "--output-path={{inputs.parameters.execution-id}}_{{inputs.parameters.output-path}}.png"
+      - "--filter-type={{inputs.parameters.filter-type}}"
+      - "--intensity={{inputs.parameters.intensity}}"
+      env:
+      - name: MINIO_ENDPOINT
+        value: "minio-service.default.svc.cluster.local:9000"
+      - name: MINIO_ACCESS_KEY
+        value: "minioadmin"
+      - name: MINIO_SECRET_KEY
+        value: "minioadmin"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+  # 終了処理ステップ
+  - name: finalize-execution-step
+    inputs:
+      parameters:
+      - name: execution-id
+      - name: final-output-path
+    script:
+      image: alpine:latest
+      command: [sh]
+      source: |
+        echo "Finalizing execution {{inputs.parameters.execution-id}}"
+        echo "Final output available at: {{inputs.parameters.final-output-path}}"
+        echo "Execution completed successfully"
