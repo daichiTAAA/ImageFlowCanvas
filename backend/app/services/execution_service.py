@@ -43,11 +43,13 @@ class ExecutionService:
         """パイプラインを実行"""
         execution_id = str(uuid.uuid4())
         
-        # 入力ファイルをアップロード
+        # 入力ファイルをアップロード（実行IDを使用）
         uploaded_files = []
-        for file in input_files:
-            file_id = await self.file_service.upload_file(file)
-            uploaded_files.append(file_id)
+        for i, file in enumerate(input_files):
+            # 実行IDベースのファイルIDを生成（複数ファイル対応）
+            file_id = f"{execution_id}-input-{i}" if len(input_files) > 1 else execution_id
+            actual_file_id = await self.file_service.upload_file(file, file_id)
+            uploaded_files.append(actual_file_id)
         
         # 実行オブジェクトを作成
         execution = Execution(

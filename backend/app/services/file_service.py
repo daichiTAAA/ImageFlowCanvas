@@ -47,9 +47,11 @@ class FileService:
             print(f"Error creating bucket: {e}")
             self.minio_available = False
     
-    async def upload_file(self, file: UploadFile) -> str:
+    async def upload_file(self, file: UploadFile, file_id: str = None) -> str:
         """ファイルをMinIOにアップロード"""
-        file_id = str(uuid.uuid4())
+        if file_id is None:
+            file_id = str(uuid.uuid4())
+        
         file_extension = ""
         if file.filename:
             file_extension = os.path.splitext(file.filename)[1]

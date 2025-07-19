@@ -73,8 +73,11 @@ def main():
         inputs = []
         outputs = []
         
-        input_name = model_metadata.inputs[0].name
-        output_name = model_metadata.outputs[0].name
+        # YOLOモデルの入力・出力名（config.pbtxtで定義済み）
+        input_name = "images"
+        output_name = "output0"
+        
+        logging.info(f"Using input: {input_name}, output: {output_name}")
         
         inputs.append(httpclient.InferInput(input_name, img_input.shape, "FP32"))
         inputs[0].set_data_from_numpy(img_input)

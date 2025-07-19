@@ -61,7 +61,7 @@ spec:
           - name: input-path
             value: "input"
           - name: output-path
-            value: "processed/resize"
+            value: "resize"
           - name: width
             value: "800"
           - name: height
@@ -77,11 +77,11 @@ spec:
           - name: execution-id
             value: "{{inputs.parameters.execution-id}}"
           - name: input-path
-            value: "processed/resize"
+            value: "resize"
           - name: output-path
-            value: "processed/ai-detection"
+            value: "ai-detection"
           - name: model-name
-            value: "yolo11n.pt"
+            value: "yolo"
           - name: confidence-threshold
             value: "0.5"
           - name: draw-boxes
@@ -95,9 +95,9 @@ spec:
           - name: execution-id
             value: "{{inputs.parameters.execution-id}}"
           - name: input-path
-            value: "processed/ai-detection"
+            value: "ai-detection"
           - name: output-path
-            value: "processed/filter"
+            value: "filter"
           - name: filter-type
             value: "blur"
           - name: intensity
@@ -111,7 +111,7 @@ spec:
           - name: execution-id
             value: "{{inputs.parameters.execution-id}}"
           - name: final-output-path
-            value: "processed/filter"
+            value: "filter"
 
   # 初期化ステップ
   - name: init-execution-step
@@ -186,7 +186,7 @@ spec:
       command: ["python", "detect.py"]
       args:
       - "--input-bucket=imageflow-files"
-      - "--input-path={{inputs.parameters.execution-id}}.png"
+      - "--input-path={{inputs.parameters.execution-id}}_{{inputs.parameters.input-path}}.png"
       - "--output-bucket=imageflow-files"
       - "--output-path={{inputs.parameters.execution-id}}_{{inputs.parameters.output-path}}.png"
       - "--model={{inputs.parameters.model-name}}"
@@ -200,7 +200,7 @@ spec:
       - name: MINIO_SECRET_KEY
         value: "minioadmin"
       - name: TRITON_SERVER_URL
-        value: "triton-server:8000"
+        value: "triton-service.default.svc.cluster.local:8000"
       resources:
         requests:
           cpu: 500m
@@ -226,7 +226,7 @@ spec:
       command: ["python", "filter.py"]
       args:
       - "--input-bucket=imageflow-files"
-      - "--input-path={{inputs.parameters.execution-id}}.png"
+      - "--input-path={{inputs.parameters.execution-id}}_{{inputs.parameters.input-path}}.png"
       - "--output-bucket=imageflow-files"
       - "--output-path={{inputs.parameters.execution-id}}_{{inputs.parameters.output-path}}.png"
       - "--filter-type={{inputs.parameters.filter-type}}"
