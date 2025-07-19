@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 from app.services.kafka_service import KafkaService
 from app.services.argo_workflow_service import get_argo_workflow_service
 from app.models.execution import ExecutionStatus, ExecutionStep, StepStatus
@@ -92,9 +92,20 @@ class ExecutionWorker:
                 await asyncio.sleep(20)  # エラー時は長めに待機
     
     async def delegate_execution_to_argo(self, execution):
-        """実行をArgo Workflowsに委譲"""
+        """実行をArgo Workflowsに委譲、失敗時は詳細な情報を提供"""
         try:
             execution_service = self.get_execution_service()
+            
+            # 実行状況を「実行中」に更新
+            await execution_service.update_execution_status(
+                execution.execution_id, 
+                ExecutionStatus.RUNNING,
+                {
+                    "current_step": "Argo Workflowsへの接続を確認中",
+                    "completed_steps": 0,
+                    "percentage": 5.0
+                }
+            )
             
             # パイプライン定義を取得（モック）
             pipeline_definition = self._get_mock_pipeline_definition(execution.pipeline_id)
@@ -103,14 +114,14 @@ class ExecutionWorker:
             input_files = []  # 実際の実装では実行からファイルリストを取得
             parameters = {}   # 実際の実装では実行から設定を取得
             
-            # 実行状況を「実行中」に更新
+            # 実行状況を更新
             await execution_service.update_execution_status(
                 execution.execution_id, 
                 ExecutionStatus.RUNNING,
                 {
-                    "current_step": "Argo Workflowsに委譲中",
+                    "current_step": "Argo Workflowsに処理を委譲中",
                     "completed_steps": 0,
-                    "percentage": 0.0
+                    "percentage": 10.0
                 }
             )
             
@@ -131,24 +142,41 @@ class ExecutionWorker:
                     ExecutionStatus.RUNNING,
                     {
                         "current_step": f"Argo Workflow {workflow_name} が開始されました",
-                        "completed_steps": 0,
-                        "percentage": 10.0,
+                        "completed_steps": 1,
+                        "percentage": 20.0,
                         "workflow_name": workflow_name
                     }
                 )
                 logger.info(f"Successfully delegated execution {execution.execution_id} to workflow {workflow_name}")
             else:
-                # ワークフロー送信失敗
+                # ワークフロー送信失敗 - 詳細エラー情報とフォールバック案内
+                error_message = "Argo Workflowsへの委譲に失敗しました"
+                
+                # Argo Workflowsの健全性チェック
+                is_healthy = await self.argo_service.health_check()
+                if not is_healthy:
+                    error_message = "Argo Workflowsサーバーに接続できません。サーバーが起動していることを確認してください。"
+                
                 await execution_service.update_execution_status(
                     execution.execution_id,
                     ExecutionStatus.FAILED,
                     {
-                        "current_step": "Argo Workflowsへの委譲に失敗しました",
+                        "current_step": error_message,
                         "completed_steps": 0,
-                        "percentage": 0.0
+                        "percentage": 0.0,
+                        "error_details": {
+                            "error_type": "argo_delegation_failure",
+                            "argo_server_url": self.argo_service.argo_server_url,
+                            "argo_namespace": self.argo_service.namespace,
+                            "workflow_template": self.argo_service.workflow_template,
+                            "argo_server_healthy": is_healthy
+                        }
                     }
                 )
                 logger.error(f"Failed to delegate execution {execution.execution_id} to Argo Workflows")
+                
+                # フォールバック処理の提案をログに記録
+                logger.info(f"Consider implementing fallback execution mode for execution {execution.execution_id}")
                 
         except Exception as e:
             logger.error(f"Error delegating execution to Argo: {e}")
@@ -159,29 +187,50 @@ class ExecutionWorker:
                 {
                     "current_step": f"Argo委譲エラー: {str(e)}",
                     "completed_steps": 0,
-                    "percentage": 0.0
+                    "percentage": 0.0,
+                    "error_details": {
+                        "error_type": "argo_delegation_exception",
+                        "error_message": str(e),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
                 }
             )
     
     async def monitor_workflow_progress(self, execution):
-        """ワークフローの進捗を監視"""
+        """ワークフローの進捗を監視（エラーハンドリング強化）"""
         try:
             execution_service = self.get_execution_service()
             workflow_name = execution.workflow_name
+            
+            logger.debug(f"Monitoring workflow {workflow_name} for execution {execution.execution_id}")
             
             # Argo Workflowsから状態を取得
             workflow_status = await self.argo_service.get_workflow_status(workflow_name)
             
             if not workflow_status:
                 logger.warning(f"Could not get status for workflow {workflow_name}")
+                # 一定回数失敗した場合はエラーにする処理を追加可能
                 return
             
             # ワークフロー状態を解析
             status = workflow_status.get("status", {})
             phase = status.get("phase", "Unknown")
+            start_time = workflow_status.get("metadata", {}).get("creationTimestamp")
+            
+            logger.debug(f"Workflow {workflow_name} phase: {phase}")
             
             # 進捗情報を更新
-            if phase == "Running":
+            if phase == "Pending":
+                await execution_service.update_execution_status(
+                    execution.execution_id,
+                    ExecutionStatus.RUNNING,
+                    {
+                        "current_step": "ワークフロー開始待機中",
+                        "completed_steps": 1,
+                        "percentage": 15.0
+                    }
+                )
+            elif phase == "Running":
                 progress_info = self._calculate_workflow_progress(status)
                 await execution_service.update_execution_status(
                     execution.execution_id,
@@ -195,32 +244,75 @@ class ExecutionWorker:
                     {
                         "current_step": "ワークフロー処理完了",
                         "completed_steps": 100,
-                        "percentage": 100.0
+                        "percentage": 100.0,
+                        "completed_at": datetime.utcnow().isoformat()
                     }
                 )
                 logger.info(f"Workflow {workflow_name} completed successfully")
             elif phase == "Failed" or phase == "Error":
                 error_message = status.get("message", "Unknown error")
+                failed_nodes = self._get_failed_nodes(status)
+                
                 await execution_service.update_execution_status(
                     execution.execution_id,
                     ExecutionStatus.FAILED,
                     {
                         "current_step": f"ワークフロー処理失敗: {error_message}",
                         "completed_steps": 0,
-                        "percentage": 0.0
+                        "percentage": 0.0,
+                        "error_details": {
+                            "phase": phase,
+                            "message": error_message,
+                            "failed_nodes": failed_nodes,
+                            "workflow_name": workflow_name
+                        }
                     }
                 )
                 logger.error(f"Workflow {workflow_name} failed: {error_message}")
+                if failed_nodes:
+                    logger.error(f"Failed nodes: {failed_nodes}")
+            else:
+                logger.warning(f"Unknown workflow phase for {workflow_name}: {phase}")
                 
         except Exception as e:
             logger.error(f"Error monitoring workflow progress: {e}")
+            # 監視エラーが発生しても実行を失敗にはしない（一時的な問題の可能性）
+            execution_service = self.get_execution_service()
+            await execution_service.update_execution_status(
+                execution.execution_id,
+                ExecutionStatus.RUNNING,
+                {
+                    "current_step": f"ワークフロー監視エラー（再試行中）: {str(e)}",
+                    "completed_steps": execution.progress.completed_steps,
+                    "percentage": execution.progress.percentage
+                }
+            )
+    
+    def _get_failed_nodes(self, workflow_status: Dict[str, Any]) -> List[Dict[str, str]]:
+        """ワークフロー状態から失敗したノードの情報を取得"""
+        nodes = workflow_status.get("nodes", {})
+        failed_nodes = []
+        
+        for node_id, node in nodes.items():
+            node_phase = node.get("phase", "")
+            if node_phase in ["Failed", "Error"]:
+                failed_nodes.append({
+                    "name": node.get("displayName", node.get("name", "unknown")),
+                    "phase": node_phase,
+                    "message": node.get("message", "No error message"),
+                    "started_at": node.get("startedAt", ""),
+                    "finished_at": node.get("finishedAt", "")
+                })
+        
+        return failed_nodes
     
     def _calculate_workflow_progress(self, workflow_status: Dict[str, Any]) -> Dict[str, Any]:
-        """ワークフロー状態から進捗情報を計算"""
+        """ワークフロー状態から進捗情報を計算（改良版）"""
         nodes = workflow_status.get("nodes", {})
         
         total_nodes = len(nodes)
         completed_nodes = 0
+        running_nodes = 0
         current_step = "処理中"
         
         for node_id, node in nodes.items():
@@ -230,17 +322,29 @@ class ExecutionWorker:
             if node_phase == "Succeeded":
                 completed_nodes += 1
             elif node_phase == "Running":
+                running_nodes += 1
                 current_step = f"{node_name} 実行中"
             elif node_phase == "Failed":
                 current_step = f"{node_name} 失敗"
+                break  # 失敗ノードがあれば優先的に表示
         
-        percentage = (completed_nodes / max(total_nodes, 1)) * 100
+        # より詳細な進捗計算
+        if total_nodes > 0:
+            base_percentage = (completed_nodes / total_nodes) * 80  # 80%まで
+            if running_nodes > 0:
+                base_percentage += 10  # 実行中のノードがあれば+10%
+        else:
+            base_percentage = 50  # ノード情報がない場合は50%
+        
+        # 最低20%は確保（ワークフローが開始されている証拠）
+        percentage = max(20.0, min(95.0, base_percentage))
         
         return {
             "current_step": current_step,
             "completed_steps": completed_nodes,
             "total_steps": total_nodes,
-            "percentage": percentage
+            "percentage": percentage,
+            "running_nodes": running_nodes
         }
 
     async def process_execution_message(self, message):

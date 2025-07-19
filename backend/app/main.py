@@ -6,10 +6,27 @@ import uvicorn
 import os
 import asyncio
 import json
+import logging
 from app.api import pipelines, executions, components, files, auth
 from app.services.websocket_manager import ConnectionManager
 from app.services.execution_worker import execution_worker
 from app.database import init_db
+
+# ログ設定を早期に初期化
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+    ]
+)
+
+# Argo Workflows関連のログレベルを調整
+logging.getLogger("app.services.argo_workflow_service").setLevel(logging.INFO)
+logging.getLogger("app.services.execution_worker").setLevel(logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # HTTP リクエストのログを抑制
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="ImageFlowCanvas API",
@@ -21,7 +38,9 @@ app = FastAPI(
 # データベース初期化
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Starting ImageFlowCanvas API...")
     await init_db()
+    logger.info("Database initialized")
 
 
 # CORS設定
@@ -198,22 +217,54 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/health/argo")
+async def argo_health_check():
+    """Argo Workflowsサービスの健全性をチェック"""
+    try:
+        from app.services.argo_workflow_service import get_argo_workflow_service
+        argo_service = get_argo_workflow_service()
+        
+        is_healthy = await argo_service.health_check()
+        
+        return {
+            "status": "healthy" if is_healthy else "unhealthy",
+            "argo_server_url": argo_service.argo_server_url,
+            "namespace": argo_service.namespace,
+            "workflow_template": argo_service.workflow_template,
+            "accessible": is_healthy
+        }
+    except Exception as e:
+        logger.error(f"Error checking Argo health: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
 @app.on_event("startup")
 async def startup_event():
     """アプリケーション起動時にワーカーを開始"""
-    print("Starting execution worker...")
+    logger.info("Starting execution worker...")
     try:
+        # Argo Workflowsサービスの初期化状況をチェック
+        from app.services.argo_workflow_service import get_argo_workflow_service
+        argo_service = get_argo_workflow_service()
+        logger.info("Argo Workflows service initialized")
+        
         # バックグラウンドタスクとしてワーカーを起動
         asyncio.create_task(execution_worker.start())
+        logger.info("Execution worker started successfully")
     except Exception as e:
-        print(f"Error starting worker: {e}")
+        logger.error(f"Error starting worker: {e}")
+        # ワーカー開始失敗でもサーバーは起動を続ける
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """アプリケーション終了時にワーカーを停止"""
-    print("Stopping execution worker...")
+    logger.info("Stopping execution worker...")
     await execution_worker.stop()
+    logger.info("Execution worker stopped")
 
 
 if __name__ == "__main__":

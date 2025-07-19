@@ -17,7 +17,48 @@ class ArgoWorkflowService:
         self.namespace = os.getenv("ARGO_NAMESPACE", "argo")
         self.workflow_template = os.getenv("WORKFLOW_TEMPLATE", "dynamic-image-processing")
         self.timeout = int(os.getenv("ARGO_TIMEOUT", "300"))
+        self.max_retries = int(os.getenv("ARGO_MAX_RETRIES", "3"))
+        self.retry_delay = int(os.getenv("ARGO_RETRY_DELAY", "30"))
         
+        # Configuration validation
+        self._validate_configuration()
+    
+    def _validate_configuration(self):
+        """Validate Argo Workflows service configuration"""
+        required_configs = {
+            "argo_server_url": self.argo_server_url,
+            "namespace": self.namespace,
+            "workflow_template": self.workflow_template
+        }
+        
+        for config_name, config_value in required_configs.items():
+            if not config_value:
+                logger.error(f"Missing required configuration: {config_name}")
+                raise ValueError(f"Missing required configuration: {config_name}")
+        
+        logger.info(f"Argo Workflows configuration validated:")
+        logger.info(f"  Server URL: {self.argo_server_url}")
+        logger.info(f"  Namespace: {self.namespace}")
+        logger.info(f"  Workflow Template: {self.workflow_template}")
+        logger.info(f"  Timeout: {self.timeout}s")
+        logger.info(f"  Max Retries: {self.max_retries}")
+        logger.info(f"  Retry Delay: {self.retry_delay}s")
+        
+    async def health_check(self) -> bool:
+        """Check if Argo Workflows server is accessible"""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(f"{self.argo_server_url}/api/v1/info")
+                if response.status_code == 200:
+                    logger.info("Argo Workflows server is accessible")
+                    return True
+                else:
+                    logger.warning(f"Argo server returned status {response.status_code}")
+                    return False
+        except Exception as e:
+            logger.error(f"Argo Workflows server health check failed: {e}")
+            return False
+    
     async def submit_pipeline_workflow(
         self, 
         execution_id: str, 
@@ -27,7 +68,7 @@ class ArgoWorkflowService:
         parameters: Dict[str, Any] = None
     ) -> Optional[str]:
         """
-        Submit a pipeline workflow to Argo Workflows
+        Submit a pipeline workflow to Argo Workflows with retry logic
         
         Args:
             execution_id: Unique execution identifier
@@ -39,38 +80,79 @@ class ArgoWorkflowService:
         Returns:
             Workflow name if submitted successfully, None otherwise
         """
-        try:
-            workflow_name = f"pipeline-{execution_id}-{int(datetime.utcnow().timestamp())}"
-            
-            # Build workflow payload
-            workflow_payload = self._build_workflow_payload(
-                workflow_name=workflow_name,
-                execution_id=execution_id,
-                pipeline_id=pipeline_id,
-                input_files=input_files,
-                pipeline_definition=pipeline_definition,
-                parameters=parameters or {}
-            )
-            
-            # Submit workflow via Argo Server API
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.argo_server_url}/api/v1/workflows/{self.namespace}",
-                    json=workflow_payload,
-                    headers={"Content-Type": "application/json"}
+        logger.info(f"Attempting to submit workflow for execution {execution_id}")
+        
+        # First check if Argo server is accessible
+        if not await self.health_check():
+            logger.error("Argo Workflows server is not accessible - cannot submit workflow")
+            return None
+        
+        for attempt in range(self.max_retries):
+            try:
+                logger.info(f"Workflow submission attempt {attempt + 1}/{self.max_retries} for execution {execution_id}")
+                
+                workflow_name = f"pipeline-{execution_id}-{int(datetime.utcnow().timestamp())}"
+                
+                # Build workflow payload
+                workflow_payload = self._build_workflow_payload(
+                    workflow_name=workflow_name,
+                    execution_id=execution_id,
+                    pipeline_id=pipeline_id,
+                    input_files=input_files,
+                    pipeline_definition=pipeline_definition,
+                    parameters=parameters or {}
                 )
                 
-                if response.status_code == 200:
-                    workflow_response = response.json()
-                    logger.info(f"Successfully submitted workflow {workflow_name} for execution {execution_id}")
-                    return workflow_response.get("metadata", {}).get("name")
-                else:
-                    logger.error(f"Failed to submit workflow: {response.status_code} - {response.text}")
-                    return None
+                logger.debug(f"Workflow payload for {execution_id}: {json.dumps(workflow_payload, indent=2)}")
+                
+                # Submit workflow via Argo Server API
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(
+                        f"{self.argo_server_url}/api/v1/workflows/{self.namespace}",
+                        json=workflow_payload,
+                        headers={"Content-Type": "application/json"}
+                    )
                     
-        except Exception as e:
-            logger.error(f"Error submitting workflow for execution {execution_id}: {e}")
-            return None
+                    if response.status_code == 200:
+                        workflow_response = response.json()
+                        workflow_name_result = workflow_response.get("metadata", {}).get("name")
+                        logger.info(f"Successfully submitted workflow {workflow_name_result} for execution {execution_id}")
+                        return workflow_name_result
+                    else:
+                        error_detail = response.text
+                        logger.error(f"Failed to submit workflow (attempt {attempt + 1}): {response.status_code} - {error_detail}")
+                        
+                        # Don't retry on client errors (4xx)
+                        if 400 <= response.status_code < 500:
+                            logger.error(f"Client error ({response.status_code}) - not retrying")
+                            return None
+                        
+                        # Only retry on server errors (5xx) or network issues
+                        if attempt < self.max_retries - 1:
+                            logger.info(f"Retrying in {self.retry_delay} seconds...")
+                            await asyncio.sleep(self.retry_delay)
+                        else:
+                            logger.error(f"All {self.max_retries} attempts failed for execution {execution_id}")
+                            return None
+                        
+            except httpx.TimeoutException as e:
+                logger.error(f"Timeout submitting workflow (attempt {attempt + 1}): {e}")
+                if attempt < self.max_retries - 1:
+                    logger.info(f"Retrying in {self.retry_delay} seconds...")
+                    await asyncio.sleep(self.retry_delay)
+                else:
+                    logger.error(f"All {self.max_retries} attempts timed out for execution {execution_id}")
+                    return None
+            except Exception as e:
+                logger.error(f"Error submitting workflow (attempt {attempt + 1}) for execution {execution_id}: {e}")
+                if attempt < self.max_retries - 1:
+                    logger.info(f"Retrying in {self.retry_delay} seconds...")
+                    await asyncio.sleep(self.retry_delay)
+                else:
+                    logger.error(f"All {self.max_retries} attempts failed for execution {execution_id}")
+                    return None
+        
+        return None
     
     async def get_workflow_status(self, workflow_name: str) -> Optional[Dict[str, Any]]:
         """Get the status of a workflow"""

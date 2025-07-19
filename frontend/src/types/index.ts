@@ -46,6 +46,26 @@ export interface Execution {
   started_at?: string
   completed_at?: string
   error_message?: string
+  error_details?: ErrorDetails
+}
+
+export interface ErrorDetails {
+  error_type?: string
+  error_message?: string
+  timestamp?: string
+  argo_server_url?: string
+  argo_namespace?: string
+  workflow_template?: string
+  argo_server_healthy?: boolean
+  failed_nodes?: FailedNode[]
+}
+
+export interface FailedNode {
+  name: string
+  phase: string
+  message: string
+  started_at?: string
+  finished_at?: string
 }
 
 export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
