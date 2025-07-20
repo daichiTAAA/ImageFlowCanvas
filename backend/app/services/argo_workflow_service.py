@@ -264,8 +264,13 @@ class ArgoWorkflowService:
     ) -> Dict[str, Any]:
         """Build the workflow payload for Argo Workflows submission"""
 
-        # Extract first input file for gRPC workflow
-        input_file = input_files[0] if input_files else "sample-image.jpg"
+        # Extract first input file for gRPC workflow  
+        # Use execution_id with appropriate file extension for the uploaded file
+        if input_files:
+            input_file = input_files[0]
+        else:
+            # Fallback: check if execution_id.png exists in Minio
+            input_file = f"{execution_id}.png"
 
         # Create workflow from template
         workflow_payload = {

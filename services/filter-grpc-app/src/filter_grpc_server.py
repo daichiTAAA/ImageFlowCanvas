@@ -110,10 +110,15 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
                 request.parameters
             )
             
-            # Save filtered image
-            output_path = request.input_image.object_key.replace('.png', '_filtered.png').replace('.jpg', '_filtered.jpg')
-            if not output_path.endswith(('.png', '.jpg', '.jpeg')):
-                output_path += '.jpg'
+            # Save filtered image with consistent naming
+            input_file = request.input_image.object_key
+            if input_file.endswith('.png'):
+                output_path = input_file.replace('.png', '_filter.png')
+            elif input_file.endswith(('.jpg', '.jpeg')):
+                output_path = input_file.replace('.jpg', '_filter.jpg').replace('.jpeg', '_filter.jpg')
+            else:
+                # Default to jpg if no extension
+                output_path = f"{input_file}_filter.jpg"
                 
             cv2.imwrite(local_output, filtered_image)
             

@@ -123,10 +123,15 @@ class AIDetectionServiceImplementation(ai_detection_pb2_grpc.AIDetectionServiceS
             if request.draw_boxes and detections:
                 output_image = self._draw_bounding_boxes(output_image, detections)
             
-            # Save output image
-            output_path = request.input_image.object_key.replace('.png', '_detected.png').replace('.jpg', '_detected.jpg')
-            if not output_path.endswith(('.png', '.jpg', '.jpeg')):
-                output_path += '.jpg'
+            # Save output image with consistent naming
+            input_file = request.input_image.object_key
+            if input_file.endswith('.png'):
+                output_path = input_file.replace('.png', '_detected.png')
+            elif input_file.endswith(('.jpg', '.jpeg')):
+                output_path = input_file.replace('.jpg', '_detected.jpg').replace('.jpeg', '_detected.jpg')
+            else:
+                # Default to jpg if no extension
+                output_path = f"{input_file}_detected.jpg"
                 
             cv2.imwrite(local_output, output_image)
             
@@ -141,8 +146,8 @@ class AIDetectionServiceImplementation(ai_detection_pb2_grpc.AIDetectionServiceS
             )
             logger.info(f"Uploaded detection result to {output_path}")
             
-            # Save detection metadata
-            metadata_path = output_path.replace('.png', '_metadata.json').replace('.jpg', '_metadata.json')
+            # Save detection metadata with consistent naming
+            metadata_path = output_path.replace('.png', '_detections.json').replace('.jpg', '_detections.json')
             detection_data = {
                 "detections": [
                     {

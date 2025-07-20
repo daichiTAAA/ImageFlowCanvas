@@ -4,10 +4,26 @@ echo "Setting up port forwarding for development..."
 
 # Kill existing port-forward processes more thoroughly
 echo "Stopping existing port forwards..."
-pkill -f "kubectl port-forward" 2>/dev/null || true
+# Kill by process name and argument pattern
+pkill -f "kubectl.*port-forward" 2>/dev/null || true
+# Also kill kubectl processes listening on our target ports
+for port in 3000 8000 8080 2746 9001 8001; do
+    pid=$(lsof -t -i :$port 2>/dev/null | head -1)
+    if [ -n "$pid" ]; then
+        echo "Killing process $pid using port $port"
+        kill $pid 2>/dev/null || true
+    fi
+done
 sleep 3
 # Force kill if still running
-pkill -9 -f "kubectl port-forward" 2>/dev/null || true
+pkill -9 -f "kubectl.*port-forward" 2>/dev/null || true
+for port in 3000 8000 8080 2746 9001 8001; do
+    pid=$(lsof -t -i :$port 2>/dev/null | head -1)
+    if [ -n "$pid" ]; then
+        echo "Force killing process $pid using port $port"
+        kill -9 $pid 2>/dev/null || true
+    fi
+done
 sleep 2
 
 # Check if critical ports are available (with timeout)
