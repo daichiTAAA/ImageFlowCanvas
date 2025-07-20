@@ -90,17 +90,30 @@ def main():
         logging.info("Upload complete.")
 
         # 4. 結果をJSON形式で出力（Argo Workflowsで使用）
+        scale_x = new_width / original_width
+        scale_y = new_height / original_height
+        
         result = {
             "status": "success",
             "input_file": f"{args.input_bucket}/{args.input_path}",
             "output_file": f"{args.output_bucket}/{args.output_path}",
             "original_size": {"width": original_width, "height": original_height},
-            "new_size": {"width": new_width, "height": new_height}
+            "new_size": {"width": new_width, "height": new_height},
+            "scale_factors": {"x": scale_x, "y": scale_y}
         }
         
         # 結果をファイルに保存（Argo Workflowsのアーティファクトとして使用）
         with open("/tmp/result.json", "w") as f:
             json.dump(result, f, indent=2)
+        
+        # メタデータをMinIOに保存（次のステップで使用）
+        metadata_filename = args.output_path.replace('.png', '_metadata.json').replace('.jpg', '_metadata.json')
+        with open("/tmp/metadata.json", "w") as f:
+            json.dump(result, f, indent=2)
+        
+        logging.info(f"Uploading metadata {metadata_filename} to bucket {args.output_bucket}...")
+        client.fput_object(args.output_bucket, metadata_filename, "/tmp/metadata.json")
+        logging.info("Metadata upload complete.")
         
         print(json.dumps(result))  # 標準出力にも出力
 

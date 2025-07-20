@@ -253,34 +253,104 @@ kubectl get pods
 
 **方法1: イメージをK3sに直接インポート（推奨）**
 ```bash
-# 1. イメージを再ビルド
+# 1. メインアプリケーションイメージの再ビルド
 docker build -t imageflow/frontend:latest ./frontend/
 docker build -t imageflow/backend:latest ./backend/
 
-# 2. K3sにイメージをインポート
+# 2. 画像処理サービスイメージの再ビルド
+docker build -t resize-app:latest ./services/resize-app/
+docker build -t object-detection-app:latest ./services/object-detection-app/
+docker build -t filter-app:latest ./services/filter-app/
+
+# 3. K3sにイメージをインポート
 docker save imageflow/frontend:latest | sudo k3s ctr images import -
 docker save imageflow/backend:latest | sudo k3s ctr images import -
+docker save resize-app:latest | sudo k3s ctr images import -
+docker save object-detection-app:latest | sudo k3s ctr images import -
+docker save filter-app:latest | sudo k3s ctr images import -
 
-# 3. デプロイメントを再起動（imagePullPolicy: Never の場合）
+# 4. デプロイメントを再起動（imagePullPolicy: Never の場合）
 kubectl rollout restart deployment/frontend deployment/backend
+# 注意: 画像処理サービスはArgo Workflowsで動的に実行されるため、
+# デプロイメントの再起動は不要です。次回のワークフロー実行時に自動的に新しいイメージが使用されます。
 ```
 
 **方法2: imagePullPolicyを一時的に変更**
 ```bash
-# 1. イメージを再ビルド
+# 1. メインアプリケーションイメージの再ビルド
 docker build -t imageflow/frontend:latest ./frontend/
 docker build -t imageflow/backend:latest ./backend/
 
-# 2. デプロイメントのimagePullPolicyをAlwaysに変更
+# 2. 画像処理サービスイメージの再ビルド
+docker build -t resize-app:latest ./services/resize-app/
+docker build -t object-detection-app:latest ./services/object-detection-app/
+docker build -t filter-app:latest ./services/filter-app/
+
+# 3. デプロイメントのimagePullPolicyをAlwaysに変更
 kubectl patch deployment frontend -p='{"spec":{"template":{"spec":{"containers":[{"name":"frontend","imagePullPolicy":"Always"}]}}}}'
 kubectl patch deployment backend -p='{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Always"}]}}}}'
 
-# 3. デプロイメントを再起動
+# 4. デプロイメントを再起動
 kubectl rollout restart deployment/frontend deployment/backend
 
-# 4. 必要に応じてimagePullPolicyをNeverに戻す
+# 5. 必要に応じてimagePullPolicyをNeverに戻す
 kubectl patch deployment frontend -p='{"spec":{"template":{"spec":{"containers":[{"name":"frontend","imagePullPolicy":"Never"}]}}}}'
 kubectl patch deployment backend -p='{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Never"}]}}}}'
+```
+
+**一括ビルドとインポートのスクリプト例**:
+```bash
+#!/bin/bash
+# 全サービスの一括ビルド・インポートスクリプト
+
+echo "Building all container images..."
+
+# メインアプリケーション
+docker build -t imageflow/frontend:latest ./frontend/
+docker build -t imageflow/backend:latest ./backend/
+
+# 画像処理サービス
+docker build -t resize-app:latest ./services/resize-app/
+docker build -t object-detection-app:latest ./services/object-detection-app/
+docker build -t filter-app:latest ./services/filter-app/
+
+echo "Importing images to K3s..."
+
+# K3sにインポート
+docker save imageflow/frontend:latest | sudo k3s ctr images import -
+docker save imageflow/backend:latest | sudo k3s ctr images import -
+docker save resize-app:latest | sudo k3s ctr images import -
+docker save object-detection-app:latest | sudo k3s ctr images import -
+docker save filter-app:latest | sudo k3s ctr images import -
+
+echo "Restarting deployments..."
+
+# メインアプリケーションの再起動
+kubectl rollout restart deployment/frontend deployment/backend
+
+echo "All images updated successfully!"
+```
+
+#### 画像処理サービスについて
+
+**services/フォルダ内の各サービス**:
+- **resize-app**: 画像リサイズ処理サービス
+- **object-detection-app**: YOLO11を使用した物体検知サービス
+- **filter-app**: 画像フィルタ処理サービス
+
+これらのサービスはArgo Workflowsによって動的に実行されるため、常駐デプロイメントはありません。
+ワークフロー実行時にPodとして起動し、処理完了後に自動的に終了します。
+
+**利用可能なイメージの確認**:
+```bash
+# K3s内のイメージ確認
+sudo k3s ctr images list | grep -E "(resize-app|object-detection-app|filter-app)"
+
+# 実行中のワークフロー確認
+kubectl get workflows -n argo
+
+# ワークフローのログ確認（実行中の場合）
+argo logs <workflow-name> -n argo
 ```
 
 #### デプロイメントの確認
@@ -288,12 +358,16 @@ kubectl patch deployment backend -p='{"spec":{"template":{"spec":{"containers":[
 # ポッドの状態確認
 kubectl get pods -o wide
 
-# ログの確認
+# メインアプリケーションのログ確認
 kubectl logs -f deployment/frontend
 kubectl logs -f deployment/backend
 
 # サービスの確認
 kubectl get services
+
+# Argo Workflowsの状態確認
+kubectl get pods -n argo
+kubectl get workflowtemplates -n argo
 ```
 
 ### デプロイメントファイルの変更を反映する場合

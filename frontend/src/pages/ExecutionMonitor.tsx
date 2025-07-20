@@ -46,6 +46,12 @@ export const ExecutionMonitor: React.FC = () => {
     filename: string;
     imageUrl: string;
   }>({ open: false, fileId: "", filename: "", imageUrl: "" });
+  const [jsonPreviewDialog, setJsonPreviewDialog] = useState<{
+    open: boolean;
+    fileId: string;
+    filename: string;
+    content: string;
+  }>({ open: false, fileId: "", filename: "", content: "" });
   const [resultsTabValue, setResultsTabValue] = useState(0);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>(
@@ -167,9 +173,51 @@ export const ExecutionMonitor: React.FC = () => {
     setPreviewDialog({ open: false, fileId: "", filename: "", imageUrl: "" });
   };
 
+  const handleJsonPreview = async (fileId: string, filename: string) => {
+    try {
+      const response = await apiService.downloadFile(fileId);
+      const content = await response.text();
+      setJsonPreviewDialog({ open: true, fileId, filename, content });
+    } catch (error) {
+      console.error("Failed to load JSON file:", error);
+    }
+  };
+
+  const handleJsonPreviewClose = () => {
+    setJsonPreviewDialog({ open: false, fileId: "", filename: "", content: "" });
+  };
+
   const isImageFile = (filename: string) => {
     const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"];
     return imageExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
+  };
+
+  const isJsonFile = (filename: string) => {
+    return filename.toLowerCase().endsWith(".json");
+  };
+
+  const getFileType = (filename: string) => {
+    if (isImageFile(filename)) return "image";
+    if (isJsonFile(filename)) return "json";
+    return "other";
+  };
+
+  const getFileTypeLabel = (filename: string) => {
+    const type = getFileType(filename);
+    switch (type) {
+      case "image": return "画像";
+      case "json": return "JSON";
+      default: return "その他";
+    }
+  };
+
+  const getFileTypeColor = (filename: string) => {
+    const type = getFileType(filename);
+    switch (type) {
+      case "image": return "primary";
+      case "json": return "secondary";
+      default: return "default";
+    }
   };
 
   const loadImageForDisplay = async (fileId: string) => {
@@ -612,14 +660,8 @@ export const ExecutionMonitor: React.FC = () => {
                           <TableCell>{file.filename}</TableCell>
                           <TableCell>
                             <Chip
-                              label={
-                                isImageFile(file.filename) ? "画像" : "その他"
-                              }
-                              color={
-                                isImageFile(file.filename)
-                                  ? "primary"
-                                  : "default"
-                              }
+                              label={getFileTypeLabel(file.filename)}
+                              color={getFileTypeColor(file.filename) as any}
                               size="small"
                             />
                           </TableCell>
@@ -638,6 +680,18 @@ export const ExecutionMonitor: React.FC = () => {
                                   }
                                 >
                                   プレビュー
+                                </Button>
+                              )}
+                              {isJsonFile(file.filename) && (
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  startIcon={<Visibility />}
+                                  onClick={() =>
+                                    handleJsonPreview(file.file_id, file.filename)
+                                  }
+                                >
+                                  JSON表示
                                 </Button>
                               )}
                               <Button
@@ -818,6 +872,56 @@ export const ExecutionMonitor: React.FC = () => {
             onClick={() => {
               handleDownload(previewDialog.fileId, previewDialog.filename);
               handleClosePreview();
+            }}
+          >
+            ダウンロード
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* JSONプレビューダイアログ */}
+      <Dialog
+        open={jsonPreviewDialog.open}
+        onClose={handleJsonPreviewClose}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>{jsonPreviewDialog.filename}</DialogTitle>
+        <DialogContent>
+          <Box
+            component="pre"
+            sx={{
+              backgroundColor: "#f5f5f5",
+              padding: 2,
+              borderRadius: 1,
+              overflow: "auto",
+              maxHeight: "400px",
+              fontSize: "0.875rem",
+              fontFamily: "monospace",
+            }}
+          >
+            {jsonPreviewDialog.content && 
+              JSON.stringify(JSON.parse(jsonPreviewDialog.content), null, 2)
+            }
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleJsonPreviewClose}>閉じる</Button>
+          <Button
+            variant="contained"
+            startIcon={<Download />}
+            onClick={() => {
+              const blob = new Blob([jsonPreviewDialog.content], {
+                type: "application/json",
+              });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = jsonPreviewDialog.filename;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
             }}
           >
             ダウンロード

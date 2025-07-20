@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--confidence", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--draw-boxes", type=bool, default=True, help="Draw bounding boxes on output")
     parser.add_argument("--triton-url", default="triton-server:8000", help="Triton server URL")
+    parser.add_argument("--resize-metadata", default=None, help="Path to resize metadata JSON for coordinate transformation")
     args = parser.parse_args()
 
     minio_endpoint = os.getenv("MINIO_ENDPOINT", "minio-service:9000")
@@ -36,6 +37,18 @@ def main():
         client = Minio(minio_endpoint, access_key=minio_access_key, secret_key=minio_secret_key, secure=False)
         logging.info(f"Downloading {args.input_path} from bucket {args.input_bucket}...")
         client.fget_object(args.input_bucket, args.input_path, local_input)
+        
+        # リサイズメタデータの読み込み（座標変換用）
+        resize_metadata = None
+        if args.resize_metadata:
+            try:
+                metadata_path = "/tmp/resize_metadata.json"
+                client.fget_object(args.input_bucket, args.resize_metadata, metadata_path)
+                with open(metadata_path, 'r') as f:
+                    resize_metadata = json.load(f)
+                logging.info(f"Loaded resize metadata: {resize_metadata}")
+            except Exception as e:
+                logging.warning(f"Could not load resize metadata: {e}, proceeding without coordinate correction")
 
         # Tritonクライアントの初期化
         logging.info(f"Connecting to Triton server at {triton_url}")
@@ -99,7 +112,8 @@ def main():
             original_h, 
             input_w, 
             input_h, 
-            args.confidence
+            args.confidence,
+            resize_metadata
         )
         
         # バウンディングボックスを描画
@@ -108,10 +122,29 @@ def main():
                 bbox = detection["bbox"]
                 x1, y1, x2, y2 = int(bbox["x1"]), int(bbox["y1"]), int(bbox["x2"]), int(bbox["y2"])
                 
+                # ボックスの線を描画（線の太さ: 2）
                 cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # ラベルテキストの設定
                 label = f"{detection['class']}: {detection['confidence']:.2f}"
-                cv2.putText(img, label, (x1, y1 - 10), 
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # テキストサイズを取得してラベル背景を描画
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.6
+                font_thickness = 1  # テキストの太さを1に変更（読みやすく）
+                
+                (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, font_thickness)
+                
+                # 半透明の背景を作成
+                overlay = img.copy()
+                cv2.rectangle(overlay, (x1, y1 - text_height - 10), (x1 + text_width, y1), (0, 0, 0), -1)
+                
+                # 半透明効果を適用（透明度0.6）
+                alpha = 0.6
+                cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+                
+                # テキストを描画（白文字、太さ1）
+                cv2.putText(img, label, (x1, y1 - 5), font, font_scale, (255, 255, 255), font_thickness)
 
         logging.info(f"Detected {len(detections)} objects")
 
@@ -148,6 +181,12 @@ def main():
         with open("/tmp/result.json", "w") as f:
             json.dump(result_data, f, indent=2)
         
+        # 検知結果JSONをMinIOに保存
+        detection_json_filename = args.output_path.replace('.png', '_detections.json').replace('.jpg', '_detections.json')
+        logging.info(f"Uploading detection results {detection_json_filename} to bucket {args.output_bucket}...")
+        client.fput_object(args.output_bucket, detection_json_filename, "/tmp/result.json")
+        logging.info("Detection results JSON upload complete.")
+        
         print(json.dumps(result_data))
 
     except Exception as e:
@@ -159,74 +198,156 @@ def main():
         print(json.dumps(error_result))
         sys.exit(1)
 
-def post_process_yolo_output(output, orig_w, orig_h, input_w, input_h, conf_threshold):
+def calculate_iou(box1, box2):
+    """
+    2つのバウンディングボックス間のIoU（Intersection over Union）を計算
+    """
+    x1 = max(box1["x1"], box2["x1"])
+    y1 = max(box1["y1"], box2["y1"])
+    x2 = min(box1["x2"], box2["x2"])
+    y2 = min(box1["y2"], box2["y2"])
+    
+    if x2 <= x1 or y2 <= y1:
+        return 0.0
+    
+    intersection = (x2 - x1) * (y2 - y1)
+    
+    area1 = (box1["x2"] - box1["x1"]) * (box1["y2"] - box1["y1"])
+    area2 = (box2["x2"] - box2["x1"]) * (box2["y2"] - box2["y1"])
+    union = area1 + area2 - intersection
+    
+    return intersection / union if union > 0 else 0.0
+
+def non_maximum_suppression(detections, iou_threshold=0.5):
+    """
+    Non-Maximum Suppressionを適用して重複する検出を除去
+    """
+    if not detections:
+        return detections
+    
+    # 信頼度順にソート（降順）
+    detections = sorted(detections, key=lambda x: x["confidence"], reverse=True)
+    
+    filtered_detections = []
+    
+    for current_detection in detections:
+        # 現在の検出が既に選択された検出と重複しているかチェック
+        should_keep = True
+        
+        for kept_detection in filtered_detections:
+            # 同じクラスの場合のみNMSを適用
+            if current_detection["class"] == kept_detection["class"]:
+                iou = calculate_iou(current_detection["bbox"], kept_detection["bbox"])
+                if iou > iou_threshold:
+                    should_keep = False
+                    break
+        
+        if should_keep:
+            filtered_detections.append(current_detection)
+    
+    return filtered_detections
+
+def post_process_yolo_output(output, orig_w, orig_h, input_w, input_h, conf_threshold, resize_metadata=None):
     """
     YOLO11の出力を後処理して検出結果を取得
+    リサイズメタデータがある場合は、座標を元画像サイズに正しく変換する
+    YOLO11 output format: [1, 84, 8400] -> [84, 8400] where 84 = [x, y, w, h, 80 class scores]
     """
     detections = []
     
-    # YOLOの出力形式に応じて調整が必要
-    # 一般的なYOLOの出力: [batch_size, num_detections, 85] (x, y, w, h, conf, class_probs...)
+    # YOLO11の実際の出力形式: [1, 84, 8400]
     if len(output.shape) == 3:
-        output = output[0]  # バッチ次元を削除
+        output = output[0]  # バッチ次元を削除 -> [84, 8400]
     
-    # スケールファクター
-    scale_x = orig_w / input_w
-    scale_y = orig_h / input_h
+    # 転置して [8400, 84] に変更（各行が1つの検出結果）
+    if output.shape[0] == 84:
+        output = output.T  # [8400, 84]
+    
+    logging.info(f"YOLO output shape after processing: {output.shape}")
+    
+    # 座標変換の設定
+    if resize_metadata and "original_size" in resize_metadata and "scale_factors" in resize_metadata:
+        # 座標変換チェーン: YOLO(640x640) -> リサイズ画像 -> 元画像
+        true_orig_w = resize_metadata["original_size"]["width"]
+        true_orig_h = resize_metadata["original_size"]["height"]
+        resize_scale_x = 1.0 / resize_metadata["scale_factors"]["x"]  # リサイズ画像から元画像への逆変換
+        resize_scale_y = 1.0 / resize_metadata["scale_factors"]["y"]
+        
+        # YOLOからリサイズ画像への変換
+        yolo_to_resized_scale_x = orig_w / input_w
+        yolo_to_resized_scale_y = orig_h / input_h
+        
+        # 最終的な変換係数（YOLO -> 元画像）
+        final_scale_x = yolo_to_resized_scale_x * resize_scale_x
+        final_scale_y = yolo_to_resized_scale_y * resize_scale_y
+        
+        # 最終出力サイズ
+        final_w = true_orig_w
+        final_h = true_orig_h
+        
+        logging.info(f"Using coordinate transformation chain: YOLO({input_w}x{input_h}) -> Resized({orig_w}x{orig_h}) -> Original({true_orig_w}x{true_orig_h})")
+        logging.info(f"Scale factors: x={final_scale_x:.4f}, y={final_scale_y:.4f}")
+    else:
+        # 従来の方法（リサイズメタデータがない場合）
+        final_scale_x = orig_w / input_w
+        final_scale_y = orig_h / input_h
+        final_w = orig_w
+        final_h = orig_h
+        logging.info(f"Using direct transformation: YOLO({input_w}x{input_h}) -> Current({orig_w}x{orig_h})")
+        logging.info(f"Scale factors: x={final_scale_x:.4f}, y={final_scale_y:.4f}")
+    
+    # COCO クラス名（YOLO11で使用される80クラス）
+    coco_classes = [
+        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
+        "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
+        "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra",
+        "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
+        "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
+        "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+        "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+        "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+        "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
+        "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+    ]
     
     for detection in output:
-        if len(detection) < 5:
+        if len(detection) < 84:
             continue
             
-        # 座標とconfidenceの取得（YOLOv8/11形式）
+        # YOLO11 形式: [x_center, y_center, width, height, class_prob_0, class_prob_1, ..., class_prob_79]
         x_center, y_center, width, height = detection[:4]
-        confidence = detection[4]
+        class_probs = detection[4:84]  # 80個のクラス確率
         
+        # 最大確率のクラスを取得
+        class_id = np.argmax(class_probs)
+        confidence = class_probs[class_id]
+        
+        # 信頼度チェック
         if confidence < conf_threshold:
             continue
         
-        # クラス確率の取得（最大値のインデックス）
-        class_probs = detection[5:]
-        class_id = np.argmax(class_probs)
-        class_conf = class_probs[class_id]
-        
-        # 総合信頼度
-        total_conf = confidence * class_conf
-        if total_conf < conf_threshold:
-            continue
-        
         # 座標変換（center format -> corner format）
-        x1 = (x_center - width / 2) * scale_x
-        y1 = (y_center - height / 2) * scale_y
-        x2 = (x_center + width / 2) * scale_x
-        y2 = (y_center + height / 2) * scale_y
+        x1 = (x_center - width / 2) * final_scale_x
+        y1 = (y_center - height / 2) * final_scale_y
+        x2 = (x_center + width / 2) * final_scale_x
+        y2 = (y_center + height / 2) * final_scale_y
         
         # 境界チェック
-        x1 = max(0, min(orig_w, x1))
-        y1 = max(0, min(orig_h, y1))
-        x2 = max(0, min(orig_w, x2))
-        y2 = max(0, min(orig_h, y2))
+        x1 = max(0, min(final_w, x1))
+        y1 = max(0, min(final_h, y1))
+        x2 = max(0, min(final_w, x2))
+        y2 = max(0, min(final_h, y2))
         
-        # COCO クラス名（簡易版）
-        coco_classes = [
-            "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
-            "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
-            "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra",
-            "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-            "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
-            "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
-            "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-            "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-            "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
-            "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
-            "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-        ]
+        # ボックスのサイズチェック（あまりに小さいものは除外）
+        if (x2 - x1) < 1 or (y2 - y1) < 1:
+            continue
         
         class_name = coco_classes[class_id] if class_id < len(coco_classes) else f"class_{class_id}"
         
         detection_result = {
             "class": class_name,
-            "confidence": float(total_conf),
+            "confidence": float(confidence),
             "bbox": {
                 "x1": float(x1),
                 "y1": float(y1),
@@ -235,6 +356,11 @@ def post_process_yolo_output(output, orig_w, orig_h, input_w, input_h, conf_thre
             }
         }
         detections.append(detection_result)
+    
+    # Non-Maximum Suppressionを適用して重複検出を除去
+    detections = non_maximum_suppression(detections, iou_threshold=0.4)
+    
+    logging.info(f"After NMS: {len(detections)} detections remaining")
     
     return detections
 

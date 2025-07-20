@@ -516,6 +516,8 @@ class ExecutionWorker:
                     content_type = "image/jpeg"
                 elif obj.object_name.lower().endswith(".tiff"):
                     content_type = "image/tiff"
+                elif obj.object_name.lower().endswith(".json"):
+                    content_type = "application/json"
 
                 output_files.append(
                     OutputFile(
