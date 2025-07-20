@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// 共通画像データ構造
+message ImageData {
+  string bucket = 1;
+  string object_key = 2;
+  string content_type = 3;
+  int64 size_bytes = 4;
+  int32 width = 5;
+  int32 height = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// 処理ステータス
+enum ProcessingStatus {
+  PROCESSING_STATUS_UNSPECIFIED = 0;
+  PROCESSING_STATUS_PENDING = 1;
+  PROCESSING_STATUS_RUNNING = 2;
+  PROCESSING_STATUS_COMPLETED = 3;
+  PROCESSING_STATUS_FAILED = 4;
+}
+
+// 処理結果共通構造
+message ProcessingResult {
+  ProcessingStatus status = 1;
+  string message = 2;
+  ImageData output_image = 3;
+  map<string, string> metadata = 4;
+  google.protobuf.Timestamp processed_at = 5;
+  double processing_time_seconds = 6;
+}
+
+// ヘルスチェック（gRPC標準）
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+    SERVICE_UNKNOWN = 3;
+  }
+  ServingStatus status = 1;
+}

@@ -1,0 +1,196 @@
+# gRPC-based Image Processing Pipeline Templates
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: grpc-image-processing-pipeline
+  namespace: image-processing
+spec:
+  entrypoint: main
+  arguments:
+    parameters:
+    - name: execution-id
+    - name: input-bucket
+      value: "imageflow-files"
+    - name: input-file
+    - name: target-width
+      value: "800"
+    - name: target-height
+      value: "600"
+    - name: model-name
+      value: "yolo"
+    - name: confidence-threshold
+      value: "0.5"
+    - name: filter-type
+      value: "FILTER_TYPE_BLUR"
+    - name: filter-intensity
+      value: "1.0"
+  
+  templates:
+  - name: main
+    dag:
+      tasks:
+      - name: resize-step
+        template: grpc-resize-call
+        arguments:
+          parameters:
+          - name: input-file
+            value: "{{workflow.parameters.input-file}}"
+          - name: output-file
+            value: "{{workflow.parameters.execution-id}}_resized.jpg"
+          - name: target-width
+            value: "{{workflow.parameters.target-width}}"
+          - name: target-height
+            value: "{{workflow.parameters.target-height}}"
+      
+      - name: ai-detection-step
+        template: grpc-ai-detection-call
+        dependencies: [resize-step]
+        arguments:
+          parameters:
+          - name: input-file
+            value: "{{workflow.parameters.execution-id}}_resized.jpg"
+          - name: output-file
+            value: "{{workflow.parameters.execution-id}}_detected.jpg"
+          - name: model-name
+            value: "{{workflow.parameters.model-name}}"
+          - name: confidence-threshold
+            value: "{{workflow.parameters.confidence-threshold}}"
+      
+      - name: filter-step
+        template: grpc-filter-call
+        dependencies: [ai-detection-step]
+        arguments:
+          parameters:
+          - name: input-file
+            value: "{{workflow.parameters.execution-id}}_detected.jpg"
+          - name: output-file
+            value: "{{workflow.parameters.execution-id}}_final.jpg"
+          - name: filter-type
+            value: "{{workflow.parameters.filter-type}}"
+          - name: filter-intensity
+            value: "{{workflow.parameters.filter-intensity}}"
+
+  - name: grpc-resize-call
+    inputs:
+      parameters:
+      - name: input-file
+      - name: output-file
+      - name: target-width
+      - name: target-height
+    http:
+      url: "http://grpc-gateway.image-processing.svc.cluster.local:8080/v1/resize"
+      method: POST
+      headers:
+        - name: Content-Type
+          value: application/json
+      body: |
+        {
+          "input_image": {
+            "bucket": "{{workflow.parameters.input-bucket}}",
+            "object_key": "{{inputs.parameters.input-file}}",
+            "content_type": "image/jpeg"
+          },
+          "target_width": {{inputs.parameters.target-width}},
+          "target_height": {{inputs.parameters.target-height}},
+          "maintain_aspect_ratio": true,
+          "quality": "RESIZE_QUALITY_GOOD",
+          "execution_id": "{{workflow.parameters.execution-id}}"
+        }
+    outputs:
+      parameters:
+      - name: result
+        valueFrom:
+          path: /tmp/result.json
+
+  - name: grpc-ai-detection-call
+    inputs:
+      parameters:
+      - name: input-file
+      - name: output-file
+      - name: model-name
+      - name: confidence-threshold
+    http:
+      url: "http://grpc-gateway.image-processing.svc.cluster.local:8080/v1/detect"
+      method: POST
+      headers:
+        - name: Content-Type
+          value: application/json
+      body: |
+        {
+          "input_image": {
+            "bucket": "{{workflow.parameters.input-bucket}}",
+            "object_key": "{{inputs.parameters.input-file}}",
+            "content_type": "image/jpeg"
+          },
+          "model_name": "{{inputs.parameters.model-name}}",
+          "confidence_threshold": {{inputs.parameters.confidence-threshold}},
+          "nms_threshold": 0.4,
+          "draw_boxes": true,
+          "execution_id": "{{workflow.parameters.execution-id}}"
+        }
+    outputs:
+      parameters:
+      - name: result
+        valueFrom:
+          path: /tmp/result.json
+
+  - name: grpc-filter-call
+    inputs:
+      parameters:
+      - name: input-file
+      - name: output-file
+      - name: filter-type
+      - name: filter-intensity
+    http:
+      url: "http://grpc-gateway.image-processing.svc.cluster.local:8080/v1/filter"
+      method: POST
+      headers:
+        - name: Content-Type
+          value: application/json
+      body: |
+        {
+          "input_image": {
+            "bucket": "{{workflow.parameters.input-bucket}}",
+            "object_key": "{{inputs.parameters.input-file}}",
+            "content_type": "image/jpeg"
+          },
+          "filter_type": "{{inputs.parameters.filter-type}}",
+          "intensity": {{inputs.parameters.filter-intensity}},
+          "parameters": {},
+          "execution_id": "{{workflow.parameters.execution-id}}"
+        }
+    outputs:
+      parameters:
+      - name: result
+        valueFrom:
+          path: /tmp/result.json
+
+---
+# Example Workflow for testing
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: test-grpc-pipeline
+  namespace: image-processing
+  generateName: test-grpc-pipeline-
+spec:
+  workflowTemplateRef:
+    name: grpc-image-processing-pipeline
+  arguments:
+    parameters:
+    - name: execution-id
+      value: "test-{{workflow.creationTimestamp}}"
+    - name: input-file
+      value: "sample-image.jpg"
+    - name: target-width
+      value: "800"
+    - name: target-height
+      value: "600"
+    - name: model-name
+      value: "yolo"
+    - name: confidence-threshold
+      value: "0.5"
+    - name: filter-type
+      value: "FILTER_TYPE_GAUSSIAN"
+    - name: filter-intensity
+      value: "2.0"

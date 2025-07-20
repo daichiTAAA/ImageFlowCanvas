@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "imageflow/v1/common.proto";
+
+// フィルタサービス
+service FilterService {
+  rpc ApplyFilter(FilterRequest) returns (FilterResponse);
+  rpc ApplyFilterStream(stream FilterRequest) returns (stream FilterResponse);
+  rpc Health(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message FilterRequest {
+  ImageData input_image = 1;
+  FilterType filter_type = 2;
+  float intensity = 3;
+  map<string, string> parameters = 4;
+  string execution_id = 5;
+}
+
+enum FilterType {
+  FILTER_TYPE_UNSPECIFIED = 0;
+  FILTER_TYPE_BLUR = 1;
+  FILTER_TYPE_SHARPEN = 2;
+  FILTER_TYPE_BRIGHTNESS = 3;
+  FILTER_TYPE_CONTRAST = 4;
+  FILTER_TYPE_SATURATION = 5;
+  FILTER_TYPE_GAUSSIAN = 6;
+}
+
+message FilterResponse {
+  ProcessingResult result = 1;
+  FilterMetadata metadata = 2;
+}
+
+message FilterMetadata {
+  FilterType filter_type = 1;
+  float intensity = 2;
+  map<string, string> applied_parameters = 3;
+}

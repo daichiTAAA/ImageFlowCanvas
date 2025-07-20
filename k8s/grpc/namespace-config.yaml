@@ -1,0 +1,60 @@
+# Namespace for image processing services
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: image-processing
+  labels:
+    app.kubernetes.io/name: image-flow-canvas
+    app.kubernetes.io/component: processing-pipelines
+
+---
+# MinIO credentials secret for gRPC services
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-credentials
+  namespace: image-processing
+type: Opaque
+data:
+  endpoint: bWluaW8tc2VydmljZTo5MDAw  # minio-service:9000
+  access-key: bWluaW9hZG1pbg==  # minioadmin
+  secret-key: bWluaW9hZG1pbg==  # minioadmin
+
+---
+# ServiceAccount for gRPC services
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-processing-sa
+  namespace: image-processing
+
+---
+# Role for gRPC services
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: image-processing-role
+  namespace: image-processing
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding for gRPC services
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: image-processing-binding
+  namespace: image-processing
+subjects:
+- kind: ServiceAccount
+  name: image-processing-sa
+  namespace: image-processing
+roleRef:
+  kind: Role
+  name: image-processing-role
+  apiGroup: rbac.authorization.k8s.io
