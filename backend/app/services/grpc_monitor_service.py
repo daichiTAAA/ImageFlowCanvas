@@ -77,10 +77,11 @@ class GRPCMonitorService:
             channel = grpc.insecure_channel(
                 endpoint,
                 options=[
-                    ("grpc.keepalive_time_ms", 10000),
+                    ("grpc.keepalive_time_ms", 30000),
                     ("grpc.keepalive_timeout_ms", 5000),
                     ("grpc.keepalive_permit_without_calls", True),
                     ("grpc.http2.keepalive_timeout_ms", 5000),
+                    ("grpc.max_connection_idle_ms", 10000),
                 ],
             )
 
@@ -90,10 +91,11 @@ class GRPCMonitorService:
 
                 # 標準ヘルスチェックリクエストを作成
                 health_request = health_pb2.HealthCheckRequest()
-                health_request.service = service_name
+                # Empty service name for overall service health
+                health_request.service = ""
 
                 # タイムアウト付きでヘルスチェックを実行
-                health_response = health_stub.Check(health_request, timeout=5.0)
+                health_response = health_stub.Check(health_request, timeout=10.0)
 
                 response_time_ms = (time.time() - start_time) * 1000
 

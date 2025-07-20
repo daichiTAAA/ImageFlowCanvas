@@ -12,11 +12,13 @@ import numpy as np
 from google.protobuf.timestamp_pb2 import Timestamp
 
 # Add generated proto path
+sys.path.append('/app/generated/python')
 sys.path.append('/home/runner/work/ImageFlowCanvas/ImageFlowCanvas/generated/python')
 
 from imageflow.v1 import filter_pb2
 from imageflow.v1 import filter_pb2_grpc
 from imageflow.v1 import common_pb2
+from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 # Setup logging
 logging.basicConfig(
@@ -233,6 +235,38 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
             
         return response
 
+
+class HealthServiceImplementation(health_pb2_grpc.HealthServicer):
+    """Standard gRPC health check service implementation"""
+    
+    def __init__(self, filter_service):
+        self.filter_service = filter_service
+    
+    def Check(self, request, context):
+        """Standard gRPC health check implementation"""
+        response = health_pb2.HealthCheckResponse()
+        
+        if self.filter_service._health_check():
+            response.status = health_pb2.HealthCheckResponse.SERVING
+            logger.debug("Filter service health check passed")
+        else:
+            response.status = health_pb2.HealthCheckResponse.NOT_SERVING
+            logger.warning("Filter service health check failed")
+            
+        return response
+    
+    def Watch(self, request, context):
+        """Health check watch implementation (streaming)"""
+        # For simplicity, just return current status
+        response = health_pb2.HealthCheckResponse()
+        
+        if self.filter_service._health_check():
+            response.status = health_pb2.HealthCheckResponse.SERVING
+        else:
+            response.status = health_pb2.HealthCheckResponse.NOT_SERVING
+            
+        yield response
+
 def serve():
     """Start the gRPC server with optimized configuration"""
     port = os.getenv("GRPC_PORT", "9090")
@@ -257,9 +291,15 @@ def serve():
         options=server_options
     )
     
+    # Create service instances
+    filter_service = FilterServiceImplementation()
+    health_service = HealthServiceImplementation(filter_service)
+    
+    # Add services to server
     filter_pb2_grpc.add_FilterServiceServicer_to_server(
-        FilterServiceImplementation(), server
+        filter_service, server
     )
+    health_pb2_grpc.add_HealthServicer_to_server(health_service, server)
     
     listen_addr = f'[::]:{port}'
     server.add_insecure_port(listen_addr)

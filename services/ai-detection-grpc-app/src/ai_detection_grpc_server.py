@@ -14,11 +14,13 @@ import requests
 from google.protobuf.timestamp_pb2 import Timestamp
 
 # Add generated proto path
+sys.path.append('/app/generated/python')
 sys.path.append('/home/runner/work/ImageFlowCanvas/ImageFlowCanvas/generated/python')
 
 from imageflow.v1 import ai_detection_pb2
 from imageflow.v1 import ai_detection_pb2_grpc
 from imageflow.v1 import common_pb2
+from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 # Setup logging
 logging.basicConfig(
@@ -317,6 +319,38 @@ class AIDetectionServiceImplementation(ai_detection_pb2_grpc.AIDetectionServiceS
             
         return response
 
+
+class HealthServiceImplementation(health_pb2_grpc.HealthServicer):
+    """Standard gRPC health check service implementation"""
+    
+    def __init__(self, ai_detection_service):
+        self.ai_detection_service = ai_detection_service
+    
+    def Check(self, request, context):
+        """Standard gRPC health check implementation"""
+        response = health_pb2.HealthCheckResponse()
+        
+        if self.ai_detection_service._health_check():
+            response.status = health_pb2.HealthCheckResponse.SERVING
+            logger.debug("AI Detection health check passed")
+        else:
+            response.status = health_pb2.HealthCheckResponse.NOT_SERVING
+            logger.warning("AI Detection health check failed")
+            
+        return response
+    
+    def Watch(self, request, context):
+        """Health check watch implementation (streaming)"""
+        # For simplicity, just return current status
+        response = health_pb2.HealthCheckResponse()
+        
+        if self.ai_detection_service._health_check():
+            response.status = health_pb2.HealthCheckResponse.SERVING
+        else:
+            response.status = health_pb2.HealthCheckResponse.NOT_SERVING
+            
+        yield response
+
 def serve():
     """Start the gRPC server with optimized configuration"""
     port = os.getenv("GRPC_PORT", "9090")
@@ -341,9 +375,15 @@ def serve():
         options=server_options
     )
     
+    # Create service instances
+    ai_detection_service = AIDetectionServiceImplementation()
+    health_service = HealthServiceImplementation(ai_detection_service)
+    
+    # Add services to server
     ai_detection_pb2_grpc.add_AIDetectionServiceServicer_to_server(
-        AIDetectionServiceImplementation(), server
+        ai_detection_service, server
     )
+    health_pb2_grpc.add_HealthServicer_to_server(health_service, server)
     
     listen_addr = f'[::]:{port}'
     server.add_insecure_port(listen_addr)
