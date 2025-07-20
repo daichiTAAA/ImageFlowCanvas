@@ -268,7 +268,7 @@ df -h
 # gRPCサービスの一括ビルド（推奨）
 ./scripts/build_grpc_services.sh
 
-# または個別にビルド
+# 個別にビルド
 # Frontend
 docker build -f frontend/Dockerfile -t imageflow/frontend:latest frontend/
 
@@ -322,7 +322,7 @@ kubectl get pods
 docker build -t imageflow/frontend:latest ./frontend/
 docker build -t imageflow/backend:latest ./backend/
 
-# 3. K3sにイメージをインポート
+# K3sにインポート
 docker save imageflow/frontend:latest | sudo k3s ctr images import -
 docker save imageflow/backend:latest | sudo k3s ctr images import -
 docker save resize-grpc-app:latest | sudo k3s ctr images import -
@@ -330,60 +330,14 @@ docker save ai-detection-grpc-app:latest | sudo k3s ctr images import -
 docker save filter-grpc-app:latest | sudo k3s ctr images import -
 docker save grpc-gateway:latest | sudo k3s ctr images import -
 
-# 4. デプロイメントを再起動
-kubectl rollout restart deployment/frontend deployment/backend
+# gRPCサービスの再起動
 kubectl rollout restart -n image-processing deployment/resize-grpc-service
 kubectl rollout restart -n image-processing deployment/ai-detection-grpc-service
 kubectl rollout restart -n image-processing deployment/filter-grpc-service
 kubectl rollout restart -n image-processing deployment/grpc-gateway
 ```
 
-**方法2: 従来方式のイメージもK3sに直接インポート**
-```bash
-# 1. メインアプリケーションイメージの再ビルド
-docker build -t imageflow/frontend:latest ./frontend/
-docker build -t imageflow/backend:latest ./backend/
 
-# 2. 画像処理サービスイメージの再ビルド
-docker build -t resize-app:latest ./services/resize-app/
-docker build -t object-detection-app:latest ./services/object-detection-app/
-docker build -t filter-app:latest ./services/filter-app/
-
-# 3. K3sにイメージをインポート
-docker save imageflow/frontend:latest | sudo k3s ctr images import -
-docker save imageflow/backend:latest | sudo k3s ctr images import -
-docker save resize-app:latest | sudo k3s ctr images import -
-docker save object-detection-app:latest | sudo k3s ctr images import -
-docker save filter-app:latest | sudo k3s ctr images import -
-
-# 4. デプロイメントを再起動（imagePullPolicy: Never の場合）
-kubectl rollout restart deployment/frontend deployment/backend
-# 注意: 画像処理サービスはArgo Workflowsで動的に実行されるため、
-# デプロイメントの再起動は不要です。次回のワークフロー実行時に自動的に新しいイメージが使用されます。
-```
-
-**方法2: imagePullPolicyを一時的に変更**
-```bash
-# 1. メインアプリケーションイメージの再ビルド
-docker build -t imageflow/frontend:latest ./frontend/
-docker build -t imageflow/backend:latest ./backend/
-
-# 2. 画像処理サービスイメージの再ビルド
-docker build -t resize-app:latest ./services/resize-app/
-docker build -t object-detection-app:latest ./services/object-detection-app/
-docker build -t filter-app:latest ./services/filter-app/
-
-# 3. デプロイメントのimagePullPolicyをAlwaysに変更
-kubectl patch deployment frontend -p='{"spec":{"template":{"spec":{"containers":[{"name":"frontend","imagePullPolicy":"Always"}]}}}}'
-kubectl patch deployment backend -p='{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Always"}]}}}}'
-
-# 4. デプロイメントを再起動
-kubectl rollout restart deployment/frontend deployment/backend
-
-# 5. 必要に応じてimagePullPolicyをNeverに戻す
-kubectl patch deployment frontend -p='{"spec":{"template":{"spec":{"containers":[{"name":"frontend","imagePullPolicy":"Never"}]}}}}'
-kubectl patch deployment backend -p='{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Never"}]}}}}'
-```
 
 **一括ビルドとインポートのスクリプト例**:
 ```bash
@@ -399,11 +353,6 @@ echo "Building all container images..."
 docker build -t imageflow/frontend:latest ./frontend/
 docker build -t imageflow/backend:latest ./backend/
 
-# 従来の画像処理サービス（互換性のため保持）
-docker build -t resize-app:latest ./services/resize-app/
-docker build -t object-detection-app:latest ./services/object-detection-app/
-docker build -t filter-app:latest ./services/filter-app/
-
 echo "Importing images to K3s..."
 
 # K3sにインポート
@@ -413,9 +362,6 @@ docker save resize-grpc-app:latest | sudo k3s ctr images import -
 docker save ai-detection-grpc-app:latest | sudo k3s ctr images import -
 docker save filter-grpc-app:latest | sudo k3s ctr images import -
 docker save grpc-gateway:latest | sudo k3s ctr images import -
-docker save resize-app:latest | sudo k3s ctr images import -
-docker save object-detection-app:latest | sudo k3s ctr images import -
-docker save filter-app:latest | sudo k3s ctr images import -
 
 echo "Restarting deployments..."
 
@@ -433,38 +379,21 @@ echo "All images updated successfully!"
 
 #### 画像処理サービスについて
 
-**高性能gRPCサービス（推奨）**:
+**高性能gRPCサービス**:
 - **resize-grpc-app**: 画像リサイズ処理gRPCサービス
 - **ai-detection-grpc-app**: YOLO11を使用した物体検知gRPCサービス
 - **filter-grpc-app**: 画像フィルタ処理gRPCサービス
 - **grpc-gateway**: HTTP-to-gRPC変換ゲートウェイ
 
-**従来のPodベースサービス（互換性のため保持）**:
-- **resize-app**: 画像リサイズ処理サービス
-- **object-detection-app**: YOLO11を使用した物体検知サービス
-- **filter-app**: 画像フィルタ処理サービス
+gRPCサービスは常駐型で、パイプライン処理時間を大幅に短縮します（60-94秒→1-3秒）。
 
-gRPCサービスは常駐型で、パイプライン処理時間を大幅に短縮します。
-従来のサービスはArgo Workflowsによって動的に実行されるため、常駐デプロイメントはありません。
-ワークフロー実行時にPodとして起動し、処理完了後に自動的に終了します。
-
-**利用可能なイメージの確認**:
-```bash
 # K3s内のgRPCサービスイメージ確認
 sudo k3s ctr images list | grep -E "(resize-grpc-app|ai-detection-grpc-app|filter-grpc-app|grpc-gateway)"
-
-# K3s内の従来サービスイメージ確認
-sudo k3s ctr images list | grep -E "(resize-app|object-detection-app|filter-app)"
 
 # gRPCサービスの動作確認
 kubectl get pods -n image-processing
 kubectl get services -n image-processing
 
-# 実行中のワークフロー確認
-kubectl get workflows -n argo
-
-# ワークフローのログ確認（実行中の場合）
-argo logs <workflow-name> -n argo
 
 # gRPCサービスのテスト
 ./scripts/test_grpc_services.py
