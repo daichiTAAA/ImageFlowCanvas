@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "imageflow/v1/common.proto";
+
+// リサイズサービス
+service ResizeService {
+  rpc ResizeImage(ResizeRequest) returns (ResizeResponse);
+  rpc ResizeImageStream(stream ResizeRequest) returns (stream ResizeResponse);
+  rpc Health(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message ResizeRequest {
+  ImageData input_image = 1;
+  int32 target_width = 2;
+  int32 target_height = 3;
+  bool maintain_aspect_ratio = 4;
+  ResizeQuality quality = 5;
+  string execution_id = 6;
+}
+
+enum ResizeQuality {
+  RESIZE_QUALITY_UNSPECIFIED = 0;
+  RESIZE_QUALITY_FAST = 1;
+  RESIZE_QUALITY_GOOD = 2;
+  RESIZE_QUALITY_BEST = 3;
+}
+
+message ResizeResponse {
+  ProcessingResult result = 1;
+  ResizeMetadata metadata = 2;
+}
+
+message ResizeMetadata {
+  int32 original_width = 1;
+  int32 original_height = 2;
+  int32 output_width = 3;
+  int32 output_height = 4;
+  double scale_factor_x = 5;
+  double scale_factor_y = 6;
+  ResizeQuality quality_used = 7;
+}

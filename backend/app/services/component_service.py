@@ -37,7 +37,7 @@ class ComponentService:
                 },
                 "input_formats": ["jpg", "jpeg", "png", "bmp", "tiff"],
                 "output_formats": ["jpg", "png"],
-                "container_image": "imageflow/resize-app:latest"
+                "grpc_service": "resize-grpc-service:9090"
             },
             "ai_detection": {
                 "name": "AI Object Detection",
@@ -49,7 +49,7 @@ class ComponentService:
                 },
                 "input_formats": ["jpg", "jpeg", "png"],
                 "output_formats": ["jpg", "json"],
-                "container_image": "imageflow/triton-detection-app:latest"
+                "grpc_service": "ai-detection-grpc-service:9090"
             },
             "filter": {
                 "name": "Image Filter",
@@ -60,7 +60,7 @@ class ComponentService:
                 },
                 "input_formats": ["jpg", "jpeg", "png", "bmp"],
                 "output_formats": ["jpg", "png"],
-                "container_image": "imageflow/filter-app:latest"
+                "grpc_service": "filter-grpc-service:9090"
             }
         }
         
@@ -137,9 +137,9 @@ class ComponentService:
     # - async def _process_resize(...)
     # - async def _process_filter(...)
     #
-    # These processing capabilities are now provided by:
-    # - services/resize-app/ (for resize operations)
-    # - services/object-detection-app/ (for AI detection)
-    # - services/filter-app/ (for image filtering)
+    # These processing capabilities are now provided by persistent gRPC services:
+    # - resize-grpc-service (for resize operations)
+    # - ai-detection-grpc-service (for AI detection)
+    # - filter-grpc-service (for image filtering)
     #
-    # The backend now only coordinates and delegates to Argo Workflows
+    # The backend now coordinates through the gRPC gateway for high-performance processing
