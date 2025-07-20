@@ -198,10 +198,14 @@ WindowsではWSL2を使用してLinux環境を作成し、その中で開発を�
 
 セットアップ完了後、以下のURLにブラウザでアクセスしてください。
 
+**ポートフォワーディング経由（推奨）**:
 - **Frontend**: http://localhost:3000
 - **Backend API (Swagger UI)**: http://localhost:8000/docs
 - **Argo Workflows UI**: http://localhost:2746
 - **MinIO Console**: http://localhost:9001 (ID: `minioadmin`, PW: `minioadmin`)
+
+**NodePort経由（直接アクセス）**:
+- **Frontend**: http://localhost:30080 （同じノードからのアクセス時）
 
 ### 使用方法
 
