@@ -58,6 +58,19 @@ export interface ErrorDetails {
   workflow_template?: string
   argo_server_healthy?: boolean
   failed_nodes?: FailedNode[]
+  processing_errors?: ProcessingErrorDetails
+}
+
+export interface ProcessingErrorDetails {
+  summary: string
+  errors: ProcessingError[]
+  missing_files: string[]
+}
+
+export interface ProcessingError {
+  step: string
+  message: string
+  status: string
 }
 
 export interface FailedNode {
@@ -91,8 +104,9 @@ export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipp
 export interface OutputFile {
   file_id: string
   filename: string
-  download_url: string
+  download_url?: string
   file_size: number
+  content_type?: string
 }
 
 export interface User {

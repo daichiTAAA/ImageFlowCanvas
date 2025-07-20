@@ -138,15 +138,10 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
             resized_image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
             logger.info(f"Resized image to {new_width}x{new_height}")
             
-            # Save resized image with consistent naming
-            input_file = request.input_image.object_key
-            if input_file.endswith('.png'):
-                output_path = input_file.replace('.png', '_resize.png')
-            elif input_file.endswith(('.jpg', '.jpeg')):
-                output_path = input_file.replace('.jpg', '_resize.jpg').replace('.jpeg', '_resize.jpg')
-            else:
-                # Default to jpg if no extension
-                output_path = f"{input_file}_resize.jpg"
+            # Save resized image with workflow-expected naming
+            # ワークフローでは {execution_id}_resized.jpg を期待している
+            execution_id = request.execution_id
+            output_path = f"{execution_id}_resized.jpg"
                 
             # Optimize save parameters based on quality setting
             save_params = []

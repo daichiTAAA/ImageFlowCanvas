@@ -252,25 +252,47 @@ class ExecutionWorker:
                 # ワークフロー完了後の出力ファイル発見
                 output_files = await self._discover_output_files(execution.execution_id)
                 steps = await self._extract_step_details(workflow_name, status)
-
-                await execution_service.update_execution_status(
-                    execution.execution_id,
-                    ExecutionStatus.COMPLETED,
-                    {
-                        "current_step": "ワークフロー処理完了",
-                        "completed_steps": 100,
-                        "percentage": 100.0,
-                        "completed_at": datetime.utcnow().isoformat(),
-                    },
-                )
+                
+                # ステップの実行結果をチェックして実際の成功/失敗を判定
+                has_processing_failures = self._check_for_processing_failures(status)
+                
+                if has_processing_failures:
+                    # ワークフローは成功したが、処理内容が失敗している場合
+                    error_details = self._extract_processing_error_details(status)
+                    await execution_service.update_execution_status(
+                        execution.execution_id,
+                        ExecutionStatus.FAILED,
+                        {
+                            "current_step": f"処理エラー: {error_details.get('summary', '画像処理に失敗しました')}",
+                            "completed_steps": 0,
+                            "percentage": 0.0,
+                            "error_details": {
+                                "phase": phase,
+                                "processing_errors": error_details,
+                                "workflow_name": workflow_name,
+                            },
+                        },
+                    )
+                    logger.error(f"Workflow {workflow_name} completed but processing failed: {error_details}")
+                else:
+                    # 正常に完了
+                    await execution_service.update_execution_status(
+                        execution.execution_id,
+                        ExecutionStatus.COMPLETED,
+                        {
+                            "current_step": "ワークフロー処理完了",
+                            "completed_steps": 100,
+                            "percentage": 100.0,
+                            "completed_at": datetime.utcnow().isoformat(),
+                        },
+                    )
+                    logger.info(
+                        f"Workflow {workflow_name} completed successfully with {len(output_files)} output files"
+                    )
 
                 # 出力ファイルとステップ詳細を更新
                 await self._update_execution_artifacts(
                     execution.execution_id, output_files, steps
-                )
-
-                logger.info(
-                    f"Workflow {workflow_name} completed successfully with {len(output_files)} output files"
                 )
             elif phase == "Failed" or phase == "Error":
                 error_message = status.get("message", "Unknown error")
@@ -332,6 +354,117 @@ class ExecutionWorker:
                 )
 
         return failed_nodes
+
+    def _check_for_processing_failures(self, workflow_status: Dict[str, Any]) -> bool:
+        """ワークフロー内の処理結果から失敗をチェック"""
+        try:
+            nodes = workflow_status.get("nodes", {})
+            logger.info(f"Checking {len(nodes)} nodes for processing failures")
+            
+            for node_id, node in nodes.items():
+                # HTTP テンプレートのノードのみをチェック（gRPCサービス呼び出し）
+                node_type = node.get("type", "")
+                if node_type == "HTTP":
+                    logger.info(f"Checking HTTP node: {node.get('displayName', node_id)}")
+                    
+                    # ノードの出力結果をチェック - outputs.resultに直接格納されている
+                    outputs = node.get("outputs", {})
+                    result_value = outputs.get("result", "")
+                    
+                    if result_value:
+                        logger.info(f"Node result: {result_value[:200]}...")
+                        try:
+                            result_json = json.loads(result_value)
+                            result_data = result_json.get("result", {})
+                            status_value = result_data.get("status", "")
+                            
+                            logger.info(f"Parsed status: {status_value}")
+                            # PROCESSING_STATUS_FAILED をチェック
+                            if status_value == "PROCESSING_STATUS_FAILED":
+                                logger.warning(f"Found processing failure in node {node_id}")
+                                return True
+                        except json.JSONDecodeError:
+                            # JSON解析失敗の場合はエラーメッセージ文字列をチェック
+                            logger.warning(f"JSON decode failed for node {node_id}, checking string content")
+                            if "PROCESSING_STATUS_FAILED" in result_value:
+                                logger.warning(f"Found PROCESSING_STATUS_FAILED in string content for node {node_id}")
+                                return True
+                            if "NoSuchKey" in result_value or "Object does not exist" in result_value:
+                                logger.warning(f"Found file not found error in node {node_id}")
+                                return True
+                                        
+            logger.info("No processing failures detected")
+            return False
+        except Exception as e:
+            logger.warning(f"Error checking for processing failures: {e}")
+            return False
+
+    def _extract_processing_error_details(self, workflow_status: Dict[str, Any]) -> Dict[str, Any]:
+        """処理エラーの詳細を抽出"""
+        error_details = {
+            "summary": "画像処理に失敗しました",
+            "errors": [],
+            "missing_files": [],
+        }
+        
+        try:
+            nodes = workflow_status.get("nodes", {})
+            
+            for node_id, node in nodes.items():
+                node_type = node.get("type", "")
+                if node_type == "HTTP":
+                    node_name = node.get("displayName", node.get("name", "unknown"))
+                    outputs = node.get("outputs", {})
+                    result_value = outputs.get("result", "")
+                    
+                    if result_value:
+                        try:
+                            result_json = json.loads(result_value)
+                            result_data = result_json.get("result", {})
+                            status_value = result_data.get("status", "")
+                            message = result_data.get("message", "")
+                            
+                            if status_value == "PROCESSING_STATUS_FAILED":
+                                error_info = {
+                                    "step": node_name,
+                                    "message": message,
+                                    "status": status_value
+                                }
+                                error_details["errors"].append(error_info)
+                                
+                                # ファイル不存在エラーの場合
+                                if "NoSuchKey" in message or "Object does not exist" in message:
+                                    # ファイル名を抽出
+                                    if "object_name:" in message:
+                                        filename = message.split("object_name:")[-1].strip().rstrip(',')
+                                        error_details["missing_files"].append(filename)
+                                    # resource: パターンからもファイル名を抽出
+                                    elif "resource:" in message:
+                                        resource_part = message.split("resource:")[-1].split(",")[0].strip()
+                                        filename = resource_part.split("/")[-1]
+                                        error_details["missing_files"].append(filename)
+                                        
+                        except json.JSONDecodeError:
+                            # JSON解析失敗の場合は文字列として処理
+                            if "PROCESSING_STATUS_FAILED" in result_value:
+                                error_details["errors"].append({
+                                    "step": node_name,
+                                    "message": result_value,
+                                    "status": "FAILED"
+                                })
+                                        
+            # エラーサマリーを生成
+            if error_details["missing_files"]:
+                error_details["summary"] = f"入力ファイルが見つかりません: {', '.join(error_details['missing_files'][:3])}"
+            elif error_details["errors"]:
+                first_error = error_details["errors"][0]
+                error_details["summary"] = f"{first_error['step']}: {first_error['message'][:100]}"
+                
+        except Exception as e:
+            logger.warning(f"Error extracting processing error details: {e}")
+            error_details["summary"] = f"エラー詳細の取得に失敗: {str(e)}"
+            
+        return error_details
 
     def _calculate_workflow_progress(
         self, workflow_status: Dict[str, Any]

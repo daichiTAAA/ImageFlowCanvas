@@ -506,6 +506,54 @@ export const ExecutionMonitor: React.FC = () => {
                         )}
                       </Box>
                     )}
+                  {execution.error_details.processing_errors && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        gutterBottom
+                      >
+                        <strong>処理エラー詳細:</strong>
+                      </Typography>
+                      {execution.error_details.processing_errors.errors &&
+                        execution.error_details.processing_errors.errors.map(
+                          (error, index) => (
+                            <Typography
+                              key={index}
+                              variant="caption"
+                              display="block"
+                              sx={{ ml: 1 }}
+                            >
+                              • {error.step}: {error.message}
+                            </Typography>
+                          )
+                        )}
+                      {execution.error_details.processing_errors.missing_files &&
+                        execution.error_details.processing_errors.missing_files.length > 0 && (
+                          <Box sx={{ mt: 1, ml: 1 }}>
+                            <Typography
+                              variant="caption"
+                              display="block"
+                              gutterBottom
+                            >
+                              <strong>見つからないファイル:</strong>
+                            </Typography>
+                            {execution.error_details.processing_errors.missing_files.map(
+                              (filename, index) => (
+                                <Typography
+                                  key={index}
+                                  variant="caption"
+                                  display="block"
+                                  sx={{ ml: 1 }}
+                                >
+                                  • {filename}
+                                </Typography>
+                              )
+                            )}
+                          </Box>
+                        )}
+                    </Box>
+                  )}
                 </Box>
               )}
             </Alert>

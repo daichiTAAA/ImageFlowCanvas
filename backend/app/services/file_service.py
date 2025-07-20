@@ -22,13 +22,17 @@ class FileService:
         
         if self.minio_available:
             try:
+                # Kubernetes環境ではサービス名を使用
+                minio_endpoint = os.getenv("MINIO_ENDPOINT", "minio-service:9000")
                 self.minio_client = Minio(
-                    endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+                    endpoint=minio_endpoint,
                     access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
                     secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
                     secure=False
                 )
+                print(f"Connecting to MinIO at {minio_endpoint}")
                 self._ensure_bucket_exists()
+                print(f"MinIO connection successful, bucket '{self.bucket_name}' ready")
             except Exception as e:
                 print(f"MinIO connection failed, falling back to mock mode: {e}")
                 self.minio_available = False
