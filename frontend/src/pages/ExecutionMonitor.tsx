@@ -192,6 +192,59 @@ export const ExecutionMonitor: React.FC = () => {
     return imageExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
   };
 
+  // ファイル名から処理ステップを抽出
+  const getProcessingStepFromFilename = (filename: string): string => {
+    // 元画像のパターン: {execution_id}.{extension} または {execution_id}-input-{index}.{extension}
+    const nameWithoutExt = filename.split('.')[0];
+    
+    // execution_idのパターンをチェック（UUID形式）
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    // 単純なexecution_idのみの場合（元画像）
+    if (uuidPattern.test(nameWithoutExt)) {
+      return '元画像';
+    }
+    
+    // input付きの場合（複数ファイルアップロード時の元画像）
+    if (nameWithoutExt.includes('-input-')) {
+      return '元画像';
+    }
+    
+    // 処理済みファイルのパターン: {execution_id}_{processing_step}.{extension}
+    const parts = filename.split('_');
+    if (parts.length >= 2) {
+      const stepPart = parts.slice(1).join('_'); // execution_idの後の部分を取得
+      const stepName = stepPart.split('.')[0]; // 拡張子を除去
+      
+      // ステップ名を日本語に変換
+      const stepLabels: Record<string, string> = {
+        'resize': '1. リサイズ処理',
+        'ai-detection': '2. 物体検知',
+        'filter': '3. フィルタ処理',
+        'enhancement': '4. 画質向上'
+      };
+      
+      return stepLabels[stepName] || stepName;
+    }
+    
+    return '不明な処理';
+  };
+
+  // 処理順序を取得（ソート用）
+  const getProcessingOrder = (filename: string): number => {
+    const stepInfo = getProcessingStepFromFilename(filename);
+    
+    const orderMap: Record<string, number> = {
+      '元画像': 0,
+      '1. リサイズ処理': 1,
+      '2. 物体検知': 2,
+      '3. フィルタ処理': 3,
+      '4. 画質向上': 4
+    };
+    
+    return orderMap[stepInfo] || 999;
+  };
+
   const isJsonFile = (filename: string) => {
     return filename.toLowerCase().endsWith(".json");
   };
@@ -557,10 +610,19 @@ export const ExecutionMonitor: React.FC = () => {
                 <Grid container spacing={2}>
                   {execution.output_files
                     .filter((file) => isImageFile(file.filename))
+                    .sort((a, b) => getProcessingOrder(a.filename) - getProcessingOrder(b.filename))
                     .map((file) => (
                       <Grid item xs={12} sm={6} md={4} key={file.file_id}>
                         <Card>
                           <CardContent>
+                            <Box sx={{ mb: 1 }}>
+                              <Chip 
+                                label={getProcessingStepFromFilename(file.filename)}
+                                color="primary"
+                                size="small"
+                                sx={{ mb: 1 }}
+                              />
+                            </Box>
                             <Typography variant="subtitle2" gutterBottom noWrap>
                               {file.filename}
                             </Typography>
@@ -649,15 +711,25 @@ export const ExecutionMonitor: React.FC = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>ファイル名</TableCell>
+                        <TableCell>処理ステップ</TableCell>
                         <TableCell>タイプ</TableCell>
                         <TableCell>サイズ</TableCell>
                         <TableCell>アクション</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {execution.output_files.map((file) => (
+                      {execution.output_files
+                        .sort((a, b) => getProcessingOrder(a.filename) - getProcessingOrder(b.filename))
+                        .map((file) => (
                         <TableRow key={file.file_id}>
                           <TableCell>{file.filename}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getProcessingStepFromFilename(file.filename)}
+                              color="primary"
+                              size="small"
+                            />
+                          </TableCell>
                           <TableCell>
                             <Chip
                               label={getFileTypeLabel(file.filename)}
