@@ -1,6 +1,17 @@
 #!/bin/bash
 
 # Build and deployment script for ImageFlowCanvas gRPC services
+#
+# Usage:
+#   ./scripts/build_grpc_services.sh                    # Build only
+#   DEPLOY=true ./scripts/build_grpc_services.sh        # Build and deploy
+#   PUSH=true ./scripts/build_grpc_services.sh          # Build and push to registry
+#
+# Environment variables:
+#   REGISTRY   - Docker registry prefix (default: imageflow)
+#   TAG        - Docker image tag (default: latest)
+#   PUSH       - Push images to registry (default: false)
+#   DEPLOY     - Deploy to Kubernetes (default: false)
 
 set -e
 
@@ -56,25 +67,48 @@ build_service "grpc-gateway" "$BASE_DIR/services/grpc-gateway"
 
 echo "✅ All services built successfully!"
 
-# Optional: Push to registry if PUSH=true
-if [ "$PUSH" = "true" ]; then
-    echo "📤 Pushing images to registry..."
-    docker push "$REGISTRY/resize-grpc:$TAG"
-    docker push "$REGISTRY/ai-detection-grpc:$TAG"
-    docker push "$REGISTRY/filter-grpc:$TAG"
-    docker push "$REGISTRY/grpc-gateway:$TAG"
-    echo "✅ All images pushed to registry!"
-fi
+
+echo "📤 Pushing images to registry..."
+docker push "$REGISTRY/resize-grpc:$TAG"
+docker push "$REGISTRY/ai-detection-grpc:$TAG"
+docker push "$REGISTRY/filter-grpc:$TAG"
+docker push "$REGISTRY/grpc-gateway:$TAG"
+echo "✅ All images pushed to registry!"
+
+echo "🚀 Deploying gRPC services to Kubernetes..."
+
+echo "🏗️  Applying namespace configuration..."
+kubectl apply -f k8s/grpc/namespace-config.yaml
+
+echo "🔐 Applying RBAC configuration..."
+kubectl apply -f k8s/grpc/grpc-workflow-rbac.yaml
+kubectl apply -f k8s/grpc/grpc-workflow-token.yaml
+
+echo "🎯 Deploying gRPC services..."
+kubectl apply -f k8s/grpc/grpc-services.yaml
+
+echo "⚡ Deploying workflow templates..."
+kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
+
+echo "✅ Deployment completed!"
 
 echo "🎉 Build completed successfully!"
 echo ""
 echo "Next steps:"
 echo "1. Apply Kubernetes configurations:"
 echo "   kubectl apply -f k8s/grpc/namespace-config.yaml"
+echo "   kubectl apply -f k8s/grpc/grpc-workflow-rbac.yaml"
+echo "   kubectl apply -f k8s/grpc/grpc-workflow-token.yaml"
 echo "   kubectl apply -f k8s/grpc/grpc-services.yaml"
 echo ""
 echo "2. Deploy Argo Workflow templates:"
 echo "   kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml"
 echo ""
-echo "3. Test the pipeline:"
-echo "   kubectl create -f k8s/workflows/grpc-pipeline-templates.yaml -o yaml --dry-run=client | kubectl apply -f -"
+echo "3. Test the services:"
+echo "   python3 scripts/performance_monitor.py --gateway-url http://localhost:8080"
+echo ""
+echo "4. For automated deployment, use:"
+echo "   DEPLOY=true ./scripts/build_grpc_services.sh"
+echo ""
+echo "5. For complete deployment with health checks, use:"
+echo "   ./scripts/deploy-optimized-grpc.sh"

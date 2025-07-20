@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import React, { useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import {
   Grid,
   Card,
@@ -19,89 +19,136 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  CircularProgress
-} from '@mui/material'
-import { Add, PlayArrow, Timeline, Upload } from '@mui/icons-material'
-import { useQuery, useMutation, useQueryClient } from 'react-query'
-import { useAuth } from '../services/AuthContext'
-import { apiService } from '../services/api'
-import { Pipeline } from '../types'
+  CircularProgress,
+  IconButton,
+} from "@mui/material";
+import { Add, PlayArrow, Timeline, Upload } from "@mui/icons-material";
+import { useQuery, useMutation, useQueryClient } from "react-query";
+import { useAuth } from "../services/AuthContext";
+import { apiService } from "../services/api";
+import { Pipeline } from "../types";
 
 export const Dashboard: React.FC = () => {
-  const { isAuthenticated, user } = useAuth()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [executeDialogOpen, setExecuteDialogOpen] = useState(false)
-  const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null)
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [executeDialogOpen, setExecuteDialogOpen] = useState(false);
+  const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(
+    null
+  );
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pipelineToDelete, setPipelineToDelete] = useState<Pipeline | null>(
+    null
+  );
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
 
-  const { data: pipelines = [] } = useQuery('pipelines', () => apiService.getPipelines())
-  const { data: executions = [] } = useQuery('executions', () => apiService.getExecutions(10))
+  const { data: pipelines = [] } = useQuery("pipelines", () =>
+    apiService.getPipelines()
+  );
+  const { data: executions = [] } = useQuery("executions", () =>
+    apiService.getExecutions(10)
+  );
 
   const executePipelineMutation = useMutation(
     ({ pipelineId, files }: { pipelineId: string; files: File[] }) =>
       apiService.executePipeline(pipelineId, files),
     {
       onSuccess: (result) => {
-        queryClient.invalidateQueries('executions')
-        setExecuteDialogOpen(false)
-        setSelectedPipeline(null)
-        setSelectedFiles([])
+        queryClient.invalidateQueries("executions");
+        setExecuteDialogOpen(false);
+        setSelectedPipeline(null);
+        setSelectedFiles([]);
         // 実行監視画面に遷移して結果を確認
-        navigate(`/execution/${result.execution_id}`)
+        navigate(`/execution/${result.execution_id}`);
       },
       onError: (error) => {
-        console.error('Pipeline execution failed:', error)
-      }
+        console.error("Pipeline execution failed:", error);
+      },
     }
-  )
+  );
+
+  const deletePipelineMutation = useMutation(
+    (pipelineId: string) => apiService.deletePipeline(pipelineId),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries("pipelines");
+        setDeleteDialogOpen(false);
+        setPipelineToDelete(null);
+      },
+      onError: (error) => {
+        console.error("Pipeline deletion failed:", error);
+      },
+    }
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'success'
-      case 'running': return 'primary'
-      case 'failed': return 'error'
-      case 'cancelled': return 'default'
-      default: return 'warning'
+      case "completed":
+        return "success";
+      case "running":
+        return "primary";
+      case "failed":
+        return "error";
+      case "cancelled":
+        return "default";
+      default:
+        return "warning";
     }
-  }
+  };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'pending': return '待機中'
-      case 'running': return '実行中'
-      case 'completed': return '完了'
-      case 'failed': return '失敗'
-      case 'cancelled': return 'キャンセル'
-      default: return status
+      case "pending":
+        return "待機中";
+      case "running":
+        return "実行中";
+      case "completed":
+        return "完了";
+      case "failed":
+        return "失敗";
+      case "cancelled":
+        return "キャンセル";
+      default:
+        return status;
     }
-  }
+  };
 
   const handleExecutePipeline = (pipeline: Pipeline) => {
-    setSelectedPipeline(pipeline)
-    setExecuteDialogOpen(true)
-  }
+    setSelectedPipeline(pipeline);
+    setExecuteDialogOpen(true);
+  };
+
+  const handleDeletePipeline = (pipeline: Pipeline) => {
+    setPipelineToDelete(pipeline);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (pipelineToDelete) {
+      deletePipelineMutation.mutate(pipelineToDelete.id);
+    }
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
+    const files = event.target.files;
     if (files) {
-      setSelectedFiles(Array.from(files))
+      setSelectedFiles(Array.from(files));
     }
-  }
+  };
 
   const handleExecuteSubmit = () => {
     if (selectedPipeline && selectedFiles.length > 0) {
       executePipelineMutation.mutate({
         pipelineId: selectedPipeline.id,
-        files: selectedFiles
-      })
+        files: selectedFiles,
+      });
     }
-  }
+  };
 
   return (
     <Box>
@@ -120,9 +167,7 @@ export const Dashboard: React.FC = () => {
               <Typography color="textSecondary" gutterBottom>
                 パイプライン数
               </Typography>
-              <Typography variant="h4">
-                {pipelines.length}
-              </Typography>
+              <Typography variant="h4">{pipelines.length}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -134,7 +179,7 @@ export const Dashboard: React.FC = () => {
                 実行中
               </Typography>
               <Typography variant="h4">
-                {executions.filter(e => e.status === 'running').length}
+                {executions.filter((e) => e.status === "running").length}
               </Typography>
             </CardContent>
           </Card>
@@ -147,7 +192,7 @@ export const Dashboard: React.FC = () => {
                 完了
               </Typography>
               <Typography variant="h4">
-                {executions.filter(e => e.status === 'completed').length}
+                {executions.filter((e) => e.status === "completed").length}
               </Typography>
             </CardContent>
           </Card>
@@ -160,7 +205,7 @@ export const Dashboard: React.FC = () => {
                 失敗
               </Typography>
               <Typography variant="h4">
-                {executions.filter(e => e.status === 'failed').length}
+                {executions.filter((e) => e.status === "failed").length}
               </Typography>
             </CardContent>
           </Card>
@@ -168,18 +213,18 @@ export const Dashboard: React.FC = () => {
 
         {/* アクションボタン */}
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+          <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => navigate('/pipeline-builder')}
+              onClick={() => navigate("/pipeline-builder")}
             >
               新しいパイプライン
             </Button>
             <Button
               variant="outlined"
               startIcon={<Timeline />}
-              onClick={() => navigate('/executions')}
+              onClick={() => navigate("/executions")}
             >
               実行監視
             </Button>
@@ -199,14 +244,20 @@ export const Dashboard: React.FC = () => {
                 </Typography>
               ) : (
                 pipelines.map((pipeline) => (
-                  <Box key={pipeline.id} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-                    <Typography variant="subtitle1">
-                      {pipeline.name}
-                    </Typography>
+                  <Box
+                    key={pipeline.id}
+                    sx={{
+                      mb: 2,
+                      p: 2,
+                      border: "1px solid #e0e0e0",
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography variant="subtitle1">{pipeline.name}</Typography>
                     <Typography variant="body2" color="textSecondary">
                       {pipeline.description}
                     </Typography>
-                    <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                    <Box sx={{ mt: 1, display: "flex", gap: 1 }}>
                       <Button
                         size="small"
                         variant="outlined"
@@ -214,6 +265,14 @@ export const Dashboard: React.FC = () => {
                         onClick={() => handleExecutePipeline(pipeline)}
                       >
                         実行
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() => handleDeletePipeline(pipeline)}
+                      >
+                        削除
                       </Button>
                     </Box>
                   </Box>
@@ -227,21 +286,27 @@ export const Dashboard: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">
-                  最近の実行履歴
-                </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6">最近の実行履歴</Typography>
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => navigate('/executions')}
+                  onClick={() => navigate("/executions")}
                 >
                   すべて表示
                 </Button>
               </Box>
               <Alert severity="info" sx={{ mb: 2 }}>
                 <Typography variant="body2">
-                  💡 実行IDまたは「詳細」ボタンをクリックして処理結果の画像を確認できます
+                  💡
+                  実行IDまたは「詳細」ボタンをクリックして処理結果の画像を確認できます
                 </Typography>
               </Alert>
               {executions.length === 0 ? (
@@ -262,19 +327,21 @@ export const Dashboard: React.FC = () => {
                     </TableHead>
                     <TableBody>
                       {executions.slice(0, 5).map((execution) => (
-                        <TableRow 
+                        <TableRow
                           key={execution.execution_id}
-                          sx={{ 
-                            '&:hover': { backgroundColor: '#f5f5f5' },
-                            cursor: 'pointer'
+                          sx={{
+                            "&:hover": { backgroundColor: "#f5f5f5" },
+                            cursor: "pointer",
                           }}
-                          onClick={() => navigate(`/execution/${execution.execution_id}`)}
+                          onClick={() =>
+                            navigate(`/execution/${execution.execution_id}`)
+                          }
                         >
                           <TableCell>
-                            <Typography 
-                              variant="body2" 
+                            <Typography
+                              variant="body2"
                               color="primary"
-                              sx={{ textDecoration: 'underline' }}
+                              sx={{ textDecoration: "underline" }}
                             >
                               {execution.execution_id.substring(0, 8)}...
                             </Typography>
@@ -297,7 +364,9 @@ export const Dashboard: React.FC = () => {
                               size="small"
                               variant="outlined"
                               startIcon={<Timeline />}
-                              onClick={() => navigate(`/execution/${execution.execution_id}`)}
+                              onClick={() =>
+                                navigate(`/execution/${execution.execution_id}`)
+                              }
                             >
                               詳細
                             </Button>
@@ -314,10 +383,13 @@ export const Dashboard: React.FC = () => {
       </Grid>
 
       {/* パイプライン実行ダイアログ */}
-      <Dialog open={executeDialogOpen} onClose={() => setExecuteDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          パイプライン実行: {selectedPipeline?.name}
-        </DialogTitle>
+      <Dialog
+        open={executeDialogOpen}
+        onClose={() => setExecuteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>パイプライン実行: {selectedPipeline?.name}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" gutterBottom>
@@ -328,7 +400,7 @@ export const Dashboard: React.FC = () => {
               multiple
               accept="image/*"
               onChange={handleFileSelect}
-              style={{ display: 'none' }}
+              style={{ display: "none" }}
               id="file-input"
             />
             <label htmlFor="file-input">
@@ -342,7 +414,7 @@ export const Dashboard: React.FC = () => {
                 ファイルを選択
               </Button>
             </label>
-            
+
             {selectedFiles.length > 0 && (
               <Box>
                 <Typography variant="body2" gutterBottom>
@@ -355,12 +427,13 @@ export const Dashboard: React.FC = () => {
                 ))}
               </Box>
             )}
-            
+
             {executePipelineMutation.isError && (
               <Alert severity="error" sx={{ mt: 2 }}>
-                実行に失敗しました: {executePipelineMutation.error instanceof Error 
-                  ? executePipelineMutation.error.message 
-                  : '不明なエラー'}
+                実行に失敗しました:{" "}
+                {executePipelineMutation.error instanceof Error
+                  ? executePipelineMutation.error.message
+                  : "不明なエラー"}
               </Alert>
             )}
           </Box>
@@ -372,13 +445,66 @@ export const Dashboard: React.FC = () => {
           <Button
             onClick={handleExecuteSubmit}
             variant="contained"
-            disabled={selectedFiles.length === 0 || executePipelineMutation.isLoading}
-            startIcon={executePipelineMutation.isLoading ? <CircularProgress size={20} /> : <PlayArrow />}
+            disabled={
+              selectedFiles.length === 0 || executePipelineMutation.isLoading
+            }
+            startIcon={
+              executePipelineMutation.isLoading ? (
+                <CircularProgress size={20} />
+              ) : (
+                <PlayArrow />
+              )
+            }
           >
             実行開始
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* パイプライン削除確認ダイアログ */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>パイプライン削除の確認</DialogTitle>
+        <DialogContent>
+          <Typography>
+            パイプライン「{pipelineToDelete?.name}」を削除しますか？
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            この操作は取り消せません。
+          </Typography>
+          {deletePipelineMutation.isError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              削除に失敗しました:{" "}
+              {deletePipelineMutation.error instanceof Error
+                ? deletePipelineMutation.error.message
+                : "不明なエラー"}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deletePipelineMutation.isLoading}
+          >
+            キャンセル
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            variant="contained"
+            color="error"
+            disabled={deletePipelineMutation.isLoading}
+            startIcon={
+              deletePipelineMutation.isLoading ? (
+                <CircularProgress size={20} />
+              ) : undefined
+            }
+          >
+            削除
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
-  )
-}
+  );
+};
