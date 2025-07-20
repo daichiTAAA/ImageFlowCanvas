@@ -14,14 +14,14 @@ class ComponentService:
     Component service for ImageFlowCanvas.
     
     Note: According to the architecture design, this service should NOT perform
-    direct image processing. Image processing is delegated to Argo Workflows
-    which execute containerized processing services.
+    direct image processing. Image processing is handled by direct gRPC service calls
+    to containerized processing services.
     
     This service only handles component metadata and coordination.
     """
     def __init__(self):
         self.file_service = FileService()
-        # Remove direct processing dependencies - these are now handled by Argo Workflows
+        # Processing is now handled by direct gRPC service calls
         # self.triton_client = TritonYOLOClient(...)  # REMOVED
     
     async def get_component_metadata(self, component_type: str) -> Dict[str, Any]:
@@ -129,7 +129,7 @@ class ComponentService:
         return components
     
     # REMOVED: All direct processing methods have been removed
-    # Image processing is now handled by Argo Workflows executing containerized services
+    # Image processing is now handled by direct gRPC service calls to containerized services
     # 
     # The following methods were removed:
     # - async def process_component(...)

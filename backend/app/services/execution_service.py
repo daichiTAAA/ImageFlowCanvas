@@ -83,7 +83,7 @@ class ExecutionService:
 
         self.executions[execution_id] = execution
 
-        # Execute pipeline directly using gRPC instead of Argo Workflows
+        # Execute pipeline directly using gRPC services
         # This eliminates the 750-1450ms overhead and achieves 40-100ms processing
         try:
             # Start direct gRPC pipeline execution in background
@@ -111,7 +111,7 @@ class ExecutionService:
     async def _execute_pipeline_direct(self, execution_id: str, execution_request: ExecutionRequest, input_files: List[str]):
         """
         Execute pipeline directly using gRPC calls (40-100ms processing time)
-        Replaces Argo Workflows delegation for ultra-fast execution
+        Ultra-fast execution using direct gRPC service calls
         """
         try:
             execution = self.executions.get(execution_id)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test script to demonstrate direct gRPC pipeline execution
-Replaces Argo Workflows with ultra-fast direct gRPC calls
+Ultra-fast direct gRPC calls for image processing
 """
 import asyncio
 import sys
@@ -92,8 +92,8 @@ async def test_direct_grpc_execution():
             print(f"   - Error: {str(e)}")
             print(f"   - This is normal in test environment without actual gRPC services")
         
-        print(f"\n📊 Performance Comparison:")
-        print(f"   - OLD (Argo Workflows): 750-1450ms overhead")
+        print(f"📊 Performance Comparison:")
+        print(f"   - Previous approach: 750-1450ms overhead")
         print(f"   - NEW (Direct gRPC):     40-100ms target")
         print(f"   - Improvement:           Up to 97% faster")
         
@@ -104,15 +104,15 @@ async def test_direct_grpc_execution():
         execution_service = get_global_execution_service()
         
         print("✅ Execution Service initialized with direct gRPC support")
-        print("   - Argo Workflows dependency removed")
+        print("   - Workflow engine dependency removed")
         print("   - Direct pipeline execution enabled")
         
         # Close connections
         await executor.close()
         print("✅ gRPC connections closed")
         
-        print(f"\n🎉 Test completed successfully!")
-        print(f"✅ Argo Workflows successfully removed")
+        print(f"🎉 Test completed successfully!")
+        print(f"✅ Workflow engine successfully removed")
         print(f"✅ Direct gRPC pipeline execution implemented") 
         print(f"✅ System ready for ultra-fast processing")
         
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     os.environ['DEV_MODE'] = 'true'
     
     print("Direct gRPC Pipeline Execution Test")
-    print("Demonstrating Argo Workflows removal and performance improvement\n")
+    print("Demonstrating workflow engine removal and performance improvement\n")
     
     success = asyncio.run(test_direct_grpc_execution())
     

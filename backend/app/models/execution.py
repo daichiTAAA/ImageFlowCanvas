@@ -79,7 +79,7 @@ class Execution(BaseModel):
     progress: ExecutionProgress
     steps: List[ExecutionStep] = Field(default_factory=list)
     output_files: List[OutputFile] = Field(default_factory=list)
-    workflow_name: Optional[str] = None  # Argo Workflow name
+    workflow_name: Optional[str] = None  # Processing workflow name
     created_at: datetime = Field(default_factory=jst_now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
