@@ -34,6 +34,19 @@ class AIDetectionServiceImplementation(ai_detection_pb2_grpc.AIDetectionServiceS
         self.minio_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
         self.minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
         
+        # Create MinIO client pool for connection reuse
+        self._create_minio_client()
+        
+        # Triton server endpoint
+        self.triton_url = os.getenv("TRITON_GRPC_URL", "triton-service:8001")
+        
+        # Performance optimization: pre-warm services
+        self._warm_up()
+        
+        logger.info(f"Initialized optimized AI Detection Service with Triton: {self.triton_url}")
+
+    def _create_minio_client(self):
+        """Create MinIO client with optimized settings"""
         self.minio_client = Minio(
             self.minio_endpoint,
             access_key=self.minio_access_key,
@@ -41,9 +54,32 @@ class AIDetectionServiceImplementation(ai_detection_pb2_grpc.AIDetectionServiceS
             secure=False
         )
         
-        # Triton server endpoint
-        self.triton_url = os.getenv("TRITON_GRPC_URL", "triton-service:8001")
-        logger.info(f"Initialized AI Detection Service with Triton: {self.triton_url}")
+    def _warm_up(self):
+        """Pre-warm AI detection and OpenCV for better performance"""
+        try:
+            # Create a small dummy image to warm up OpenCV and detection pipeline
+            dummy = np.zeros((224, 224, 3), dtype=np.uint8)
+            cv2.resize(dummy, (100, 100))
+            # Warm up detection pipeline with dummy data
+            self._perform_object_detection(dummy, "yolo", 0.5, 0.4)
+            logger.info("AI Detection service warmed up successfully")
+        except Exception as e:
+            logger.warning(f"Warm-up failed: {e}")
+            
+    def _health_check(self):
+        """Internal health check method"""
+        try:
+            # Test MinIO connection
+            self.minio_client.list_buckets()
+            # Test OpenCV functionality
+            test_img = np.zeros((100, 100, 3), dtype=np.uint8)
+            cv2.resize(test_img, (50, 50))
+            # Test detection pipeline
+            self._perform_object_detection(test_img, "yolo", 0.5, 0.4)
+            return True
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
 
     def DetectObjects(self, request, context):
         """Handle object detection request"""
@@ -269,15 +305,41 @@ class AIDetectionServiceImplementation(ai_detection_pb2_grpc.AIDetectionServiceS
         return image
 
     def Health(self, request, context):
-        """Health check endpoint"""
+        """Health check endpoint with actual service verification"""
         response = common_pb2.HealthCheckResponse()
-        response.status = common_pb2.HealthCheckResponse.SERVING
+        
+        if self._health_check():
+            response.status = common_pb2.HealthCheckResponse.SERVING
+            logger.debug("AI Detection health check passed")
+        else:
+            response.status = common_pb2.HealthCheckResponse.NOT_SERVING
+            logger.warning("AI Detection health check failed")
+            
         return response
 
 def serve():
-    """Start the gRPC server"""
+    """Start the gRPC server with optimized configuration"""
     port = os.getenv("GRPC_PORT", "9090")
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    
+    # Optimize thread pool for AI workloads
+    max_workers = int(os.getenv("GRPC_MAX_WORKERS", "15"))
+    
+    # Configure server options for better performance
+    server_options = [
+        ('grpc.keepalive_time_ms', 30000),
+        ('grpc.keepalive_timeout_ms', 5000),
+        ('grpc.keepalive_permit_without_calls', True),
+        ('grpc.http2.max_pings_without_data', 0),
+        ('grpc.http2.min_time_between_pings_ms', 10000),
+        ('grpc.http2.min_ping_interval_without_data_ms', 5000),
+        ('grpc.max_connection_idle_ms', 300000),
+        ('grpc.max_connection_age_ms', 600000),
+    ]
+    
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=max_workers), 
+        options=server_options
+    )
     
     ai_detection_pb2_grpc.add_AIDetectionServiceServicer_to_server(
         AIDetectionServiceImplementation(), server

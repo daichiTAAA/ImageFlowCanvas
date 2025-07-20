@@ -32,13 +32,48 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
         self.minio_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
         self.minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
         
+        # Create MinIO client pool for connection reuse
+        self._create_minio_client()
+        
+        # Performance optimization: pre-warm OpenCV filters
+        self._warm_up()
+        
+        logger.info(f"Initialized optimized Filter Service for {self.minio_endpoint}")
+
+    def _create_minio_client(self):
+        """Create MinIO client with optimized settings"""
         self.minio_client = Minio(
             self.minio_endpoint,
             access_key=self.minio_access_key,
             secret_key=self.minio_secret_key,
             secure=False
         )
-        logger.info(f"Initialized MinIO client for {self.minio_endpoint}")
+        
+    def _warm_up(self):
+        """Pre-warm OpenCV filters for better performance"""
+        try:
+            # Create a small dummy image to warm up filter operations
+            dummy = np.zeros((100, 100, 3), dtype=np.uint8)
+            # Test different filter types
+            cv2.GaussianBlur(dummy, (5, 5), 0)
+            cv2.medianBlur(dummy, 5)
+            cv2.bilateralFilter(dummy, 9, 75, 75)
+            logger.info("Filter service warmed up successfully")
+        except Exception as e:
+            logger.warning(f"Warm-up failed: {e}")
+            
+    def _health_check(self):
+        """Internal health check method"""
+        try:
+            # Test MinIO connection
+            self.minio_client.list_buckets()
+            # Test OpenCV functionality
+            test_img = np.zeros((100, 100, 3), dtype=np.uint8)
+            cv2.GaussianBlur(test_img, (5, 5), 0)
+            return True
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
 
     def ApplyFilter(self, request, context):
         """Handle filter application request"""
@@ -186,15 +221,41 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
             return image
 
     def Health(self, request, context):
-        """Health check endpoint"""
+        """Health check endpoint with actual service verification"""
         response = common_pb2.HealthCheckResponse()
-        response.status = common_pb2.HealthCheckResponse.SERVING
+        
+        if self._health_check():
+            response.status = common_pb2.HealthCheckResponse.SERVING
+            logger.debug("Filter service health check passed")
+        else:
+            response.status = common_pb2.HealthCheckResponse.NOT_SERVING
+            logger.warning("Filter service health check failed")
+            
         return response
 
 def serve():
-    """Start the gRPC server"""
+    """Start the gRPC server with optimized configuration"""
     port = os.getenv("GRPC_PORT", "9090")
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    
+    # Optimize thread pool for filter operations
+    max_workers = int(os.getenv("GRPC_MAX_WORKERS", "20"))
+    
+    # Configure server options for better performance
+    server_options = [
+        ('grpc.keepalive_time_ms', 30000),
+        ('grpc.keepalive_timeout_ms', 5000),
+        ('grpc.keepalive_permit_without_calls', True),
+        ('grpc.http2.max_pings_without_data', 0),
+        ('grpc.http2.min_time_between_pings_ms', 10000),
+        ('grpc.http2.min_ping_interval_without_data_ms', 5000),
+        ('grpc.max_connection_idle_ms', 300000),
+        ('grpc.max_connection_age_ms', 600000),
+    ]
+    
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=max_workers), 
+        options=server_options
+    )
     
     filter_pb2_grpc.add_FilterServiceServicer_to_server(
         FilterServiceImplementation(), server
@@ -203,7 +264,7 @@ def serve():
     listen_addr = f'[::]:{port}'
     server.add_insecure_port(listen_addr)
     
-    logger.info(f"Starting gRPC Filter Service on {listen_addr}")
+    logger.info(f"Starting optimized gRPC Filter Service on {listen_addr} with {max_workers} workers")
     server.start()
     
     try:
