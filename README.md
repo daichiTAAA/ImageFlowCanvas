@@ -430,7 +430,7 @@ ImageFlowCanvasのgRPCアーキテクチャは、以下の大幅な性能向上�
 
 3. **gRPCゲートウェイ**（`services/grpc-gateway/`）
    - HTTP-to-gRPC変換
-   - Argo Workflows互換性の維持
+   - 高性能通信基盤の維持
    - RESTful API エンドポイントの提供
 
 4. **Kubernetesデプロイメント**（`k8s/grpc/`）
@@ -593,7 +593,7 @@ pip install requests ultralytics grpcio grpcio-tools
    curl http://localhost:8080/health
    ```
 
-**注意**: 2025年7月20日のアップデートにより、Argo Workflowsから直接gRPC呼び出し方式に移行しました。パイプラインの実行時間が60-94秒から1-3秒に短縮され、リアルタイム処理が可能になっています。
+**注意**: 2025年7月20日のアップデートにより、直接gRPC呼び出し方式に移行しました。パイプラインの実行時間が60-94秒から1-3秒に短縮され、リアルタイム処理が可能になっています。
 
 ### Macでのポートフォワーディングの問題
 
