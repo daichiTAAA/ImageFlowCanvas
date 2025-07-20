@@ -68,7 +68,7 @@ build_service "grpc-gateway" "$BASE_DIR/services/grpc-gateway"
 echo "✅ All gRPC services built successfully!"
 
 # Import images to K3s cluster if not in registry mode
-if [ "$PUSH" != "true" ]; then
+if [ "$PUSH" != "true" || "$DEPLOY" != "true" ]; then
     echo "📥 Importing gRPC images to K3s cluster..."
     
     # Save images as tar files and import to K3s
@@ -107,23 +107,27 @@ if [ "$DEPLOY" = "true" ]; then
     echo "⚡ Deploying workflow templates..."
     kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
 
+    echo "🔄 Restarting gRPC services to apply changes..."
+    kubectl rollout restart -n image-processing deployment/resize-grpc-service
+    kubectl rollout restart -n image-processing deployment/ai-detection-grpc-service
+    kubectl rollout restart -n image-processing deployment/filter-grpc-service
+    kubectl rollout restart -n image-processing deployment/grpc-gateway
+
     echo "✅ gRPC services deployment completed!"
 fi
 
 echo "🎉 gRPC services build completed successfully!"
 echo ""
 echo "Next steps:"
-echo "1. Apply Kubernetes configurations:"
+echo "1. For manual Kubernetes deployment:"
 echo "   kubectl apply -f k8s/grpc/namespace-config.yaml"
 echo "   kubectl apply -f k8s/grpc/grpc-workflow-rbac.yaml"
 echo "   kubectl apply -f k8s/grpc/grpc-workflow-token.yaml"
 echo "   kubectl apply -f k8s/grpc/grpc-services.yaml"
-echo ""
-echo "2. Deploy Argo Workflow templates:"
 echo "   kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml"
+echo ""
+echo "2. For automated deployment with rollout:"
+echo "   DEPLOY=true ./scripts/build_grpc_services.sh"
 echo ""
 echo "3. Test the services:"
 echo "   python3 scripts/performance_monitor.py --gateway-url http://localhost:8080"
-echo ""
-echo "4. For automated deployment, use:"
-echo "   DEPLOY=true ./scripts/build_grpc_services.sh"

@@ -45,7 +45,7 @@ echo "  ✓ Built $REGISTRY/frontend:$TAG"
 echo "✅ All web services built successfully!"
 
 # Import images to K3s cluster if not in registry mode
-if [ "$PUSH" != "true" ]; then
+if [ "$PUSH" != "true" || "$DEPLOY" != "true" ]; then
     echo "📥 Importing web service images to K3s cluster..."
     
     # Save images as tar files and import to K3s
@@ -73,17 +73,20 @@ if [ "$DEPLOY" = "true" ]; then
     echo "🌐 Deploying backend and frontend..."
     kubectl apply -f k8s/core/app-deployments.yaml
 
+    echo "🔄 Restarting web services to apply changes..."
+    kubectl rollout restart deployment/frontend deployment/backend
+
     echo "✅ Web services deployment completed!"
 fi
 
 echo "🎉 Web services build completed successfully!"
 echo ""
 echo "Next steps:"
-echo "1. Apply Kubernetes configurations:"
+echo "1. For manual Kubernetes deployment:"
 echo "   kubectl apply -f k8s/grpc/grpc-monitor-rbac.yaml"
 echo "   kubectl apply -f k8s/core/app-deployments.yaml"
 echo ""
-echo "2. For automated deployment, use:"
+echo "2. For automated deployment with rollout:"
 echo "   DEPLOY=true ./scripts/build_web_services.sh"
 echo ""
 echo "3. Check service status:"

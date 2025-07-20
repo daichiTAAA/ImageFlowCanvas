@@ -124,7 +124,7 @@ class GRPCMonitorService:
                 error_code = e.code()
                 error_details = e.details()
 
-                logger.warning(
+                logger.error(
                     f"gRPC health check failed for {service_name}: {error_code} - {error_details}"
                 )
 

@@ -259,7 +259,7 @@ limactl start k3s
 ```
 
 ### コンテナイメージのビルド
-各サービスのDockerイメージをビルドするには、リポジトリのルートディレクトリから以下のコマンドを実行します。
+各サービスのDockerイメージをビルドするには、リポジトリのルートディレクトリから以下のスクリプトを実行します。
 
 **前提条件の確認**:
 ```bash
@@ -279,21 +279,11 @@ ls -la generated/python/imageflow/v1/
 # ビルド前にディスク容量を確認
 df -h
 
-# gRPCサービスの一括ビルド（推奨）
+# gRPCサービスのビルド
 ./scripts/build_grpc_services.sh
 
-# 個別にビルド
-# Frontend
-docker build -f frontend/Dockerfile -t imageflow/frontend:latest frontend/
-
-# Backend  
-docker build -f backend/Dockerfile -t imageflow/backend:latest backend/
-
-# gRPCサービス
-docker build -t resize-grpc-app:latest ./services/resize-grpc-app/
-docker build -t ai-detection-grpc-app:latest ./services/ai-detection-grpc-app/
-docker build -t filter-grpc-app:latest ./services/filter-grpc-app/
-docker build -t grpc-gateway:latest ./services/grpc-gateway/
+# バックエンドとフロントエンドサービスのビルド
+./scripts/build_web_services.sh
 
 # ビルド後の不要なキャッシュを削除
 docker system prune -f
@@ -327,69 +317,24 @@ kubectl get pods
 #### コンテナイメージの変更を反映
 新しいコンテナイメージを反映する場合は、以下の手順を実行します：
 
-**方法1: gRPCサービス用イメージをK3sに直接インポート（推奨）**
+**方法1: スクリプトを使用した一括ビルドとインポート（推奨）**
 ```bash
-# 1. gRPCサービスイメージの一括ビルド
+# gRPCサービスのビルドとK3sインポート
 ./scripts/build_grpc_services.sh
 
-# 2. メインアプリケーションイメージの再ビルド
-docker build -t imageflow/frontend:latest ./frontend/
-docker build -t imageflow/backend:latest ./backend/
-
-# K3sにインポート
-docker save imageflow/frontend:latest | sudo k3s ctr images import -
-docker save imageflow/backend:latest | sudo k3s ctr images import -
-docker save resize-grpc-app:latest | sudo k3s ctr images import -
-docker save ai-detection-grpc-app:latest | sudo k3s ctr images import -
-docker save filter-grpc-app:latest | sudo k3s ctr images import -
-docker save grpc-gateway:latest | sudo k3s ctr images import -
-
-# gRPCサービスの再起動
-kubectl rollout restart -n image-processing deployment/resize-grpc-service
-kubectl rollout restart -n image-processing deployment/ai-detection-grpc-service
-kubectl rollout restart -n image-processing deployment/filter-grpc-service
-kubectl rollout restart -n image-processing deployment/grpc-gateway
+# バックエンドとフロントエンドサービスのビルドとK3sインポート
+./scripts/build_web_services.sh
 ```
 
-
-
-**一括ビルドとインポートのスクリプト例**:
+**方法2: ビルドとデプロイを同時実行（自動ロールアウト付き）**
 ```bash
-#!/bin/bash
-# 全サービスの一括ビルド・インポートスクリプト
+# gRPCサービスのビルド、インポート、デプロイ、ロールアウト
+DEPLOY=true ./scripts/build_grpc_services.sh
 
-echo "Building all container images..."
-
-# gRPCサービスの一括ビルド
-./scripts/build_grpc_services.sh
-
-# メインアプリケーション
-docker build -t imageflow/frontend:latest ./frontend/
-docker build -t imageflow/backend:latest ./backend/
-
-echo "Importing images to K3s..."
-
-# K3sにインポート
-docker save imageflow/frontend:latest | sudo k3s ctr images import -
-docker save imageflow/backend:latest | sudo k3s ctr images import -
-docker save resize-grpc-app:latest | sudo k3s ctr images import -
-docker save ai-detection-grpc-app:latest | sudo k3s ctr images import -
-docker save filter-grpc-app:latest | sudo k3s ctr images import -
-docker save grpc-gateway:latest | sudo k3s ctr images import -
-
-echo "Restarting deployments..."
-
-# メインアプリケーションの再起動
-kubectl rollout restart deployment/frontend deployment/backend
-
-# gRPCサービスの再起動
-kubectl rollout restart -n image-processing deployment/resize-grpc-service
-kubectl rollout restart -n image-processing deployment/ai-detection-grpc-service
-kubectl rollout restart -n image-processing deployment/filter-grpc-service
-kubectl rollout restart -n image-processing deployment/grpc-gateway
-
-echo "All images updated successfully!"
+# バックエンドとフロントエンドサービスのビルド、インポート、デプロイ、ロールアウト
+DEPLOY=true ./scripts/build_web_services.sh
 ```
+
 
 #### 画像処理サービスについて
 
@@ -548,6 +493,9 @@ pip install grpcio grpcio-tools
 
 # gRPCサービスを再ビルド
 ./scripts/build_grpc_services.sh
+
+# バックエンドとフロントエンドサービスを再ビルド
+./scripts/build_web_services.sh
 ```
 
 #### 症状2: Docker build時に `"/generated/python": not found`
