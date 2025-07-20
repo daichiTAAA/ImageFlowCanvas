@@ -8,7 +8,7 @@ metadata:
     app: resize-grpc-service
     component: image-processing
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: resize-grpc-service
@@ -176,7 +176,7 @@ metadata:
     app: filter-grpc-service
     component: image-processing
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: filter-grpc-service
@@ -259,7 +259,7 @@ metadata:
     app: grpc-gateway
     component: gateway
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: grpc-gateway

@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies
+# Install system dependencies including JPEG support
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     libgomp1 \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libavcodec-dev \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -17,6 +20,10 @@ WORKDIR /app
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Reinstall OpenCV with JPEG support
+RUN pip uninstall -y opencv-python opencv-contrib-python && \
+    pip install --no-cache-dir opencv-contrib-python==4.10.0.84
 
 # Copy generated protobuf files
 COPY generated/python /app/generated/python
