@@ -13,13 +13,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy generated protobuf files
-COPY ../../generated/python /app/generated/python
+COPY generated/python /app/generated/python
 
 # Copy application source
 COPY src/ .
 
 # Set Python path to include generated code
-ENV PYTHONPATH="/app/generated/python:$PYTHONPATH"
+ENV PYTHONPATH="/app/generated/python"
 
 # Expose HTTP port
 EXPOSE 8080

@@ -19,12 +19,12 @@ ImageFlowCanvasは、従来のPodベースの実行方式から、持続的なgR
 
 #### パフォーマンス改善
 
-| 項目 | 従来（Pod方式） | 新方式（gRPC） | 改善効果 |
-|------|----------------|---------------|----------|
-| Pod起動時間 | 30-50秒 | 0秒（常駐サービス） | **-50秒** |
-| 通信オーバーヘッド | HTTP/1.1: 100-200ms | gRPC: 20-50ms | **-150ms** |
-| 処理時間 | 15-20秒 | 1-2秒 | **-18秒** |
-| **合計パイプライン時間** | **60-94秒** | **1-3秒** | **95%以上の短縮** |
+| 項目                     | 従来（Pod方式）     | 新方式（gRPC）      | 改善効果          |
+| ------------------------ | ------------------- | ------------------- | ----------------- |
+| Pod起動時間              | 30-50秒             | 0秒（常駐サービス） | **-50秒**         |
+| 通信オーバーヘッド       | HTTP/1.1: 100-200ms | gRPC: 20-50ms       | **-150ms**        |
+| 処理時間                 | 15-20秒             | 1-2秒               | **-18秒**         |
+| **合計パイプライン時間** | **60-94秒**         | **1-3秒**           | **95%以上の短縮** |
 
 #### gRPCコンポーネント
 
@@ -77,6 +77,9 @@ conda activate imageflowcanvas
 # 必要なPythonパッケージのインストール
 pip install requests ultralytics
 
+# gRPC開発用パッケージのインストール
+pip install grpcio grpcio-tools
+
 # YOLO11 ONNXモデルをセットアップ（自動ダウンロード・変換）
 python scripts/setup-yolo11.py
 
@@ -86,19 +89,16 @@ python scripts/setup-yolo11.py
 # gRPCサービスのビルド
 ./scripts/build_grpc_services.sh
 
+# ⚠️ エラーが発生した場合
+# - `grpc_tools`モジュールエラー: pip install grpcio grpcio-tools
+# - Protocol Buffers生成エラー: ./scripts/generate_protos.sh を再実行
+# - Docker buildエラー: 生成されたファイルの確認 ls -la generated/python/
+
 # K3sとArgo Workflowsのセットアップスクリプトを実行
 sudo ./scripts/setup-k3s.sh
 
 # 立ち上がっているか確認
 kubectl get pods -A
-
-# gRPCサービスのデプロイ
-kubectl apply -f k8s/grpc/namespace-config.yaml
-kubectl apply -f k8s/grpc/grpc-services.yaml
-kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
-
-# 開発用サーバーの起動
-./scripts/dev-start.sh
 
 # 別のターミナルを開いて、ポートフォワーディングを開始
 ./scripts/port-forward.sh
@@ -261,6 +261,20 @@ limactl start k3s
 ### コンテナイメージのビルド
 各サービスのDockerイメージをビルドするには、リポジトリのルートディレクトリから以下のコマンドを実行します。
 
+**前提条件の確認**:
+```bash
+# conda環境がアクティベートされているか確認
+conda info --envs
+echo $CONDA_DEFAULT_ENV  # imageflowcanvasと表示されるはず
+
+# 必要なパッケージがインストールされているか確認
+python -c "import grpc_tools.protoc; print('gRPC tools: OK')"
+
+# Protocol Buffersが生成されているか確認
+ls -la generated/python/imageflow/v1/
+```
+
+**ビルド手順**:
 ```bash
 # ビルド前にディスク容量を確認
 df -h
@@ -290,13 +304,13 @@ docker system prune -f
 #### 初回デプロイ
 K3sにデプロイするには、以下のコマンドを実行します。
 ```bash
-# gRPCサービスのデプロイ（推奨）
-kubectl apply -f k8s/grpc/namespace-config.yaml
-kubectl apply -f k8s/grpc/grpc-services.yaml
-kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
+# K3sとArgo Workflowsのセットアップ（gRPCサービスも含む）
+sudo ./scripts/setup-k3s.sh
 
-# アプリケーション（Backend & Frontend）のデプロイ
-kubectl apply -f k8s/core/app-deployments.yaml
+# ⚠️ setup-k3s.shが以下を自動で実行します：
+# - K3s + Argo Workflowsのインストール
+# - gRPCサービスのデプロイ（namespace、services、templates）
+# - アプリケーション（Backend & Frontend）のデプロイ
 ```
 
 #### デプロイメントファイルの変更を反映
@@ -388,12 +402,13 @@ echo "All images updated successfully!"
 gRPCサービスは常駐型で、パイプライン処理時間を大幅に短縮します（60-94秒→1-3秒）。
 
 # K3s内のgRPCサービスイメージ確認
+```bash
+# gRPCサービスのイメージ一覧を確認
 sudo k3s ctr images list | grep -E "(resize-grpc-app|ai-detection-grpc-app|filter-grpc-app|grpc-gateway)"
 
 # gRPCサービスの動作確認
 kubectl get pods -n image-processing
 kubectl get services -n image-processing
-
 
 # gRPCサービスのテスト
 ./scripts/test_grpc_services.py
@@ -516,6 +531,66 @@ print('Resize service connection: OK')
 
 ## トラブルシューティング
 
+### gRPCサービスのビルドエラー
+
+#### 症状1: `ModuleNotFoundError: No module named 'grpc_tools'`
+
+**原因**: gRPC開発ツールがインストールされていない
+
+**対処法**:
+```bash
+# conda環境をアクティベートしてgRPCツールをインストール
+conda activate imageflowcanvas
+pip install grpcio grpcio-tools
+
+# Protocol Buffersを再生成
+./scripts/generate_protos.sh
+
+# gRPCサービスを再ビルド
+./scripts/build_grpc_services.sh
+```
+
+#### 症状2: Docker build時に `"/generated/python": not found`
+
+**原因**: Protocol Buffersファイルが生成されていない、または生成に失敗している
+
+**対処法**:
+```bash
+# 生成されたファイルの確認
+ls -la generated/python/
+
+# Protocol Buffersの手動生成
+./scripts/generate_protos.sh
+
+# 生成が成功したか確認
+ls -la generated/python/imageflow/v1/
+
+# 期待されるファイル:
+# - common_pb2.py, common_pb2_grpc.py
+# - resize_pb2.py, resize_pb2_grpc.py  
+# - ai_detection_pb2.py, ai_detection_pb2_grpc.py
+# - filter_pb2.py, filter_pb2_grpc.py
+```
+
+#### 症状3: conda環境が見つからない
+
+**原因**: conda環境が正しく作成・アクティベートされていない
+
+**対処法**:
+```bash
+# conda環境の確認
+conda env list
+
+# 環境が存在しない場合は作成
+conda create -n imageflowcanvas python=3.12 -y
+
+# 環境をアクティベート
+conda activate imageflowcanvas
+
+# 必要なパッケージを再インストール
+pip install requests ultralytics grpcio grpcio-tools
+```
+
 ### パイプラインが保存されてもダッシュボードに表示されない
 
 **症状**: パイプラインビルダーでパイプラインを保存したが、ダッシュボードページで「パイプラインがありません」と表示される
@@ -539,11 +614,11 @@ print('Resize service connection: OK')
    # ログインしてトークンを取得
    TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
      -d '{"username":"admin","password":"admin123"}' \
-     http://localhost:3000/api/auth/login | \
+     http://localhost:8000/api/auth/login | \
      grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
 
    # パイプライン一覧を取得
-   curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/pipelines/
+   curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/pipelines/
    ```
 
 4. **バックエンドポッドの確認**
@@ -552,6 +627,18 @@ print('Resize service connection: OK')
    kubectl get pods -l app=backend
    kubectl logs -f deployment/backend
    ```
+
+5. **gRPCサービスの状態確認**
+   ```bash
+   # gRPCサービスが正常に動作しているか確認
+   kubectl get pods -n image-processing
+   kubectl get services -n image-processing
+   
+   # gRPCゲートウェイのテスト
+   curl http://localhost:8080/health
+   ```
+
+**注意**: 2025年7月20日のアップデートにより、古いPodベースの処理方式は完全に廃止され、常駐gRPCサービスによるリアルタイム処理方式に移行しました。パイプラインの実行時間が60-94秒から1-3秒に短縮され、リアルタイム処理が可能になっています。
 
 
 ### フロントエンドの変更が反映されない（開発時）

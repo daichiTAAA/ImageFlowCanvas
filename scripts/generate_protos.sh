@@ -4,8 +4,9 @@
 
 set -e
 
-PROTO_DIR="/home/runner/work/ImageFlowCanvas/ImageFlowCanvas/proto"
-OUT_DIR="/home/runner/work/ImageFlowCanvas/ImageFlowCanvas/generated"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROTO_DIR="$BASE_DIR/proto"
+OUT_DIR="$BASE_DIR/generated"
 
 # Create output directories
 mkdir -p "$OUT_DIR/python"

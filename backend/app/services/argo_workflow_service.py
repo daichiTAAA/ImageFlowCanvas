@@ -19,9 +19,9 @@ class ArgoWorkflowService:
         self.argo_server_url = os.getenv(
             "ARGO_SERVER_URL", "http://argo-server.argo.svc.cluster.local:2746"
         )
-        self.namespace = os.getenv("ARGO_NAMESPACE", "argo")
+        self.namespace = os.getenv("ARGO_NAMESPACE", "image-processing")
         self.workflow_template = os.getenv(
-            "WORKFLOW_TEMPLATE", "dynamic-image-processing"
+            "WORKFLOW_TEMPLATE", "grpc-image-processing-pipeline"
         )
         self.timeout = int(os.getenv("ARGO_TIMEOUT", "300"))
         self.max_retries = int(os.getenv("ARGO_MAX_RETRIES", "3"))
@@ -151,7 +151,9 @@ class ArgoWorkflowService:
 
                 # Submit workflow via Argo Server API
                 headers = self._get_headers()
-                async with httpx.AsyncClient(timeout=self.timeout, verify=not self.insecure) as client:
+                async with httpx.AsyncClient(
+                    timeout=self.timeout, verify=not self.insecure
+                ) as client:
                     response = await client.post(
                         f"{self.argo_server_url}/api/v1/workflows/{self.namespace}",
                         json={"workflow": workflow_payload},
@@ -262,6 +264,9 @@ class ArgoWorkflowService:
     ) -> Dict[str, Any]:
         """Build the workflow payload for Argo Workflows submission"""
 
+        # Extract first input file for gRPC workflow
+        input_file = input_files[0] if input_files else "sample-image.jpg"
+
         # Create workflow from template
         workflow_payload = {
             "apiVersion": "argoproj.io/v1alpha1",
@@ -276,26 +281,43 @@ class ArgoWorkflowService:
                 },
             },
             "spec": {
+                "serviceAccountName": "grpc-workflow",
                 "workflowTemplateRef": {"name": self.workflow_template},
                 "arguments": {
                     "parameters": [
-                        {"name": "input-files", "value": json.dumps(input_files)},
-                        {
-                            "name": "pipeline-definition",
-                            "value": json.dumps(pipeline_definition),
-                        },
                         {"name": "execution-id", "value": execution_id},
-                        {"name": "pipeline-id", "value": pipeline_id},
+                        {"name": "input-bucket", "value": "imageflow-files"},
+                        {"name": "input-file", "value": input_file},
+                        {
+                            "name": "target-width",
+                            "value": str(parameters.get("width", 800)),
+                        },
+                        {
+                            "name": "target-height",
+                            "value": str(parameters.get("height", 600)),
+                        },
+                        {
+                            "name": "model-name",
+                            "value": parameters.get("model", "yolo"),
+                        },
+                        {
+                            "name": "confidence-threshold",
+                            "value": str(parameters.get("confidence", 0.5)),
+                        },
+                        {
+                            "name": "filter-type",
+                            "value": parameters.get(
+                                "filter_type", "FILTER_TYPE_GAUSSIAN"
+                            ),
+                        },
+                        {
+                            "name": "filter-intensity",
+                            "value": str(parameters.get("filter_intensity", 1.0)),
+                        },
                     ]
                 },
             },
         }
-
-        # Add any additional parameters
-        if parameters:
-            workflow_payload["spec"]["arguments"]["parameters"].append(
-                {"name": "additional-parameters", "value": json.dumps(parameters)}
-            )
 
         return workflow_payload
 

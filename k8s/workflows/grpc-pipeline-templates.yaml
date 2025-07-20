@@ -5,6 +5,7 @@ metadata:
   name: grpc-image-processing-pipeline
   namespace: image-processing
 spec:
+  serviceAccountName: grpc-workflow
   entrypoint: main
   arguments:
     parameters:
@@ -174,6 +175,7 @@ metadata:
   namespace: image-processing
   generateName: test-grpc-pipeline-
 spec:
+  serviceAccountName: grpc-workflow
   workflowTemplateRef:
     name: grpc-image-processing-pipeline
   arguments:

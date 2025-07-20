@@ -6,7 +6,7 @@ set -e
 
 REGISTRY=${REGISTRY:-"imageflow"}
 TAG=${TAG:-"latest"}
-BASE_DIR="/home/runner/work/ImageFlowCanvas/ImageFlowCanvas"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "🔧 Building ImageFlowCanvas gRPC Services"
 echo "Registry: $REGISTRY"
@@ -22,7 +22,8 @@ build_service() {
     
     # Copy generated protobuf files to service directory
     if [ -d "$BASE_DIR/generated/python" ]; then
-        cp -r "$BASE_DIR/generated/python" "$context_dir/"
+        mkdir -p "$context_dir/generated"
+        cp -r "$BASE_DIR/generated/python" "$context_dir/generated/"
         echo "  ✓ Copied protobuf files to $service_name"
     fi
     
@@ -31,8 +32,8 @@ build_service() {
     echo "  ✓ Built $REGISTRY/$service_name:$TAG"
     
     # Clean up copied files
-    if [ -d "$context_dir/python" ]; then
-        rm -rf "$context_dir/python"
+    if [ -d "$context_dir/generated" ]; then
+        rm -rf "$context_dir/generated"
         echo "  ✓ Cleaned up temporary files"
     fi
 }

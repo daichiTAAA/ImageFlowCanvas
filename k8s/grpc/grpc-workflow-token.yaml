@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grpc-workflow.service-account-token
+  namespace: image-processing
+  annotations:
+    kubernetes.io/service-account.name: grpc-workflow
+type: kubernetes.io/service-account-token

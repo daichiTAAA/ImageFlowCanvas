@@ -87,6 +87,19 @@ kubectl apply -f k8s/core/app-deployments.yaml
 echo "Waiting for backend to be ready..."
 kubectl wait --for=condition=available --timeout=300s deployment/backend -n default
 
+# Deploy gRPC services
+echo "Deploying gRPC services..."
+kubectl apply -f k8s/grpc/namespace-config.yaml
+kubectl apply -f k8s/grpc/grpc-services.yaml
+kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
+
+# Wait for gRPC services to be ready
+echo "Waiting for gRPC services to be ready..."
+kubectl wait --for=condition=available --timeout=300s deployment/resize-grpc-service -n image-processing
+kubectl wait --for=condition=available --timeout=300s deployment/ai-detection-grpc-service -n image-processing
+kubectl wait --for=condition=available --timeout=300s deployment/filter-grpc-service -n image-processing
+kubectl wait --for=condition=available --timeout=300s deployment/grpc-gateway -n image-processing
+
 # Setup port forwarding script
 cat > scripts/port-forward.sh << 'EOF'
 #!/bin/bash
