@@ -86,8 +86,11 @@ python scripts/setup-yolo11.py
 # gRPCサービス用Protocol Buffersの生成
 ./scripts/generate_protos.sh
 
-# gRPCサービスのビルド
-./scripts/build_grpc_services.sh
+# フロントエンドとバックエンドのビルドとデプロイ
+DEPLOY=true ./scripts/build_web_services.sh
+
+# gRPCサービスのビルドとデプロイ
+DEPLOY=true ./scripts/build_grpc_services.sh
 
 # ⚠️ エラーが発生した場合
 # - `grpc_tools`モジュールエラー: pip install grpcio grpcio-tools
