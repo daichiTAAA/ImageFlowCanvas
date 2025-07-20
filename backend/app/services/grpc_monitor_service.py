@@ -66,7 +66,7 @@ class GRPCMonitorService:
             service_config = self.services.get(service_name)
             if not service_config:
                 return {
-                    "status": "UNKNOWN",
+                    "status": "error",
                     "error": f"Unknown service: {service_name}",
                     "response_time_ms": 0,
                 }
@@ -104,7 +104,7 @@ class GRPCMonitorService:
                     return {
                         "service_name": service_name,
                         "display_name": service_config["name"],
-                        "status": "SERVING",
+                        "status": "healthy",
                         "response_time_ms": round(response_time_ms, 2),
                         "endpoint": endpoint,
                         "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -114,7 +114,7 @@ class GRPCMonitorService:
                     return {
                         "service_name": service_name,
                         "display_name": service_config["name"],
-                        "status": "NOT_SERVING",
+                        "status": "unhealthy",
                         "response_time_ms": round(response_time_ms, 2),
                         "endpoint": endpoint,
                         "error": f"Service reported status: {status_name}",
@@ -130,10 +130,16 @@ class GRPCMonitorService:
                     f"gRPC health check failed for {service_name}: {error_code} - {error_details}"
                 )
 
+                # Map gRPC error codes to appropriate statuses
+                if error_code == grpc.StatusCode.DEADLINE_EXCEEDED:
+                    status = "timeout"
+                else:
+                    status = "error"
+                
                 return {
                     "service_name": service_name,
                     "display_name": service_config["name"],
-                    "status": "NOT_SERVING",
+                    "status": status,
                     "error": f"gRPC error: {error_code} - {error_details}",
                     "response_time_ms": round(response_time_ms, 2),
                     "endpoint": endpoint,
@@ -151,7 +157,7 @@ class GRPCMonitorService:
             return {
                 "service_name": service_name,
                 "display_name": self.services.get(service_name, {}).get("name", service_name),
-                "status": "ERROR",
+                "status": "error",
                 "error": f"Unexpected error: {str(e)}",
                 "response_time_ms": round(response_time_ms, 2),
                 "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
