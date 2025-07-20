@@ -592,6 +592,75 @@ pip install requests ultralytics grpcio grpcio-tools
 
 **注意**: 2025年7月20日のアップデートにより、古いPodベースの処理方式は完全に廃止され、常駐gRPCサービスによるリアルタイム処理方式に移行しました。パイプラインの実行時間が60-94秒から1-3秒に短縮され、リアルタイム処理が可能になっています。
 
+### Macでのポートフォワーディングの問題
+
+**症状**: MacでLimaを使用している際に、ポートフォワーディングが正常に動作せず、ホストPCからVM内のサービス（http://localhost:3000、http://localhost:8000等）にアクセスできない
+
+**原因**: Lima VMの設定が正しく読み込まれていない、またはポートフォワーディング設定に問題がある
+
+**対処法**:
+
+1. **VMの再起動（推奨）**
+   ```bash
+   # ホストマシン（Mac）で実行
+   limactl stop k3s
+   limactl start k3s
+   
+   # 再起動後、VMにシェル接続
+   limactl shell k3s
+   
+   # VM内でK3sサービスの状態を確認
+   kubectl get pods -A
+   ```
+
+2. **ポートフォワーディング設定の確認**
+   ```bash
+   # ホストマシン（Mac）で実行
+   limactl stop k3s
+   limactl edit k3s
+   
+   # 以下の設定が正しく記載されているか確認
+   # portForwards:
+   #   - guestPort: 3000
+   #     hostPort: 3000
+   #   - guestPort: 8000
+   #     hostPort: 8000
+   #   - guestPort: 9001
+   #     hostPort: 9001
+   #   - guestPort: 2746
+   #     hostPort: 2746
+   
+   # 設定を保存後、VM再起動
+   limactl start k3s
+   ```
+
+3. **VM内のサービス起動確認**
+   ```bash
+   # VMにシェル接続
+   limactl shell k3s
+   
+   # ポートフォワーディングスクリプトを実行
+   cd ~/ImageFlowCanvas
+   ./scripts/port-forward.sh
+   
+   # 別のターミナルでサービスの動作確認
+   curl http://localhost:3000  # Frontend
+   curl http://localhost:8000/docs  # Backend API
+   ```
+
+4. **Lima VM設定の確認**
+   ```bash
+   # VM設定の詳細表示
+   limactl show-ssh k3s
+   
+   # VMの状態確認
+   limactl list
+   ```
+
+**追加のトラブルシューティング**:
+- VM再起動後は、VM内で `./scripts/port-forward.sh` を再実行する必要があります
+- ホストPCのファイアウォール設定がポートをブロックしていないか確認してください
+- 他のアプリケーションが同じポート（3000、8000等）を使用していないか確認してください
 
 ### フロントエンドの変更が反映されない（開発時）
 
