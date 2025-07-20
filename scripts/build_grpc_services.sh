@@ -104,9 +104,6 @@ if [ "$DEPLOY" = "true" ]; then
     echo "🎯 Deploying gRPC services..."
     kubectl apply -f k8s/grpc/grpc-services.yaml
 
-    echo "⚡ Deploying workflow templates..."
-    kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
-
     echo "🔄 Restarting gRPC services to apply changes..."
     kubectl rollout restart -n image-processing deployment/resize-grpc-service
     kubectl rollout restart -n image-processing deployment/ai-detection-grpc-service
