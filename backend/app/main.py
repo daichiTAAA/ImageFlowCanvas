@@ -87,6 +87,10 @@ app.include_router(files.router, prefix="/v1/files", tags=["files"])
 app.include_router(
     grpc_services.router, prefix="/v1/grpc-services", tags=["grpc-services"]
 )
+# Health monitoring endpoints (no auth required)
+app.include_router(
+    grpc_services.router, prefix="/v1/monitoring", tags=["monitoring"]
+)
 
 
 @app.on_event("startup")

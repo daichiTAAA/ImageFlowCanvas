@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build and deployment script for ImageFlowCanvas gRPC services
+# Build and deployment script for ImageFlowCanvas gRPC services only
 #
 # Usage:
 #   ./scripts/build_grpc_services.sh                    # Build only
@@ -65,34 +65,52 @@ build_service "ai-detection-grpc" "$BASE_DIR/services/ai-detection-grpc-app"
 build_service "filter-grpc" "$BASE_DIR/services/filter-grpc-app"
 build_service "grpc-gateway" "$BASE_DIR/services/grpc-gateway"
 
-echo "✅ All services built successfully!"
+echo "✅ All gRPC services built successfully!"
 
+# Import images to K3s cluster if not in registry mode
+if [ "$PUSH" != "true" ]; then
+    echo "📥 Importing gRPC images to K3s cluster..."
+    
+    # Save images as tar files and import to K3s
+    docker save "$REGISTRY/resize-grpc:$TAG" | sudo k3s ctr images import -
+    docker save "$REGISTRY/ai-detection-grpc:$TAG" | sudo k3s ctr images import -
+    docker save "$REGISTRY/filter-grpc:$TAG" | sudo k3s ctr images import -
+    docker save "$REGISTRY/grpc-gateway:$TAG" | sudo k3s ctr images import -
+    
+    echo "✅ All gRPC images imported to K3s cluster!"
+fi
 
-echo "📤 Pushing images to registry..."
-docker push "$REGISTRY/resize-grpc:$TAG"
-docker push "$REGISTRY/ai-detection-grpc:$TAG"
-docker push "$REGISTRY/filter-grpc:$TAG"
-docker push "$REGISTRY/grpc-gateway:$TAG"
-echo "✅ All images pushed to registry!"
+# Push to registry if requested
+if [ "$PUSH" = "true" ]; then
+    echo "📤 Pushing gRPC images to registry..."
+    docker push "$REGISTRY/resize-grpc:$TAG"
+    docker push "$REGISTRY/ai-detection-grpc:$TAG"
+    docker push "$REGISTRY/filter-grpc:$TAG"
+    docker push "$REGISTRY/grpc-gateway:$TAG"
+    echo "✅ All gRPC images pushed to registry!"
+fi
 
-echo "🚀 Deploying gRPC services to Kubernetes..."
+# Deploy to Kubernetes if requested
+if [ "$DEPLOY" = "true" ]; then
+    echo "🚀 Deploying gRPC services to Kubernetes..."
 
-echo "🏗️  Applying namespace configuration..."
-kubectl apply -f k8s/grpc/namespace-config.yaml
+    echo "🏗️  Applying namespace configuration..."
+    kubectl apply -f k8s/grpc/namespace-config.yaml
 
-echo "🔐 Applying RBAC configuration..."
-kubectl apply -f k8s/grpc/grpc-workflow-rbac.yaml
-kubectl apply -f k8s/grpc/grpc-workflow-token.yaml
+    echo "🔐 Applying RBAC configuration..."
+    kubectl apply -f k8s/grpc/grpc-workflow-rbac.yaml
+    kubectl apply -f k8s/grpc/grpc-workflow-token.yaml
 
-echo "🎯 Deploying gRPC services..."
-kubectl apply -f k8s/grpc/grpc-services.yaml
+    echo "🎯 Deploying gRPC services..."
+    kubectl apply -f k8s/grpc/grpc-services.yaml
 
-echo "⚡ Deploying workflow templates..."
-kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
+    echo "⚡ Deploying workflow templates..."
+    kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
 
-echo "✅ Deployment completed!"
+    echo "✅ gRPC services deployment completed!"
+fi
 
-echo "🎉 Build completed successfully!"
+echo "🎉 gRPC services build completed successfully!"
 echo ""
 echo "Next steps:"
 echo "1. Apply Kubernetes configurations:"
@@ -109,6 +127,3 @@ echo "   python3 scripts/performance_monitor.py --gateway-url http://localhost:8
 echo ""
 echo "4. For automated deployment, use:"
 echo "   DEPLOY=true ./scripts/build_grpc_services.sh"
-echo ""
-echo "5. For complete deployment with health checks, use:"
-echo "   ./scripts/deploy-optimized-grpc.sh"

@@ -21,3 +21,4 @@ alembic==1.13.1
 grpcio==1.60.0
 grpcio-health-checking==1.60.0
 kubernetes==28.1.0
+protobuf==4.24.4

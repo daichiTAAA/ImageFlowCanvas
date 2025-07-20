@@ -12,12 +12,14 @@ import cv2
 import numpy as np
 from google.protobuf.timestamp_pb2 import Timestamp
 
-# Add generated proto path
+# Add generated proto paths
+sys.path.append('/app/generated/python')
 sys.path.append('/home/runner/work/ImageFlowCanvas/ImageFlowCanvas/generated/python')
 
 from imageflow.v1 import resize_pb2
 from imageflow.v1 import resize_pb2_grpc
 from imageflow.v1 import common_pb2
+from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 # Setup logging
 logging.basicConfig(
@@ -27,6 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
+    """gRPC Resize service implementation with standard health checking"""
     def __init__(self):
         # MinIO client setup
         self.minio_endpoint = os.getenv("MINIO_ENDPOINT", "minio-service:9000")
@@ -231,18 +234,38 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
             
             return response
 
-    def Health(self, request, context):
-        """Health check endpoint with actual service verification"""
-        response = common_pb2.HealthCheckResponse()
+
+class HealthServiceImplementation(health_pb2_grpc.HealthServicer):
+    """Standard gRPC health check service implementation"""
+    
+    def __init__(self, resize_service):
+        self.resize_service = resize_service
+    
+    def Check(self, request, context):
+        """Standard gRPC health check implementation"""
+        response = health_pb2.HealthCheckResponse()
         
-        if self._health_check():
-            response.status = common_pb2.HealthCheckResponse.SERVING
+        if self.resize_service._health_check():
+            response.status = health_pb2.HealthCheckResponse.SERVING
             logger.debug("Health check passed")
         else:
-            response.status = common_pb2.HealthCheckResponse.NOT_SERVING
+            response.status = health_pb2.HealthCheckResponse.NOT_SERVING
             logger.warning("Health check failed")
             
         return response
+    
+    def Watch(self, request, context):
+        """Health check watch implementation (streaming)"""
+        # For simplicity, just return current status
+        response = health_pb2.HealthCheckResponse()
+        
+        if self.resize_service._health_check():
+            response.status = health_pb2.HealthCheckResponse.SERVING
+        else:
+            response.status = health_pb2.HealthCheckResponse.NOT_SERVING
+            
+        yield response
+
 
 def serve():
     """Start the gRPC server with optimized configuration"""
@@ -268,9 +291,13 @@ def serve():
         options=server_options
     )
     
-    resize_pb2_grpc.add_ResizeServiceServicer_to_server(
-        ResizeServiceImplementation(), server
-    )
+    # Create service instances
+    resize_service = ResizeServiceImplementation()
+    health_service = HealthServiceImplementation(resize_service)
+    
+    # Add services to server
+    resize_pb2_grpc.add_ResizeServiceServicer_to_server(resize_service, server)
+    health_pb2_grpc.add_HealthServicer_to_server(health_service, server)
     
     listen_addr = f'[::]:{port}'
     server.add_insecure_port(listen_addr)

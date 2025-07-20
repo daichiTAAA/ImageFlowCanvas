@@ -2,10 +2,21 @@ import asyncio
 import logging
 import grpc
 import time
+import sys
+import os
 from typing import Dict, Any, List, Optional
-from grpc_health.v1 import health_pb2, health_pb2_grpc
 import kubernetes.client as k8s_client
 from kubernetes.client.rest import ApiException
+from grpc_health.v1 import health_pb2, health_pb2_grpc
+
+# Add generated proto path
+sys.path.append("/app")
+from imageflow.v1 import (
+    common_pb2,
+    ai_detection_pb2_grpc,
+    resize_pb2_grpc,
+    filter_pb2_grpc,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,21 +28,21 @@ class GRPCMonitorService:
         self.services = {
             "resize-grpc-service": {
                 "name": "Image Resize Service",
-                "endpoint": "resize-grpc-service:9090",
+                "endpoint": "resize-grpc-service.image-processing.svc.cluster.local:9090",
                 "namespace": "image-processing",
-                "deployment": "resize-grpc-deployment",
+                "deployment": "resize-grpc-service",
             },
             "ai-detection-grpc-service": {
                 "name": "AI Detection Service",
-                "endpoint": "ai-detection-grpc-service:9090",
+                "endpoint": "ai-detection-grpc-service.image-processing.svc.cluster.local:9090",
                 "namespace": "image-processing",
-                "deployment": "ai-detection-grpc-deployment",
+                "deployment": "ai-detection-grpc-service",
             },
             "filter-grpc-service": {
                 "name": "Filter Service",
-                "endpoint": "filter-grpc-service:9090",
+                "endpoint": "filter-grpc-service.image-processing.svc.cluster.local:9090",
                 "namespace": "image-processing",
-                "deployment": "filter-grpc-deployment",
+                "deployment": "filter-grpc-service",
             },
         }
 
@@ -47,71 +58,101 @@ class GRPCMonitorService:
             self.k8s_apps_v1 = None
             self.k8s_core_v1 = None
 
-    async def check_service_health(self, service_name: str) -> Optional[Dict[str, Any]]:
-        """特定のgRPCサービスの健康状態をチェック"""
-        if service_name not in self.services:
-            return None
-
-        service_info = self.services[service_name]
-        endpoint = service_info["endpoint"]
+    async def check_service_health(self, service_name: str) -> Dict[str, Any]:
+        """指定されたgRPCサービスのヘルスチェックを実行"""
+        start_time = time.time()
 
         try:
-            # gRPCヘルスチェック
-            channel = grpc.aio.insecure_channel(endpoint)
+            service_config = self.services.get(service_name)
+            if not service_config:
+                return {
+                    "status": "UNKNOWN",
+                    "error": f"Unknown service: {service_name}",
+                    "response_time_ms": 0,
+                }
 
-            # 接続タイムアウト設定
-            await asyncio.wait_for(channel.channel_ready(), timeout=5.0)
+            endpoint = service_config["endpoint"]
 
-            # ヘルスチェック実行
-            health_stub = health_pb2_grpc.HealthStub(channel)
-
-            start_time = time.time()
-            health_request = health_pb2.HealthCheckRequest()
-            health_response = await asyncio.wait_for(
-                health_stub.Check(health_request), timeout=3.0
+            # gRPCチャンネルを作成
+            channel = grpc.insecure_channel(
+                endpoint,
+                options=[
+                    ("grpc.keepalive_time_ms", 10000),
+                    ("grpc.keepalive_timeout_ms", 5000),
+                    ("grpc.keepalive_permit_without_calls", True),
+                    ("grpc.http2.keepalive_timeout_ms", 5000),
+                ],
             )
-            response_time = time.time() - start_time
 
-            await channel.close()
+            try:
+                # 標準のgRPCヘルスチェックサービスを使用
+                health_stub = health_pb2_grpc.HealthStub(channel)
 
-            # Kubernetesポッド情報取得
-            pod_info = await self._get_pod_info(service_info)
+                # 標準ヘルスチェックリクエストを作成
+                health_request = health_pb2.HealthCheckRequest()
+                health_request.service = service_name
 
-            health_status = {
-                "service_name": service_name,
-                "display_name": service_info["name"],
-                "endpoint": endpoint,
-                "status": (
-                    "healthy"
-                    if health_response.status == health_pb2.HealthCheckResponse.SERVING
-                    else "unhealthy"
-                ),
-                "response_time_ms": round(response_time * 1000, 2),
-                "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                "pod_info": pod_info,
-            }
+                # タイムアウト付きでヘルスチェックを実行
+                health_response = health_stub.Check(health_request, timeout=5.0)
 
-            return health_status
+                response_time_ms = (time.time() - start_time) * 1000
 
-        except asyncio.TimeoutError:
-            return {
-                "service_name": service_name,
-                "display_name": service_info["name"],
-                "endpoint": endpoint,
-                "status": "timeout",
-                "error": "Health check timed out",
-                "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                "pod_info": await self._get_pod_info(service_info),
-            }
+                # レスポンスのステータスを確認
+                if health_response.status == health_pb2.HealthCheckResponse.SERVING:
+                    return {
+                        "service_name": service_name,
+                        "display_name": service_config["name"],
+                        "status": "SERVING",
+                        "response_time_ms": round(response_time_ms, 2),
+                        "endpoint": endpoint,
+                        "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                    }
+                else:
+                    status_name = health_pb2.HealthCheckResponse.ServingStatus.Name(health_response.status)
+                    return {
+                        "service_name": service_name,
+                        "display_name": service_config["name"],
+                        "status": "NOT_SERVING",
+                        "response_time_ms": round(response_time_ms, 2),
+                        "endpoint": endpoint,
+                        "error": f"Service reported status: {status_name}",
+                        "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                    }
+
+            except grpc.RpcError as e:
+                response_time_ms = (time.time() - start_time) * 1000
+                error_code = e.code()
+                error_details = e.details()
+
+                logger.warning(
+                    f"gRPC health check failed for {service_name}: {error_code} - {error_details}"
+                )
+
+                return {
+                    "service_name": service_name,
+                    "display_name": service_config["name"],
+                    "status": "NOT_SERVING",
+                    "error": f"gRPC error: {error_code} - {error_details}",
+                    "response_time_ms": round(response_time_ms, 2),
+                    "endpoint": endpoint,
+                    "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                }
+
+            finally:
+                channel.close()
+
         except Exception as e:
+            response_time_ms = (time.time() - start_time) * 1000
+            logger.error(
+                f"Unexpected error during health check for {service_name}: {str(e)}"
+            )
             return {
                 "service_name": service_name,
-                "display_name": service_info["name"],
-                "endpoint": endpoint,
-                "status": "error",
-                "error": str(e),
+                "display_name": self.services.get(service_name, {}).get("name", service_name),
+                "status": "ERROR",
+                "error": f"Unexpected error: {str(e)}",
+                "response_time_ms": round(response_time_ms, 2),
                 "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                "pod_info": await self._get_pod_info(service_info),
             }
 
     async def get_all_services_health(self) -> List[Dict[str, Any]]:

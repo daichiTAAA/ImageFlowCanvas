@@ -13,11 +13,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Python依存関係をインストール
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --no-cache-dir -r requirements.txt
 
 # アプリケーションコードをコピー
-COPY app/ ./app/
+COPY backend/app/ ./app/
+
+# 生成されたprotoファイルをコピー
+COPY backend/generated/python/ ./
 
 # ポート8000を公開
 EXPOSE 8000
