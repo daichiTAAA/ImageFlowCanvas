@@ -4,6 +4,7 @@ import grpc
 import time
 import sys
 import os
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 import kubernetes.client as k8s_client
 from kubernetes.client.rest import ApiException
@@ -19,6 +20,7 @@ from imageflow.v1 import (
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class GRPCMonitorService:
@@ -57,6 +59,47 @@ class GRPCMonitorService:
             logger.warning(f"Failed to initialize Kubernetes client: {e}")
             self.k8s_apps_v1 = None
             self.k8s_core_v1 = None
+
+    def _get_jst_time(self) -> str:
+        """JST時刻を取得"""
+        jst = timezone(timedelta(hours=9))
+        return datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S")
+
+    async def _get_pod_info(self, service_name: str) -> Optional[Dict[str, Any]]:
+        """サービスのPod情報を取得"""
+        if not self.k8s_core_v1:
+            return None
+            
+        try:
+            service_config = self.services.get(service_name)
+            if not service_config:
+                logger.warning(f"Service config not found for {service_name}")
+                return None
+                
+            namespace = service_config["namespace"]
+            deployment_name = service_config["deployment"]
+            
+            logger.debug(f"Getting pods for service {service_name} in namespace {namespace} with label app={deployment_name}")
+            
+            # Podを取得
+            pods = self.k8s_core_v1.list_namespaced_pod(
+                namespace=namespace,
+                label_selector=f"app={deployment_name}"
+            )
+            
+            if pods.items:
+                pod = pods.items[0]  # 最初のPodを取得
+                return {
+                    "name": pod.metadata.name,
+                    "status": pod.status.phase,
+                    "restart_count": sum(container.restart_count for container in pod.status.container_statuses or []),
+                    "created_time": pod.metadata.creation_timestamp.strftime("%Y-%m-%d %H:%M:%S") if pod.metadata.creation_timestamp else "Unknown",
+                    "node_name": pod.spec.node_name or "Unknown"
+                }
+        except Exception as e:
+            logger.error(f"Failed to get pod info for {service_name}: {e}", exc_info=True)
+            
+        return None
 
     async def check_service_health(self, service_name: str) -> Dict[str, Any]:
         """指定されたgRPCサービスのヘルスチェックを実行"""
@@ -99,6 +142,9 @@ class GRPCMonitorService:
 
                 response_time_ms = (time.time() - start_time) * 1000
 
+                # Pod情報を取得
+                pod_info = await self._get_pod_info(service_name)
+                
                 # レスポンスのステータスを確認
                 if health_response.status == health_pb2.HealthCheckResponse.SERVING:
                     return {
@@ -107,18 +153,21 @@ class GRPCMonitorService:
                         "status": "healthy",
                         "response_time_ms": round(response_time_ms, 2),
                         "endpoint": endpoint,
-                        "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                        "pod_info": pod_info,
+                        "last_checked": self._get_jst_time(),
                     }
                 else:
                     status_name = health_pb2.HealthCheckResponse.ServingStatus.Name(health_response.status)
+                    pod_info = await self._get_pod_info(service_name)
                     return {
                         "service_name": service_name,
                         "display_name": service_config["name"],
                         "status": "unhealthy",
                         "response_time_ms": round(response_time_ms, 2),
                         "endpoint": endpoint,
+                        "pod_info": pod_info,
                         "error": f"Service reported status: {status_name}",
-                        "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                        "last_checked": self._get_jst_time(),
                     }
 
             except grpc.RpcError as e:
@@ -136,6 +185,7 @@ class GRPCMonitorService:
                 else:
                     status = "error"
                 
+                pod_info = await self._get_pod_info(service_name)
                 return {
                     "service_name": service_name,
                     "display_name": service_config["name"],
@@ -143,7 +193,8 @@ class GRPCMonitorService:
                     "error": f"gRPC error: {error_code} - {error_details}",
                     "response_time_ms": round(response_time_ms, 2),
                     "endpoint": endpoint,
-                    "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                    "pod_info": pod_info,
+                    "last_checked": self._get_jst_time(),
                 }
 
             finally:
@@ -154,13 +205,15 @@ class GRPCMonitorService:
             logger.error(
                 f"Unexpected error during health check for {service_name}: {str(e)}"
             )
+            pod_info = await self._get_pod_info(service_name) if service_name in self.services else None
             return {
                 "service_name": service_name,
                 "display_name": self.services.get(service_name, {}).get("name", service_name),
                 "status": "error",
                 "error": f"Unexpected error: {str(e)}",
                 "response_time_ms": round(response_time_ms, 2),
-                "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "pod_info": pod_info,
+                "last_checked": self._get_jst_time(),
             }
 
     async def get_all_services_health(self) -> List[Dict[str, Any]]:
@@ -183,9 +236,7 @@ class GRPCMonitorService:
                         "display_name": self.services[service_name]["name"],
                         "status": "error",
                         "error": str(result),
-                        "last_checked": time.strftime(
-                            "%Y-%m-%d %H:%M:%S", time.localtime()
-                        ),
+                        "last_checked": self._get_jst_time(),
                     }
                 )
             else:
