@@ -46,7 +46,6 @@ echo "Access services at:"
 echo "- Frontend: http://localhost:3000"
 echo "- Backend API: http://localhost:8000"
 echo "- gRPC Gateway: http://localhost:8080"
-echo "- Argo Workflows UI: http://localhost:2746"
 echo "- MinIO Console: http://localhost:9001"
 echo "- Triton Inference Server: http://localhost:8001"
 echo ""
@@ -64,10 +63,6 @@ BACKEND_PID=$!
 echo "Starting gRPC Gateway..."
 kubectl port-forward svc/grpc-gateway -n image-processing 8080:8080 >/dev/null 2>&1 &
 GRPC_GATEWAY_PID=$!
-
-echo "Starting Argo Workflows UI..."
-kubectl port-forward svc/argo-server -n argo 2746:2746 >/dev/null 2>&1 &
-ARGO_PID=$!
 
 echo "Starting MinIO console..."
 kubectl port-forward svc/minio-service -n default 9001:9001 >/dev/null 2>&1 &
@@ -110,14 +105,6 @@ else
     services_status+=("grpc-gateway:fail")
 fi
 
-# Test other services
-if curl -s http://localhost:2746 > /dev/null; then
-    echo "✅ Argo Workflows: http://localhost:2746"
-    services_status+=("argo:ok")
-else
-    echo "⚠️  Argo Workflows: http://localhost:2746 (may need time to start)"
-    services_status+=("argo:pending")
-fi
 
 if curl -s http://localhost:9001 > /dev/null; then
     echo "✅ MinIO Console: http://localhost:9001"
@@ -143,7 +130,7 @@ echo "📋 Login with: admin/admin123 or user/user123"
 cleanup() {
     echo ""
     echo "Stopping port forwards..."
-    kill $FRONTEND_PID $BACKEND_PID $GRPC_GATEWAY_PID $ARGO_PID $MINIO_PID $TRITON_PID 2>/dev/null || true
+    kill $FRONTEND_PID $BACKEND_PID $GRPC_GATEWAY_PID $MINIO_PID $TRITON_PID 2>/dev/null || true
     pkill -f "kubectl port-forward" 2>/dev/null || true
     exit 0
 }
