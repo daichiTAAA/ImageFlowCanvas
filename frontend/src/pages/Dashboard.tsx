@@ -22,7 +22,14 @@ import {
   CircularProgress,
   IconButton,
 } from "@mui/material";
-import { Add, PlayArrow, Timeline, Upload } from "@mui/icons-material";
+import {
+  Add,
+  PlayArrow,
+  Timeline,
+  Upload,
+  Storage,
+  Settings,
+} from "@mui/icons-material";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useAuth } from "../services/AuthContext";
 import { apiService } from "../services/api";
@@ -52,6 +59,14 @@ export const Dashboard: React.FC = () => {
   );
   const { data: executions = [] } = useQuery("executions", () =>
     apiService.getExecutions(10)
+  );
+  const { data: grpcServicesHealth = [] } = useQuery(
+    "grpc-services-health",
+    () => apiService.getGrpcServicesHealth(),
+    {
+      refetchInterval: 30000, // 30秒ごとに自動更新
+      retry: 3,
+    }
   );
 
   const executePipelineMutation = useMutation(
@@ -179,7 +194,7 @@ export const Dashboard: React.FC = () => {
                 実行中
               </Typography>
               <Typography variant="h4">
-                {executions.filter((e) => e.status === "running").length}
+                {executions.filter((e: any) => e.status === "running").length}
               </Typography>
             </CardContent>
           </Card>
@@ -192,7 +207,7 @@ export const Dashboard: React.FC = () => {
                 完了
               </Typography>
               <Typography variant="h4">
-                {executions.filter((e) => e.status === "completed").length}
+                {executions.filter((e: any) => e.status === "completed").length}
               </Typography>
             </CardContent>
           </Card>
@@ -205,7 +220,27 @@ export const Dashboard: React.FC = () => {
                 失敗
               </Typography>
               <Typography variant="h4">
-                {executions.filter((e) => e.status === "failed").length}
+                {executions.filter((e: any) => e.status === "failed").length}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                gRPCサービス
+              </Typography>
+              <Typography variant="h4">
+                {
+                  grpcServicesHealth.filter((s: any) => s.status === "healthy")
+                    .length
+                }
+                /{grpcServicesHealth.length}
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                稼働中
               </Typography>
             </CardContent>
           </Card>

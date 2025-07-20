@@ -245,6 +245,31 @@ class ApiService {
     const api = this.ensureApiInitialized()
     await api.delete(`/files/${fileId}`)
   }
+
+  // gRPC Services APIs
+  async getGrpcServicesHealth(): Promise<any[]> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/grpc-services/health')
+    return response.data
+  }
+
+  async getGrpcServiceHealth(serviceName: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/grpc-services/${serviceName}/health`)
+    return response.data
+  }
+
+  async getGrpcServicesInfo(): Promise<any[]> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/grpc-services/')
+    return response.data
+  }
+
+  async restartGrpcService(serviceName: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post(`/grpc-services/${serviceName}/restart`)
+    return response.data
+  }
 }
 
 export const apiService = new ApiService()

@@ -6,7 +6,16 @@ import uvicorn
 import os
 import asyncio
 import logging
-from app.api import pipelines, executions, components, files, auth, websocket, health
+from app.api import (
+    pipelines,
+    executions,
+    components,
+    files,
+    auth,
+    websocket,
+    health,
+    grpc_services,
+)
 from app.services.execution_worker import execution_worker
 from app.database import init_db
 
@@ -75,6 +84,9 @@ app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["executions"])
 app.include_router(components.router, prefix="/v1/components", tags=["components"])
 app.include_router(files.router, prefix="/v1/files", tags=["files"])
+app.include_router(
+    grpc_services.router, prefix="/v1/grpc-services", tags=["grpc-services"]
+)
 
 
 @app.on_event("startup")

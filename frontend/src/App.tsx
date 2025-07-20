@@ -1,17 +1,18 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
-import { AppBar, Toolbar, Typography, Container, Box } from '@mui/material'
-import { Dashboard } from './pages/Dashboard'
-import { PipelineBuilder } from './pages/PipelineBuilder'
-import { ExecutionMonitor } from './pages/ExecutionMonitor'
-import { ExecutionList } from './pages/ExecutionList'
-import { Login } from './pages/Login'
-import { AuthProvider, useAuth } from './services/AuthContext'
-import { Navigation } from './components/Navigation'
+import { Routes, Route, useLocation } from "react-router-dom";
+import { AppBar, Toolbar, Typography, Container, Box } from "@mui/material";
+import { Dashboard } from "./pages/Dashboard";
+import { PipelineBuilder } from "./pages/PipelineBuilder";
+import { ExecutionMonitor } from "./pages/ExecutionMonitor";
+import { ExecutionList } from "./pages/ExecutionList";
+import { Login } from "./pages/Login";
+import { GrpcServicesStatus } from "./pages/GrpcServicesStatus";
+import { AuthProvider, useAuth } from "./services/AuthContext";
+import { Navigation } from "./components/Navigation";
 
 function AppContent() {
-  const { isAuthenticated } = useAuth()
-  const location = useLocation()
-  const showNavigation = isAuthenticated && location.pathname !== '/login'
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const showNavigation = isAuthenticated && location.pathname !== "/login";
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -23,7 +24,7 @@ function AppContent() {
           {showNavigation && <Navigation />}
         </Toolbar>
       </AppBar>
-      
+
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -31,10 +32,11 @@ function AppContent() {
           <Route path="/pipeline-builder" element={<PipelineBuilder />} />
           <Route path="/executions" element={<ExecutionList />} />
           <Route path="/execution/:id" element={<ExecutionMonitor />} />
+          <Route path="/grpc-services" element={<GrpcServicesStatus />} />
         </Routes>
       </Container>
     </Box>
-  )
+  );
 }
 
 function App() {
@@ -42,7 +44,7 @@ function App() {
     <AuthProvider>
       <AppContent />
     </AuthProvider>
-  )
+  );
 }
 
-export default App
+export default App;
