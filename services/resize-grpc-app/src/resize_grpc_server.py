@@ -33,32 +33,77 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
         self.minio_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
         self.minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
         
+        # Create MinIO client pool for connection reuse
+        self._create_minio_client()
+        
+        # Performance optimization: pre-warm OpenCV
+        self._warm_up()
+        
+        logger.info(f"Initialized optimized MinIO client for {self.minio_endpoint}")
+
+    def _create_minio_client(self):
+        """Create MinIO client with optimized settings"""
         self.minio_client = Minio(
             self.minio_endpoint,
             access_key=self.minio_access_key,
             secret_key=self.minio_secret_key,
             secure=False
         )
-        logger.info(f"Initialized MinIO client for {self.minio_endpoint}")
+        
+    def _warm_up(self):
+        """Pre-warm OpenCV and other libraries for better performance"""
+        try:
+            # Create a small dummy image to warm up OpenCV
+            dummy = np.zeros((100, 100, 3), dtype=np.uint8)
+            cv2.resize(dummy, (50, 50))
+            logger.info("Service warmed up successfully")
+        except Exception as e:
+            logger.warning(f"Warm-up failed: {e}")
+            
+    def _health_check(self):
+        """Internal health check method"""
+        try:
+            # Test MinIO connection
+            self.minio_client.list_buckets()
+            # Test OpenCV functionality
+            test_img = np.zeros((10, 10, 3), dtype=np.uint8)
+            cv2.resize(test_img, (5, 5))
+            return True
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
 
     def ResizeImage(self, request, context):
-        """Handle single image resize request"""
+        """Handle single image resize request with performance optimization"""
         start_time = time.time()
+        download_time = 0
+        processing_time = 0
+        upload_time = 0
+        
         logger.info(f"Processing resize request for execution_id: {request.execution_id}")
         
         try:
-            # Download image from MinIO
-            local_input = f"/tmp/input_{request.execution_id}"
-            local_output = f"/tmp/output_{request.execution_id}"
+            # Download image from MinIO with timing
+            download_start = time.time()
+            local_input = f"/tmp/input_{request.execution_id}_{int(time.time())}"
+            local_output = f"/tmp/output_{request.execution_id}_{int(time.time())}"
             
             logger.info(f"Downloading {request.input_image.object_key} from bucket {request.input_image.bucket}")
+            
+            # Ensure bucket exists before attempting download
+            if not self.minio_client.bucket_exists(request.input_image.bucket):
+                raise ValueError(f"Bucket {request.input_image.bucket} does not exist")
+                
             self.minio_client.fget_object(
                 request.input_image.bucket, 
                 request.input_image.object_key, 
                 local_input
             )
+            download_time = time.time() - download_start
+            logger.info(f"Download completed in {download_time:.2f}s")
             
-            # Load and process image
+            # Load and process image with timing
+            processing_start = time.time()
             image = cv2.imread(local_input)
             if image is None:
                 raise ValueError(f"Could not read input image: {request.input_image.object_key}")
@@ -79,18 +124,38 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
                 new_width = request.target_width
                 new_height = request.target_height
             
+            # Optimize resize interpolation based on scaling factor
+            scale_factor = (new_width * new_height) / (original_width * original_height)
+            if scale_factor < 0.5:
+                interpolation = cv2.INTER_AREA  # Better for downscaling
+            else:
+                interpolation = cv2.INTER_LINEAR  # Faster for upscaling
+                
             # Resize image
-            resized_image = cv2.resize(image, (new_width, new_height))
+            resized_image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
             logger.info(f"Resized image to {new_width}x{new_height}")
             
-            # Save resized image
+            # Save resized image with optimal quality
             output_path = request.input_image.object_key.replace('.png', '_resized.png').replace('.jpg', '_resized.jpg')
             if not output_path.endswith(('.png', '.jpg', '.jpeg')):
                 output_path += '.jpg'
                 
-            cv2.imwrite(local_output, resized_image)
+            # Optimize save parameters based on quality setting
+            save_params = []
+            if output_path.endswith(('.jpg', '.jpeg')):
+                if request.quality == resize_pb2.RESIZE_QUALITY_HIGH:
+                    save_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
+                elif request.quality == resize_pb2.RESIZE_QUALITY_GOOD:
+                    save_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+                else:  # RESIZE_QUALITY_FAST
+                    save_params = [cv2.IMWRITE_JPEG_QUALITY, 75]
             
-            # Upload to MinIO
+            cv2.imwrite(local_output, resized_image, save_params)
+            processing_time = time.time() - processing_start
+            logger.info(f"Processing completed in {processing_time:.2f}s")
+            
+            # Upload to MinIO with timing
+            upload_start = time.time()
             if not self.minio_client.bucket_exists(request.input_image.bucket):
                 self.minio_client.make_bucket(request.input_image.bucket)
                 
@@ -99,22 +164,26 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
                 output_path,
                 local_output
             )
-            logger.info(f"Uploaded resized image to {output_path}")
+            upload_time = time.time() - upload_start
+            logger.info(f"Upload completed in {upload_time:.2f}s")
             
             # Cleanup local files
-            if os.path.exists(local_input):
-                os.remove(local_input)
-            if os.path.exists(local_output):
-                os.remove(local_output)
+            try:
+                if os.path.exists(local_input):
+                    os.remove(local_input)
+                if os.path.exists(local_output):
+                    os.remove(local_output)
+            except Exception as e:
+                logger.warning(f"Cleanup failed: {e}")
             
-            processing_time = time.time() - start_time
+            total_time = time.time() - start_time
             
-            # Create response
+            # Create response with detailed timing
             response = resize_pb2.ResizeResponse()
             
             # Set processing result
             response.result.status = common_pb2.PROCESSING_STATUS_COMPLETED
-            response.result.message = "Image resize completed successfully"
+            response.result.message = f"Image resize completed successfully (total: {total_time:.2f}s, download: {download_time:.2f}s, processing: {processing_time:.2f}s, upload: {upload_time:.2f}s)"
             
             # Set output image info
             response.result.output_image.bucket = request.input_image.bucket
@@ -127,9 +196,9 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
             now = Timestamp()
             now.FromDatetime(datetime.now(timezone.utc))
             response.result.processed_at.CopyFrom(now)
-            response.result.processing_time_seconds = processing_time
+            response.result.processing_time_seconds = total_time
             
-            # Set metadata
+            # Set metadata with detailed timing
             response.metadata.original_width = original_width
             response.metadata.original_height = original_height
             response.metadata.output_width = new_width
@@ -138,30 +207,66 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
             response.metadata.scale_factor_y = new_height / original_height
             response.metadata.quality_used = request.quality
             
-            logger.info(f"Resize completed in {processing_time:.2f}s")
+            logger.info(f"Resize completed successfully - Total: {total_time:.2f}s (download: {download_time:.2f}s, processing: {processing_time:.2f}s, upload: {upload_time:.2f}s)")
             return response
             
         except Exception as e:
-            logger.error(f"Error processing resize request: {str(e)}")
+            total_time = time.time() - start_time
+            logger.error(f"Error processing resize request (after {total_time:.2f}s): {str(e)}")
+            
+            # Cleanup on error
+            try:
+                if 'local_input' in locals() and os.path.exists(local_input):
+                    os.remove(local_input)
+                if 'local_output' in locals() and os.path.exists(local_output):
+                    os.remove(local_output)
+            except Exception:
+                pass
             
             # Return error response
             response = resize_pb2.ResizeResponse()
             response.result.status = common_pb2.PROCESSING_STATUS_FAILED
             response.result.message = f"Resize failed: {str(e)}"
-            response.result.processing_time_seconds = time.time() - start_time
+            response.result.processing_time_seconds = total_time
             
             return response
 
     def Health(self, request, context):
-        """Health check endpoint"""
+        """Health check endpoint with actual service verification"""
         response = common_pb2.HealthCheckResponse()
-        response.status = common_pb2.HealthCheckResponse.SERVING
+        
+        if self._health_check():
+            response.status = common_pb2.HealthCheckResponse.SERVING
+            logger.debug("Health check passed")
+        else:
+            response.status = common_pb2.HealthCheckResponse.NOT_SERVING
+            logger.warning("Health check failed")
+            
         return response
 
 def serve():
-    """Start the gRPC server"""
+    """Start the gRPC server with optimized configuration"""
     port = os.getenv("GRPC_PORT", "9090")
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    
+    # Optimize thread pool for better concurrency
+    max_workers = int(os.getenv("GRPC_MAX_WORKERS", "20"))
+    
+    # Configure server options for better performance
+    server_options = [
+        ('grpc.keepalive_time_ms', 30000),
+        ('grpc.keepalive_timeout_ms', 5000),
+        ('grpc.keepalive_permit_without_calls', True),
+        ('grpc.http2.max_pings_without_data', 0),
+        ('grpc.http2.min_time_between_pings_ms', 10000),
+        ('grpc.http2.min_ping_interval_without_data_ms', 5000),
+        ('grpc.max_connection_idle_ms', 300000),
+        ('grpc.max_connection_age_ms', 600000),
+    ]
+    
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=max_workers), 
+        options=server_options
+    )
     
     resize_pb2_grpc.add_ResizeServiceServicer_to_server(
         ResizeServiceImplementation(), server
@@ -170,7 +275,7 @@ def serve():
     listen_addr = f'[::]:{port}'
     server.add_insecure_port(listen_addr)
     
-    logger.info(f"Starting gRPC Resize Service on {listen_addr}")
+    logger.info(f"Starting optimized gRPC Resize Service on {listen_addr} with {max_workers} workers")
     server.start()
     
     try:

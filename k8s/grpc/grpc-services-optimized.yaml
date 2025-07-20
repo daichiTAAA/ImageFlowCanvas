@@ -1,0 +1,330 @@
+# Optimized gRPC Services Deployment with Health Checks and Performance Improvements
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resize-grpc-service
+  namespace: image-processing
+  labels:
+    app: resize-grpc-service
+    component: image-processing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: resize-grpc-service
+  template:
+    metadata:
+      labels:
+        app: resize-grpc-service
+        component: image-processing
+    spec:
+      containers:
+      - name: resize-grpc
+        image: docker.io/imageflow/resize-grpc:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 9090
+          name: grpc
+        env:
+        - name: MINIO_ENDPOINT
+          value: "minio-service.default.svc.cluster.local:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: access-key
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secret-key
+        - name: GRPC_PORT
+          value: "9090"
+        - name: GRPC_MAX_WORKERS
+          value: "25"
+        resources:
+          requests:
+            cpu: 300m
+            memory: 768Mi
+          limits:
+            cpu: 1
+            memory: 1.5Gi
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9090"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9090"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resize-grpc-service
+  namespace: image-processing
+  labels:
+    app: resize-grpc-service
+spec:
+  selector:
+    app: resize-grpc-service
+  ports:
+  - port: 9090
+    targetPort: 9090
+    name: grpc
+  type: ClusterIP
+
+---
+# AI Detection gRPC Service - Optimized
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-detection-grpc-service
+  namespace: image-processing
+  labels:
+    app: ai-detection-grpc-service
+    component: image-processing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-detection-grpc-service
+  template:
+    metadata:
+      labels:
+        app: ai-detection-grpc-service
+        component: image-processing
+    spec:
+      containers:
+      - name: ai-detection-grpc
+        image: docker.io/imageflow/ai-detection-grpc:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 9090
+          name: grpc
+        env:
+        - name: MINIO_ENDPOINT
+          value: "minio-service.default.svc.cluster.local:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: access-key
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secret-key
+        - name: TRITON_GRPC_URL
+          value: "triton-service.default.svc.cluster.local:8001"
+        - name: GRPC_PORT
+          value: "9090"
+        - name: GRPC_MAX_WORKERS
+          value: "15"
+        resources:
+          requests:
+            cpu: 700m
+            memory: 1.5Gi
+          limits:
+            cpu: 2
+            memory: 4Gi
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9090"]
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9090"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-detection-grpc-service
+  namespace: image-processing
+  labels:
+    app: ai-detection-grpc-service
+spec:
+  selector:
+    app: ai-detection-grpc-service
+  ports:
+  - port: 9090
+    targetPort: 9090
+    name: grpc
+  type: ClusterIP
+
+---
+# Filter gRPC Service - Optimized
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filter-grpc-service
+  namespace: image-processing
+  labels:
+    app: filter-grpc-service
+    component: image-processing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: filter-grpc-service
+  template:
+    metadata:
+      labels:
+        app: filter-grpc-service
+        component: image-processing
+    spec:
+      containers:
+      - name: filter-grpc
+        image: docker.io/imageflow/filter-grpc:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 9090
+          name: grpc
+        env:
+        - name: MINIO_ENDPOINT
+          value: "minio-service.default.svc.cluster.local:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: access-key
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secret-key
+        - name: GRPC_PORT
+          value: "9090"
+        - name: GRPC_MAX_WORKERS
+          value: "20"
+        resources:
+          requests:
+            cpu: 300m
+            memory: 768Mi
+          limits:
+            cpu: 1
+            memory: 1.5Gi
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9090"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9090"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: filter-grpc-service
+  namespace: image-processing
+  labels:
+    app: filter-grpc-service
+spec:
+  selector:
+    app: filter-grpc-service
+  ports:
+  - port: 9090
+    targetPort: 9090
+    name: grpc
+  type: ClusterIP
+
+---
+# gRPC Gateway Service - Optimized
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-gateway
+  namespace: image-processing
+  labels:
+    app: grpc-gateway
+    component: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: grpc-gateway
+  template:
+    metadata:
+      labels:
+        app: grpc-gateway
+        component: gateway
+    spec:
+      containers:
+      - name: grpc-gateway
+        image: docker.io/imageflow/grpc-gateway:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: RESIZE_GRPC_ENDPOINT
+          value: "resize-grpc-service.image-processing.svc.cluster.local:9090"
+        - name: AI_DETECTION_GRPC_ENDPOINT
+          value: "ai-detection-grpc-service.image-processing.svc.cluster.local:9090"
+        - name: FILTER_GRPC_ENDPOINT
+          value: "filter-grpc-service.image-processing.svc.cluster.local:9090"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: HOST
+          value: "0.0.0.0"
+        - name: GRPC_MAX_WORKERS
+          value: "30"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 384Mi
+          limits:
+            cpu: 500m
+            memory: 768Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-gateway
+  namespace: image-processing
+  labels:
+    app: grpc-gateway
+spec:
+  selector:
+    app: grpc-gateway
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
