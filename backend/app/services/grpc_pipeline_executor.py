@@ -1,6 +1,6 @@
 """
 Direct gRPC Pipeline Executor
-Replaces Argo Workflows with direct gRPC service calls for 40-100ms execution times
+High-performance direct gRPC service calls for 40-100ms execution times
 """
 import asyncio
 import grpc
@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 class GRPCPipelineExecutor:
     """
     Direct gRPC pipeline executor for ultra-fast image processing
-    Eliminates Argo Workflows overhead (750-1450ms) to achieve 40-100ms execution
+    Achieves 40-100ms execution times with direct service calls
     """
     
     def __init__(self):

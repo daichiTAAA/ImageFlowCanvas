@@ -455,34 +455,6 @@ export const ExecutionMonitor: React.FC = () => {
               </Typography>
               {execution.error_details && (
                 <Box sx={{ mt: 1 }}>
-                  {execution.error_details.error_type ===
-                    "argo_delegation_failure" && (
-                    <Box sx={{ mt: 1 }}>
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        gutterBottom
-                      >
-                        <strong>Argo Workflows設定:</strong>
-                      </Typography>
-                      <Typography variant="caption" display="block">
-                        • サーバー: {execution.error_details.argo_server_url}
-                      </Typography>
-                      <Typography variant="caption" display="block">
-                        • 名前空間: {execution.error_details.argo_namespace}
-                      </Typography>
-                      <Typography variant="caption" display="block">
-                        • ワークフローテンプレート:{" "}
-                        {execution.error_details.workflow_template}
-                      </Typography>
-                      <Typography variant="caption" display="block">
-                        • サーバー状態:{" "}
-                        {execution.error_details.argo_server_healthy
-                          ? "接続可能"
-                          : "接続不可"}
-                      </Typography>
-                    </Box>
-                  )}
                   {execution.error_details.failed_nodes &&
                     execution.error_details.failed_nodes.length > 0 && (
                       <Box sx={{ mt: 1 }}>

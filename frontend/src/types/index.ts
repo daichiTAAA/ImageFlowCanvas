@@ -53,10 +53,7 @@ export interface ErrorDetails {
   error_type?: string
   error_message?: string
   timestamp?: string
-  argo_server_url?: string
-  argo_namespace?: string
   workflow_template?: string
-  argo_server_healthy?: boolean
   failed_nodes?: FailedNode[]
   processing_errors?: ProcessingErrorDetails
 }

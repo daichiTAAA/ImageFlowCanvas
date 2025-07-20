@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ExecutionWorker:
     """
     Execution worker for direct gRPC pipeline processing
-    Replaces Argo Workflows with ultra-fast direct gRPC service calls
+    Ultra-fast direct gRPC service calls for image processing
     """
     
     def __init__(self):

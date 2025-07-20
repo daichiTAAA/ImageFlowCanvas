@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Setup script for K3s and Argo Workflows development environment
+# Setup script for K3s development environment
 set -e
 
-echo "Setting up ImageFlowCanvas development environment with K3s and Argo Workflows..."
+echo "Setting up ImageFlowCanvas development environment with K3s..."
 
 # Check if running on Linux
 if [[ "$OSTYPE" != "linux-gnu"* ]]; then
@@ -36,23 +36,8 @@ sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 sudo chown $(id -u):$(id -g) ~/.kube/config
 export KUBECONFIG=~/.kube/config
 
-# Install Argo Workflows
-echo "Installing Argo Workflows..."
-kubectl create namespace argo --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.5.4/install.yaml
-
-# Apply custom Argo Server configuration
-echo "Applying custom Argo Server configuration..."
-kubectl apply -f k8s/core/argo-server-deployment.yaml
-
-# Wait for Argo Workflows to be ready
-echo "Waiting for Argo Workflows to be ready..."
-kubectl wait --for=condition=available --timeout=300s deployment/argo-server -n argo
-kubectl wait --for=condition=available --timeout=300s deployment/workflow-controller -n argo
-
 # Apply custom configurations
 echo "Applying custom configurations..."
-kubectl apply -f k8s/core/argo-secret.yaml
 
 # Create default namespace resources
 echo "Creating core infrastructure..."
@@ -105,7 +90,6 @@ cat > scripts/port-forward.sh << 'EOF'
 #!/bin/bash
 echo "Setting up port forwarding for development..."
 echo "Access services at:"
-echo "- Argo Workflows UI: http://localhost:2746"
 echo "- Backend API: http://localhost:8000"
 echo "- MinIO Console: http://localhost:9001"
 echo "- Triton Inference Server: http://localhost:8001"
@@ -113,7 +97,6 @@ echo ""
 echo "Press Ctrl+C to stop port forwarding"
 
 # Start port forwarding in background
-kubectl port-forward svc/argo-server -n argo 2746:2746 &
 kubectl port-forward svc/backend-service -n default 8000:8000 &
 kubectl port-forward svc/minio-service -n default 9001:9001 &
 kubectl port-forward svc/triton-service -n default 8001:8000 &
@@ -134,7 +117,6 @@ echo "3. Place YOLO model at 'models/yolo/1/model.onnx'"
 echo "4. Start frontend development server: cd frontend && npm install && npm run dev"
 echo ""
 echo "Access points:"
-echo "- Argo Workflows UI: http://localhost:2746"
 echo "- Backend API: http://localhost:8000"
 echo "- MinIO Console: http://localhost:9001 (admin/admin123)"
 echo "- Triton Server: http://localhost:8001"
