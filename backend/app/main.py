@@ -28,8 +28,8 @@ logging.basicConfig(
     ],
 )
 
-# Argo Workflows関連のログレベルを調整
-logging.getLogger("app.services.argo_workflow_service").setLevel(logging.INFO)
+# gRPC services関連のログレベルを調整
+logging.getLogger("app.services.grpc_pipeline_executor").setLevel(logging.INFO)
 logging.getLogger("app.services.execution_worker").setLevel(logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)  # HTTP リクエストのログを抑制
 
@@ -98,15 +98,15 @@ async def startup_event():
     """アプリケーション起動時にワーカーを開始"""
     logger.info("Starting execution worker...")
     try:
-        # Argo Workflowsサービスの初期化状況をチェック
-        from app.services.argo_workflow_service import get_argo_workflow_service
+        # gRPC pipeline executor の初期化状況をチェック
+        from app.services.grpc_pipeline_executor import get_grpc_pipeline_executor
 
-        argo_service = get_argo_workflow_service()
-        logger.info("Argo Workflows service initialized")
+        grpc_executor = get_grpc_pipeline_executor()
+        logger.info("gRPC pipeline executor initialized")
 
         # バックグラウンドタスクとしてワーカーを起動
         asyncio.create_task(execution_worker.start())
-        logger.info("Execution worker started successfully")
+        logger.info("Execution worker started successfully with direct gRPC execution")
     except Exception as e:
         logger.error(f"Error starting worker: {e}")
         # ワーカー開始失敗でもサーバーは起動を続ける

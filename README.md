@@ -7,7 +7,7 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 - **高性能gRPCアーキテクチャ**: パイプライン処理時間を60-94秒から1-3秒に短縮（95%以上の改善）
 - **マイクロサービスアーキテクチャ**: 各処理コンポーネントを独立したサービスとして構築
 - **動的パイプライン構築**: Web UIを通じて処理フローを視覚的に設計
-- **Kubernetesネイティブ**: K3s + Argo Workflowsによる堅牢な実行基盤
+- **Kubernetesネイティブ**: K3s + 直接gRPC呼び出しによる堅牢な実行基盤
 - **リアルタイム監視**: WebSocketによる進捗のリアルタイム表示
 - **スケーラブル**: 処理負荷に応じた自動スケーリング
 
@@ -30,7 +30,7 @@ ImageFlowCanvasは、従来のPodベースの実行方式から、持続的なgR
 
 - **Protocol Buffers**: 型安全で高性能な通信スキーマ
 - **gRPCサービス**: リサイズ、AI検知、フィルタ処理の常駐サービス
-- **gRPCゲートウェイ**: HTTP-to-gRPC変換によるArgo Workflows互換性
+- **gRPCゲートウェイ**: HTTP-to-gRPC変換による高性能通信
 - **バイナリプロトコル**: 通信オーバーヘッドを50-70%削減
 
 ### 技術スタック
@@ -38,7 +38,7 @@ ImageFlowCanvasは、従来のPodベースの実行方式から、持続的なgR
 - **Frontend**: React + TypeScript + Material-UI
 - **Backend**: FastAPI + Python
 - **Message Queue**: Apache Kafka
-- **Workflow Engine**: Argo Workflows
+- **Pipeline Execution**: Direct gRPC calls to processing services
 - **Container Platform**: Kubernetes (K3s)
 - **Object Storage**: MinIO
 - **AI Inference**: Triton Inference Server
@@ -94,7 +94,7 @@ python scripts/setup-yolo11.py
 # - Protocol Buffers生成エラー: ./scripts/generate_protos.sh を再実行
 # - Docker buildエラー: 生成されたファイルの確認 ls -la generated/python/
 
-# K3sとArgo Workflowsのセットアップスクリプトを実行
+# K3sと直接gRPC実行基盤のセットアップスクリプトを実行
 sudo ./scripts/setup-k3s.sh
 
 # 立ち上がっているか確認
@@ -147,8 +147,6 @@ macOSでは、Lima VMを使用してLinux環境を作成し、その中で開発
        hostPort: 8000
      - guestPort: 9001 # MinIO Console
        hostPort: 9001
-     - guestPort: 2746 # Argo Workflows UI
-       hostPort: 2746
    ```
 
 4. **VM再起動と共通設定の実行**
@@ -201,7 +199,6 @@ WindowsではWSL2を使用してLinux環境を作成し、その中で開発を�
 **ポートフォワーディング経由（推奨）**:
 - **Frontend**: http://localhost:3000
 - **Backend API (Swagger UI)**: http://localhost:8000/docs
-- **Argo Workflows UI**: http://localhost:2746
 - **MinIO Console**: http://localhost:9001 (ID: `minioadmin`, PW: `minioadmin`)
 
 **NodePort経由（直接アクセス）**:
@@ -308,12 +305,12 @@ docker system prune -f
 #### 初回デプロイ
 K3sにデプロイするには、以下のコマンドを実行します。
 ```bash
-# K3sとArgo Workflowsのセットアップ（gRPCサービスも含む）
+# K3sと直接gRPC実行基盤のセットアップ（gRPCサービス群も含む）
 sudo ./scripts/setup-k3s.sh
 
 # ⚠️ setup-k3s.shが以下を自動で実行します：
-# - K3s + Argo Workflowsのインストール
-# - gRPCサービスのデプロイ（namespace、services、templates）
+# - K3s + 直接gRPC実行基盤のインストール
+# - gRPCサービス群のデプロイ（namespace、services、templates）
 # - アプリケーション（Backend & Frontend）のデプロイ
 ```
 
@@ -394,10 +391,6 @@ kubectl logs -f -n image-processing deployment/grpc-gateway
 # サービスの確認
 kubectl get services
 kubectl get services -n image-processing
-
-# Argo Workflowsの状態確認
-kubectl get pods -n argo
-kubectl get workflowtemplates -n argo
 ```
 
 ### デプロイメントファイルの変更を反映する場合
@@ -437,7 +430,7 @@ ImageFlowCanvasのgRPCアーキテクチャは、以下の大幅な性能向上�
 
 3. **gRPCゲートウェイ**（`services/grpc-gateway/`）
    - HTTP-to-gRPC変換
-   - Argo Workflows互換性の維持
+   - 高性能通信基盤の維持
    - RESTful API エンドポイントの提供
 
 4. **Kubernetesデプロイメント**（`k8s/grpc/`）
@@ -600,7 +593,7 @@ pip install requests ultralytics grpcio grpcio-tools
    curl http://localhost:8080/health
    ```
 
-**注意**: 2025年7月20日のアップデートにより、古いPodベースの処理方式は完全に廃止され、常駐gRPCサービスによるリアルタイム処理方式に移行しました。パイプラインの実行時間が60-94秒から1-3秒に短縮され、リアルタイム処理が可能になっています。
+**注意**: 2025年7月20日のアップデートにより、直接gRPC呼び出し方式に移行しました。パイプラインの実行時間が60-94秒から1-3秒に短縮され、リアルタイム処理が可能になっています。
 
 ### Macでのポートフォワーディングの問題
 
