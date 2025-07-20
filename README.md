@@ -235,6 +235,16 @@ kubectl logs -n image-processing deployment/resize-grpc-service
 Lima VMでDockerビルドを行う際は、以下の点にご注意ください：
 
 #### リソース不足でVMがスタックする場合
+
+**自動クリーンアップスクリプトを使用（推奨）**:
+```bash
+# 包括的なディスククリーンアップを実行
+./scripts/cleanup_disk.sh
+
+# 定期的に実行することを推奨（週1〜2回程度）
+```
+
+**手動でのクリーンアップ**:
 ```bash
 # Dockerキャッシュを定期的にクリア
 sudo docker system prune -af --volumes
@@ -702,4 +712,55 @@ pip install requests ultralytics grpcio grpcio-tools
 - フロントエンドの変更をテストする際は、必ずハードリフレッシュを実行
 - 開発者ツールの「Disable cache」を有効にしてブラウジング
 - APIエンドポイントのURLに末尾スラッシュが不要な場合の修正後は、特にキャッシュクリアが重要
+
+### ディスク容量不足の問題
+
+**症状**: 開発中にディスク容量が不足し、DockerビルドやK3sの動作に支障が出る
+
+**原因**: containerdイメージ、停止中のコンテナ、Dockerキャッシュなどの蓄積
+
+**対処法**:
+
+1. **自動クリーンアップスクリプトの実行（推奨）**
+   ```bash
+   # 包括的なディスククリーンアップ
+   ./scripts/cleanup_disk.sh
+   
+   # 実行により以下の作業が自動実行されます：
+   # - containerdの不要イメージ削除
+   # - 停止中のコンテナ削除
+   # - タグ無しイメージの削除
+   # - Dockerキャッシュクリア
+   # - APTキャッシュクリア
+   # - 大きなログファイルのローテート
+   ```
+
+2. **手動での緊急クリーンアップ**
+   ```bash
+   # containerdの不要イメージを削除
+   sudo k3s crictl rmi --prune
+   
+   # 停止中のコンテナを削除
+   sudo k3s crictl ps -a | grep Exited | awk '{print $1}' | xargs -r sudo k3s crictl rm
+   
+   # Dockerキャッシュをクリア
+   sudo docker system prune -af --volumes
+   
+   # ディスク使用量の確認
+   df -h
+   ```
+
+3. **定期メンテナンス**
+   ```bash
+   # 週1〜2回の定期実行を推奨
+   ./scripts/cleanup_disk.sh
+   
+   # 大容量ファイルの検索（必要に応じて）
+   sudo find / -size +1G -type f 2>/dev/null | head -10
+   ```
+
+**予防策**:
+- 定期的な `./scripts/cleanup_disk.sh` の実行
+- Lima VM使用時はVM設定でディスク容量を十分に確保（100GiB以上推奨）
+- 開発作業後の適切なクリーンアップ習慣
 
