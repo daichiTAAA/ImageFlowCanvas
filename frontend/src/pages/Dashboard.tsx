@@ -82,10 +82,19 @@ export const Dashboard: React.FC = () => {
       onSuccess: (result) => {
         queryClient.invalidateQueries("executions");
         setExecuteDialogOpen(false);
+        const executedPipelineId = selectedPipeline?.id;
         setSelectedPipeline(null);
         setSelectedFiles([]);
         // 実行監視画面に遷移して結果を確認
-        navigate(`/execution/${result.execution_id}`);
+        // 戻る先に実行したパイプラインでフィルターされた実行監視一覧を設定
+        const returnToUrl = executedPipelineId
+          ? `/executions?pipeline=${executedPipelineId}`
+          : "/executions";
+        navigate(
+          `/execution/${result.execution_id}?returnTo=${encodeURIComponent(
+            returnToUrl
+          )}`
+        );
       },
       onError: (error) => {
         console.error("Pipeline execution failed:", error);
@@ -426,9 +435,16 @@ export const Dashboard: React.FC = () => {
                             "&:hover": { backgroundColor: "#f5f5f5" },
                             cursor: "pointer",
                           }}
-                          onClick={() =>
-                            navigate(`/execution/${execution.execution_id}`)
-                          }
+                          onClick={() => {
+                            const returnToUrl = execution.pipeline_id
+                              ? `/executions?pipeline=${execution.pipeline_id}`
+                              : "/executions";
+                            navigate(
+                              `/execution/${
+                                execution.execution_id
+                              }?returnTo=${encodeURIComponent(returnToUrl)}`
+                            );
+                          }}
                         >
                           <TableCell>
                             <Typography
@@ -452,15 +468,20 @@ export const Dashboard: React.FC = () => {
                           <TableCell>
                             {(() => {
                               // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
-                              const utcDate = new Date(execution.created_at + (execution.created_at.includes('Z') ? '' : 'Z'));
+                              const utcDate = new Date(
+                                execution.created_at +
+                                  (execution.created_at.includes("Z")
+                                    ? ""
+                                    : "Z")
+                              );
                               return utcDate.toLocaleString(undefined, {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit',
-                                timeZoneName: 'short'
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                                timeZoneName: "short",
                               });
                             })()}
                           </TableCell>
@@ -469,9 +490,16 @@ export const Dashboard: React.FC = () => {
                               size="small"
                               variant="outlined"
                               startIcon={<Timeline />}
-                              onClick={() =>
-                                navigate(`/execution/${execution.execution_id}`)
-                              }
+                              onClick={() => {
+                                const returnToUrl = execution.pipeline_id
+                                  ? `/executions?pipeline=${execution.pipeline_id}`
+                                  : "/executions";
+                                navigate(
+                                  `/execution/${
+                                    execution.execution_id
+                                  }?returnTo=${encodeURIComponent(returnToUrl)}`
+                                );
+                              }}
                             >
                               詳細
                             </Button>
@@ -634,15 +662,18 @@ export const Dashboard: React.FC = () => {
                 <strong>作成日時:</strong>{" "}
                 {(() => {
                   // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
-                  const utcDate = new Date(pipelineToView.created_at + (pipelineToView.created_at.includes('Z') ? '' : 'Z'));
+                  const utcDate = new Date(
+                    pipelineToView.created_at +
+                      (pipelineToView.created_at.includes("Z") ? "" : "Z")
+                  );
                   return utcDate.toLocaleString(undefined, {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    timeZoneName: 'short'
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    timeZoneName: "short",
                   });
                 })()}
               </Typography>
@@ -651,15 +682,18 @@ export const Dashboard: React.FC = () => {
                 <strong>更新日時:</strong>{" "}
                 {(() => {
                   // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
-                  const utcDate = new Date(pipelineToView.updated_at + (pipelineToView.updated_at.includes('Z') ? '' : 'Z'));
+                  const utcDate = new Date(
+                    pipelineToView.updated_at +
+                      (pipelineToView.updated_at.includes("Z") ? "" : "Z")
+                  );
                   return utcDate.toLocaleString(undefined, {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    timeZoneName: 'short'
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    timeZoneName: "short",
                   });
                 })()}
               </Typography>
@@ -797,9 +831,16 @@ export const Dashboard: React.FC = () => {
                                 textDecoration: "underline",
                                 cursor: "pointer",
                               }}
-                              onClick={() =>
-                                navigate(`/execution/${execution.execution_id}`)
-                              }
+                              onClick={() => {
+                                const returnToUrl = execution.pipeline_id
+                                  ? `/executions?pipeline=${execution.pipeline_id}`
+                                  : "/executions";
+                                navigate(
+                                  `/execution/${
+                                    execution.execution_id
+                                  }?returnTo=${encodeURIComponent(returnToUrl)}`
+                                );
+                              }}
                             >
                               {execution.execution_id.substring(0, 8)}...
                             </Typography>
@@ -817,15 +858,20 @@ export const Dashboard: React.FC = () => {
                           <TableCell>
                             {(() => {
                               // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
-                              const utcDate = new Date(execution.created_at + (execution.created_at.includes('Z') ? '' : 'Z'));
+                              const utcDate = new Date(
+                                execution.created_at +
+                                  (execution.created_at.includes("Z")
+                                    ? ""
+                                    : "Z")
+                              );
                               return utcDate.toLocaleString(undefined, {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit',
-                                timeZoneName: 'short'
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                                timeZoneName: "short",
                               });
                             })()}
                           </TableCell>
@@ -834,9 +880,16 @@ export const Dashboard: React.FC = () => {
                               size="small"
                               variant="outlined"
                               startIcon={<Timeline />}
-                              onClick={() =>
-                                navigate(`/execution/${execution.execution_id}`)
-                              }
+                              onClick={() => {
+                                const returnToUrl = execution.pipeline_id
+                                  ? `/executions?pipeline=${execution.pipeline_id}`
+                                  : "/executions";
+                                navigate(
+                                  `/execution/${
+                                    execution.execution_id
+                                  }?returnTo=${encodeURIComponent(returnToUrl)}`
+                                );
+                              }}
                             >
                               詳細
                             </Button>

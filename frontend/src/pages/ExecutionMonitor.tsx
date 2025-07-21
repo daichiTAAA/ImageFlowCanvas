@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Navigate, useParams, useNavigate } from "react-router-dom";
+import {
+  Navigate,
+  useParams,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Box,
   Card,
@@ -39,6 +44,7 @@ export const ExecutionMonitor: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [, setWsConnection] = useState<WebSocket | null>(null);
   const [previewDialog, setPreviewDialog] = useState<{
     open: boolean;
@@ -517,7 +523,14 @@ export const ExecutionMonitor: React.FC = () => {
         <Button
           variant="outlined"
           startIcon={<ArrowBack />}
-          onClick={() => navigate("/executions")}
+          onClick={() => {
+            const returnTo = searchParams.get("returnTo");
+            if (returnTo) {
+              navigate(decodeURIComponent(returnTo));
+            } else {
+              navigate("/executions");
+            }
+          }}
         >
           実行監視一覧に戻る
         </Button>

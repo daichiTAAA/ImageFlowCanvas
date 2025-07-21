@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Box,
   Card,
@@ -29,11 +29,20 @@ import { Execution, Pipeline } from "../types";
 export const ExecutionList: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
+  // URLパラメータからフィルターを初期化
+  useEffect(() => {
+    const pipelineId = searchParams.get("pipeline");
+    if (pipelineId) {
+      setSelectedPipelineId(pipelineId);
+    }
+  }, [searchParams]);
 
   // パイプライン一覧を取得
   const {
@@ -62,7 +71,17 @@ export const ExecutionList: React.FC = () => {
   );
 
   const handlePipelineFilterChange = (event: SelectChangeEvent) => {
-    setSelectedPipelineId(event.target.value);
+    const newPipelineId = event.target.value;
+    setSelectedPipelineId(newPipelineId);
+
+    // URLパラメータを更新
+    const newSearchParams = new URLSearchParams(searchParams);
+    if (newPipelineId) {
+      newSearchParams.set("pipeline", newPipelineId);
+    } else {
+      newSearchParams.delete("pipeline");
+    }
+    setSearchParams(newSearchParams);
   };
 
   const getStatusColor = (status: string) => {
@@ -181,7 +200,12 @@ export const ExecutionList: React.FC = () => {
                   color="primary"
                   size="small"
                   sx={{ ml: 2 }}
-                  onDelete={() => setSelectedPipelineId("")}
+                  onDelete={() => {
+                    setSelectedPipelineId("");
+                    const newSearchParams = new URLSearchParams(searchParams);
+                    newSearchParams.delete("pipeline");
+                    setSearchParams(newSearchParams);
+                  }}
                 />
               )}
             </Typography>
@@ -202,7 +226,7 @@ export const ExecutionList: React.FC = () => {
                     <TableCell>進捗</TableCell>
                     <TableCell>作成日時</TableCell>
                     <TableCell>完了日時</TableCell>
-                    <TableCell>詳細を表示</TableCell>
+                    <TableCell>詳細</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -257,9 +281,23 @@ export const ExecutionList: React.FC = () => {
                       <TableCell>
                         <IconButton
                           size="small"
-                          onClick={() =>
-                            navigate(`/execution/${execution.execution_id}`)
-                          }
+                          onClick={() => {
+                            const executionDetailPath = `/execution/${execution.execution_id}`;
+                            // 現在のフィルター状態をクエリパラメータとして保持
+                            const returnParams = new URLSearchParams();
+                            if (selectedPipelineId) {
+                              returnParams.set("pipeline", selectedPipelineId);
+                            }
+                            const returnQuery = returnParams.toString();
+                            const finalPath = returnQuery
+                              ? `${executionDetailPath}?returnTo=${encodeURIComponent(
+                                  `/executions?${returnQuery}`
+                                )}`
+                              : `${executionDetailPath}?returnTo=${encodeURIComponent(
+                                  "/executions"
+                                )}`;
+                            navigate(finalPath);
+                          }}
                           title="詳細を表示"
                         >
                           <Visibility />
