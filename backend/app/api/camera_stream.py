@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Depends
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
@@ -19,12 +19,70 @@ import grpc
 from imageflow.v1 import camera_stream_pb2
 from imageflow.v1 import camera_stream_pb2_grpc
 
+# Import pipeline service and dependencies
+from app.services.pipeline_service import PipelineService
+from app.services.auth_service import get_current_user
+from app.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 # Connected clients for real-time streaming
 connected_clients: Dict[str, WebSocket] = {}
+
+# Pipeline service instance
+pipeline_service = PipelineService()
+
+
+@router.get("/v1/camera-stream/pipelines")
+async def get_available_pipelines(
+    user=Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get list of available pipelines for real-time camera stream processing
+    """
+    try:
+        pipelines = await pipeline_service.get_all_pipelines(db)
+        
+        # Format pipelines for camera stream usage
+        camera_pipelines = []
+        for pipeline in pipelines:
+            # Check if pipeline is suitable for real-time processing
+            # (contains supported component types)
+            supported_components = {"resize", "ai_detection", "filter"}
+            has_supported_components = any(
+                comp.component_type in supported_components 
+                for comp in pipeline.components
+            )
+            
+            if has_supported_components:
+                camera_pipelines.append({
+                    "id": pipeline.id,
+                    "name": pipeline.name,
+                    "description": pipeline.description,
+                    "components": [
+                        {
+                            "name": comp.name,
+                            "type": comp.component_type,
+                            "parameters": comp.parameters
+                        }
+                        for comp in pipeline.components
+                        if comp.component_type in supported_components
+                    ]
+                })
+        
+        return {
+            "pipelines": camera_pipelines,
+            "supported_components": list(supported_components),
+            "message": f"Found {len(camera_pipelines)} pipelines suitable for real-time processing"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching pipelines for camera stream: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch pipelines: {e}")
 
 
 class CameraStreamManager:
