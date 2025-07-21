@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Camera Stream gRPC Service
+  camera-stream-grpc:
+    build:
+      context: ./services/camera-stream-grpc-app
+      dockerfile: Dockerfile
+    ports:
+      - "9093:9090"  # Expose on different port to avoid conflicts
+    environment:
+      - GRPC_PORT=9090
+      - AI_DETECTION_GRPC_ENDPOINT=ai-detection-grpc:9090
+      - MAX_CONCURRENT_STREAMS=10
+      - FRAME_SKIP_THRESHOLD=100
+    networks:
+      - imageflow-network
+
+  # Main Backend (for testing camera stream integration)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"  # Expose on different port for testing
+    environment:
+      - CAMERA_STREAM_GRPC_ENDPOINT=camera-stream-grpc:9090
+    depends_on:
+      - camera-stream-grpc
+    networks:
+      - imageflow-network
+    volumes:
+      - ./backend:/app
+      - ./generated:/app/generated
+
+networks:
+  imageflow-network:
+    driver: bridge
