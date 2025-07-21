@@ -9,7 +9,7 @@ import logging
 import time
 import uuid
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Import generated gRPC stubs
 import sys
@@ -34,6 +34,7 @@ try:
         filter_pb2_grpc,
         common_pb2,
     )
+
     logger.info("Successfully imported protobuf files")
 except ImportError as e:
     logger.error(f"Failed to import protobuf files: {e}")
@@ -41,7 +42,9 @@ except ImportError as e:
     logger.error(f"Generated path exists: {os.path.exists(generated_path)}")
     if os.path.exists(generated_path):
         logger.error(f"Contents: {os.listdir(generated_path)}")
-    raise ImportError(f"Cannot start gRPC pipeline executor without protobuf files: {e}")
+    raise ImportError(
+        f"Cannot start gRPC pipeline executor without protobuf files: {e}"
+    )
 
 from app.models.execution import ExecutionStatus, ExecutionStep, StepStatus
 from app.services.kafka_service import KafkaService
@@ -328,7 +331,7 @@ class GRPCPipelineExecutor:
 
         # Extract metadata from gRPC response
         grpc_metadata = {}
-        if hasattr(response.result, 'metadata') and response.result.metadata:
+        if hasattr(response.result, "metadata") and response.result.metadata:
             for key, value in response.result.metadata.items():
                 grpc_metadata[key] = value
 
@@ -457,7 +460,7 @@ class GRPCPipelineExecutor:
                 "execution_id": execution_id,
                 "step_id": step_id,
                 "status": status,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": data,
             }
 

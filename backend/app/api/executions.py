@@ -47,10 +47,10 @@ async def get_execution_status(execution_id: str, user=Depends(get_current_user)
 
 @router.get("/", response_model=List[Execution])
 async def get_executions(
-    limit: int = 100, offset: int = 0, user=Depends(get_current_user)
+    limit: int = 100, offset: int = 0, pipeline_id: Optional[str] = None, user=Depends(get_current_user)
 ):
-    """実行履歴を取得"""
-    return await execution_service.get_executions(limit, offset)
+    """実行履歴を取得（パイプラインIDでフィルタ可能）"""
+    return await execution_service.get_executions(limit, offset, pipeline_id)
 
 
 @router.post("/{execution_id}/cancel")

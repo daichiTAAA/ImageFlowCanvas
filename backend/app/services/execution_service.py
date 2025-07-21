@@ -1,12 +1,12 @@
 from typing import List, Optional, Dict, Any
 from fastapi import UploadFile
 import uuid
+from datetime import datetime, timezone
 from app.models.execution import (
     Execution,
     ExecutionRequest,
     ExecutionStatus,
     ExecutionProgress,
-    jst_now,
 )
 from app.services.file_service import FileService
 from app.services.kafka_service import KafkaService
@@ -136,7 +136,7 @@ class ExecutionService:
 
             # Update status to running
             execution.status = ExecutionStatus.RUNNING
-            execution.started_at = jst_now()
+            execution.started_at = datetime.now(timezone.utc)
             execution.progress.current_step = "処理開始"
             await self._notify_execution_update(execution)
 
@@ -156,7 +156,7 @@ class ExecutionService:
                 execution.progress.current_step = "完了"
                 execution.progress.completed_steps = execution.progress.total_steps
                 execution.progress.percentage = 100.0
-                execution.completed_at = jst_now()
+                execution.completed_at = datetime.now(timezone.utc)
 
                 # Add execution steps based on pipeline config
                 from app.models.execution import ExecutionStep, OutputFile, StepStatus
@@ -208,22 +208,26 @@ class ExecutionService:
                                     content_type=content_type,
                                 )
                                 output_files.append(output_file)
-                        
+
                         # Check for additional files in metadata (e.g., JSON detection files)
                         if "metadata" in step_result:
                             metadata = step_result["metadata"]
                             print(f"🔍 Found metadata: {metadata}")
                             if "json_output_file" in metadata:
                                 json_filename = metadata["json_output_file"]
-                                json_content_type = metadata.get("json_content_type", "application/json")
-                                
+                                json_content_type = metadata.get(
+                                    "json_content_type", "application/json"
+                                )
+
                                 print(f"🎯 Processing JSON file: {json_filename}")
-                                
+
                                 # Get JSON file info
-                                json_file_size, _ = await self._get_file_info(json_filename)
+                                json_file_size, _ = await self._get_file_info(
+                                    json_filename
+                                )
                                 # Use full filename as file_id for JSON files to avoid conflicts
                                 json_file_id = json_filename
-                                
+
                                 json_output_file = OutputFile(
                                     file_id=json_file_id,
                                     filename=json_filename,
@@ -483,10 +487,19 @@ class ExecutionService:
         return False
 
     async def get_executions(
-        self, limit: int = 100, offset: int = 0
+        self, limit: int = 100, offset: int = 0, pipeline_id: Optional[str] = None
     ) -> List[Execution]:
-        """実行履歴を取得"""
+        """実行履歴を取得（パイプラインIDでフィルタ可能）"""
         all_executions = list(self.executions.values())
+
+        # パイプラインIDでフィルタ
+        if pipeline_id:
+            all_executions = [
+                execution
+                for execution in all_executions
+                if execution.pipeline_id == pipeline_id
+            ]
+
         # 作成日時でソート（新しい順）
         all_executions.sort(key=lambda x: x.created_at, reverse=True)
         return all_executions[offset : offset + limit]
@@ -519,12 +532,11 @@ class ExecutionService:
             return
 
         # ステータス変更時にタイムスタンプを更新
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime
 
-        jst = timezone(timedelta(hours=9))  # JST = UTC+9
         if execution.status != status:
             if status == ExecutionStatus.RUNNING and execution.started_at is None:
-                execution.started_at = datetime.now(jst)
+                execution.started_at = datetime.now(timezone.utc)
             elif status in [
                 ExecutionStatus.COMPLETED,
                 ExecutionStatus.FAILED,
@@ -532,8 +544,8 @@ class ExecutionService:
             ]:
                 # 完了時にstarted_atが設定されていない場合は設定
                 if execution.started_at is None:
-                    execution.started_at = datetime.now(jst)
-                execution.completed_at = datetime.now(jst)
+                    execution.started_at = datetime.now(timezone.utc)
+                execution.completed_at = datetime.now(timezone.utc)
 
         execution.status = status
 
@@ -572,9 +584,7 @@ class ExecutionService:
         if not execution:
             return False
 
-        from datetime import datetime, timezone, timedelta
-
-        jst = timezone(timedelta(hours=9))
+        from datetime import datetime
 
         # ステップから実行時間を推定
         if execution.steps and execution.status == ExecutionStatus.COMPLETED:
@@ -590,8 +600,8 @@ class ExecutionService:
             ]
 
             if step_start_times and step_end_times:
-                execution.started_at = min(step_start_times).astimezone(jst)
-                execution.completed_at = max(step_end_times).astimezone(jst)
+                execution.started_at = min(step_start_times).replace(tzinfo=None)
+                execution.completed_at = max(step_end_times).replace(tzinfo=None)
                 return True
 
         return False

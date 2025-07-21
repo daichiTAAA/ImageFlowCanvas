@@ -178,12 +178,17 @@ class ApiService {
     return response.data
   }
 
-  async getExecutions(limit: number = 100, offset: number = 0): Promise<Execution[]> {
+  async getExecutions(limit: number = 100, offset: number = 0, pipeline_id?: string): Promise<Execution[]> {
     try {
       const api = this.ensureApiInitialized()
       console.log('API Service - getExecutions using API instance:', !!api)
       
-      const response = await api.get(`/executions/?limit=${limit}&offset=${offset}`)
+      let url = `/executions/?limit=${limit}&offset=${offset}`
+      if (pipeline_id) {
+        url += `&pipeline_id=${pipeline_id}`
+      }
+      
+      const response = await api.get(url)
       console.log('Executions response:', response.data)
       return response.data
     } catch (error) {

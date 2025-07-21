@@ -54,6 +54,7 @@ export const Dashboard: React.FC = () => {
   const [pipelineDetailDialogOpen, setPipelineDetailDialogOpen] =
     useState(false);
   const [pipelineToView, setPipelineToView] = useState<Pipeline | null>(null);
+  const [pipelineExecutions, setPipelineExecutions] = useState<any[]>([]);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -148,9 +149,18 @@ export const Dashboard: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleViewPipelineDetail = (pipeline: Pipeline) => {
+  const handleViewPipelineDetail = async (pipeline: Pipeline) => {
     setPipelineToView(pipeline);
     setPipelineDetailDialogOpen(true);
+
+    // Fetch execution history for this pipeline
+    try {
+      const executions = await apiService.getExecutions(10, 0, pipeline.id);
+      setPipelineExecutions(executions);
+    } catch (error) {
+      console.error("Failed to fetch pipeline executions:", error);
+      setPipelineExecutions([]);
+    }
   };
 
   const handleDeleteConfirm = () => {
@@ -440,7 +450,19 @@ export const Dashboard: React.FC = () => {
                             {execution.progress.percentage.toFixed(0)}%
                           </TableCell>
                           <TableCell>
-                            {new Date(execution.created_at).toLocaleString()}
+                            {(() => {
+                              // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
+                              const utcDate = new Date(execution.created_at + (execution.created_at.includes('Z') ? '' : 'Z'));
+                              return utcDate.toLocaleString(undefined, {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                timeZoneName: 'short'
+                              });
+                            })()}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <Button
@@ -592,7 +614,10 @@ export const Dashboard: React.FC = () => {
       {/* パイプライン詳細ダイアログ */}
       <Dialog
         open={pipelineDetailDialogOpen}
-        onClose={() => setPipelineDetailDialogOpen(false)}
+        onClose={() => {
+          setPipelineDetailDialogOpen(false);
+          setPipelineExecutions([]);
+        }}
         maxWidth="md"
         fullWidth
       >
@@ -607,12 +632,36 @@ export const Dashboard: React.FC = () => {
 
               <Typography variant="body1" gutterBottom sx={{ mt: 2 }}>
                 <strong>作成日時:</strong>{" "}
-                {new Date(pipelineToView.created_at).toLocaleString()}
+                {(() => {
+                  // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
+                  const utcDate = new Date(pipelineToView.created_at + (pipelineToView.created_at.includes('Z') ? '' : 'Z'));
+                  return utcDate.toLocaleString(undefined, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZoneName: 'short'
+                  });
+                })()}
               </Typography>
 
               <Typography variant="body1" gutterBottom>
                 <strong>更新日時:</strong>{" "}
-                {new Date(pipelineToView.updated_at).toLocaleString()}
+                {(() => {
+                  // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
+                  const utcDate = new Date(pipelineToView.updated_at + (pipelineToView.updated_at.includes('Z') ? '' : 'Z'));
+                  return utcDate.toLocaleString(undefined, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZoneName: 'short'
+                  });
+                })()}
               </Typography>
 
               <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
@@ -715,24 +764,100 @@ export const Dashboard: React.FC = () => {
                   )}
                 </Typography>
               </Box>
+
+              {/* 実行履歴セクション */}
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
+                実行履歴 (最新10件)
+              </Typography>
+
+              {pipelineExecutions.length === 0 ? (
+                <Typography color="textSecondary">
+                  このパイプラインの実行履歴はありません
+                </Typography>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>実行ID</TableCell>
+                        <TableCell>ステータス</TableCell>
+                        <TableCell>進捗</TableCell>
+                        <TableCell>実行日時</TableCell>
+                        <TableCell>アクション</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {pipelineExecutions.map((execution) => (
+                        <TableRow key={execution.execution_id}>
+                          <TableCell>
+                            <Typography
+                              variant="body2"
+                              color="primary"
+                              sx={{
+                                textDecoration: "underline",
+                                cursor: "pointer",
+                              }}
+                              onClick={() =>
+                                navigate(`/execution/${execution.execution_id}`)
+                              }
+                            >
+                              {execution.execution_id.substring(0, 8)}...
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getStatusText(execution.status)}
+                              color={getStatusColor(execution.status) as any}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {execution.progress.percentage.toFixed(0)}%
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              // UTC時間として明示的に扱って、ローカルタイムゾーンに変換
+                              const utcDate = new Date(execution.created_at + (execution.created_at.includes('Z') ? '' : 'Z'));
+                              return utcDate.toLocaleString(undefined, {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                timeZoneName: 'short'
+                              });
+                            })()}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Timeline />}
+                              onClick={() =>
+                                navigate(`/execution/${execution.execution_id}`)
+                              }
+                            >
+                              詳細
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPipelineDetailDialogOpen(false)}>
-            閉じる
-          </Button>
           <Button
-            variant="outlined"
-            startIcon={<Edit />}
             onClick={() => {
               setPipelineDetailDialogOpen(false);
-              navigate("/pipeline-builder", {
-                state: { editPipeline: pipelineToView },
-              });
+              setPipelineExecutions([]);
             }}
           >
-            編集
+            閉じる
           </Button>
         </DialogActions>
       </Dialog>

@@ -176,12 +176,12 @@ export const ExecutionMonitor: React.FC = () => {
   const handleJsonPreview = async (fileId: string, filename: string) => {
     try {
       // JSONファイルかどうか確認
-      if (!filename.toLowerCase().endsWith('.json')) {
+      if (!filename.toLowerCase().endsWith(".json")) {
         throw new Error("このファイルはJSONファイルではありません");
       }
 
       console.log(`JSONプレビュー要求: fileId=${fileId}, filename=${filename}`);
-      
+
       // Use the new JSON preview API endpoint
       const token = localStorage.getItem("access_token");
       const response = await fetch(`/v1/files/${fileId}/preview`, {
@@ -192,7 +192,9 @@ export const ExecutionMonitor: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`JSONファイルの読み込みに失敗しました: ${response.status}`);
+        throw new Error(
+          `JSONファイルの読み込みに失敗しました: ${response.status}`
+        );
       }
 
       const jsonData = await response.json();
@@ -205,20 +207,22 @@ export const ExecutionMonitor: React.FC = () => {
         console.log("フォールバック: downloadFile を使用");
         const response = await apiService.downloadFile(fileId);
         const content = await response.text();
-        
+
         // バイナリデータ（画像など）でないか確認
-        if (content.startsWith('\uFFFD') || content.includes('JFIF')) {
-          throw new Error("このファイルはJSONファイルではありません（バイナリデータ）");
+        if (content.startsWith("\uFFFD") || content.includes("JFIF")) {
+          throw new Error(
+            "このファイルはJSONファイルではありません（バイナリデータ）"
+          );
         }
-        
+
         setJsonPreviewDialog({ open: true, fileId, filename, content });
       } catch (fallbackError) {
         console.error("フォールバック方法も失敗:", fallbackError);
-        setJsonPreviewDialog({ 
-          open: true, 
-          fileId, 
-          filename, 
-          content: `エラー: JSONファイルの読み込みに失敗しました\n\n原因: ${fallbackError.message}`
+        setJsonPreviewDialog({
+          open: true,
+          fileId,
+          filename,
+          content: `エラー: JSONファイルの読み込みに失敗しました\n\n原因: ${fallbackError.message}`,
         });
       }
     }
@@ -695,12 +699,28 @@ export const ExecutionMonitor: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {step.started_at
-                        ? new Date(step.started_at).toLocaleString()
+                        ? new Date(step.started_at).toLocaleString("ja-JP", {
+                            timeZone: "Asia/Tokyo",
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })
                         : "-"}
                     </TableCell>
                     <TableCell>
                       {step.completed_at
-                        ? new Date(step.completed_at).toLocaleString()
+                        ? new Date(step.completed_at).toLocaleString("ja-JP", {
+                            timeZone: "Asia/Tokyo",
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })
                         : "-"}
                     </TableCell>
                   </TableRow>
@@ -771,118 +791,129 @@ export const ExecutionMonitor: React.FC = () => {
                     .map((file, index, sortedFiles) => {
                       // 同じ処理順序のファイルは同じ番号を表示
                       const currentOrder = getProcessingOrder(file.filename);
-                      const displayOrder = [...new Set(sortedFiles.map(f => getProcessingOrder(f.filename)))].indexOf(currentOrder) + 1;
-                      
+                      const displayOrder =
+                        [
+                          ...new Set(
+                            sortedFiles.map((f) =>
+                              getProcessingOrder(f.filename)
+                            )
+                          ),
+                        ].indexOf(currentOrder) + 1;
+
                       return (
                         <Grid item xs={12} sm={6} md={4} key={file.file_id}>
-                        <Card>
-                          <CardContent>
-                            <Box
-                              sx={{
-                                mb: 1,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                                flexWrap: "wrap",
-                              }}
-                            >
+                          <Card>
+                            <CardContent>
                               <Box
                                 sx={{
+                                  mb: 1,
                                   display: "flex",
                                   alignItems: "center",
-                                  gap: 0.5,
+                                  gap: 1,
+                                  flexWrap: "wrap",
                                 }}
                               >
-                                <Chip
-                                  label={`処理順 ${displayOrder}`}
-                                  color="secondary"
-                                  size="small"
+                                <Box
                                   sx={{
-                                    fontWeight: "bold",
-                                    fontSize: "0.75rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 0.5,
                                   }}
-                                />
-                                <Typography
-                                  variant="caption"
-                                  color="textSecondary"
                                 >
-                                  →
-                                </Typography>
-                              </Box>
-                              <Chip
-                                label={getProcessingStepFromFilename(
-                                  file.filename
-                                )}
-                                color="primary"
-                                size="small"
-                                sx={{ mb: 0 }}
-                              />
-                            </Box>
-                            <Typography variant="subtitle2" gutterBottom noWrap>
-                              {file.filename}
-                            </Typography>
-                            <Box
-                              sx={{
-                                width: "100%",
-                                height: 200,
-                                backgroundColor: "#f5f5f5",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                                border: "1px dashed #ccc",
-                                borderRadius: 1,
-                                overflow: "hidden",
-                                position: "relative",
-                              }}
-                              onClick={() =>
-                                handlePreview(file.file_id, file.filename)
-                              }
-                            >
-                              {loadingImages[file.file_id] ? (
-                                <Typography color="textSecondary">
-                                  読み込み中...
-                                </Typography>
-                              ) : imageUrls[file.file_id] ? (
-                                <img
-                                  src={imageUrls[file.file_id]}
-                                  alt={file.filename}
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }}
+                                  <Chip
+                                    label={`処理順 ${displayOrder}`}
+                                    color="secondary"
+                                    size="small"
+                                    sx={{
+                                      fontWeight: "bold",
+                                      fontSize: "0.75rem",
+                                    }}
+                                  />
+                                  <Typography
+                                    variant="caption"
+                                    color="textSecondary"
+                                  >
+                                    →
+                                  </Typography>
+                                </Box>
+                                <Chip
+                                  label={getProcessingStepFromFilename(
+                                    file.filename
+                                  )}
+                                  color="primary"
+                                  size="small"
+                                  sx={{ mb: 0 }}
                                 />
-                              ) : (
-                                <Typography color="textSecondary">
-                                  クリックで画像を表示
-                                </Typography>
-                              )}
-                            </Box>
-                            <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<Visibility />}
+                              </Box>
+                              <Typography
+                                variant="subtitle2"
+                                gutterBottom
+                                noWrap
+                              >
+                                {file.filename}
+                              </Typography>
+                              <Box
+                                sx={{
+                                  width: "100%",
+                                  height: 200,
+                                  backgroundColor: "#f5f5f5",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                  border: "1px dashed #ccc",
+                                  borderRadius: 1,
+                                  overflow: "hidden",
+                                  position: "relative",
+                                }}
                                 onClick={() =>
                                   handlePreview(file.file_id, file.filename)
                                 }
                               >
-                                プレビュー
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<Download />}
-                                onClick={() =>
-                                  handleDownload(file.file_id, file.filename)
-                                }
-                              >
-                                DL
-                              </Button>
-                            </Box>
-                          </CardContent>
-                        </Card>
+                                {loadingImages[file.file_id] ? (
+                                  <Typography color="textSecondary">
+                                    読み込み中...
+                                  </Typography>
+                                ) : imageUrls[file.file_id] ? (
+                                  <img
+                                    src={imageUrls[file.file_id]}
+                                    alt={file.filename}
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                ) : (
+                                  <Typography color="textSecondary">
+                                    クリックで画像を表示
+                                  </Typography>
+                                )}
+                              </Box>
+                              <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<Visibility />}
+                                  onClick={() =>
+                                    handlePreview(file.file_id, file.filename)
+                                  }
+                                >
+                                  プレビュー
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<Download />}
+                                  onClick={() =>
+                                    handleDownload(file.file_id, file.filename)
+                                  }
+                                >
+                                  DL
+                                </Button>
+                              </Box>
+                            </CardContent>
+                          </Card>
                         </Grid>
                       );
                     })}
@@ -890,7 +921,6 @@ export const ExecutionMonitor: React.FC = () => {
               )}
             </Box>
           )}
-
 
           {/* 全ファイル一覧タブ */}
           {resultsTabValue === 1 && (
@@ -924,84 +954,99 @@ export const ExecutionMonitor: React.FC = () => {
                         )
                         .map((file: any, index: number, sortedFiles: any[]) => {
                           // 同じ処理順序のファイルは同じ番号を表示
-                          const currentOrder = getProcessingOrder(file.filename);
-                          const displayOrder = [...new Set(sortedFiles.map(f => getProcessingOrder(f.filename)))].indexOf(currentOrder) + 1;
-                          
+                          const currentOrder = getProcessingOrder(
+                            file.filename
+                          );
+                          const displayOrder =
+                            [
+                              ...new Set(
+                                sortedFiles.map((f) =>
+                                  getProcessingOrder(f.filename)
+                                )
+                              ),
+                            ].indexOf(currentOrder) + 1;
+
                           return (
                             <TableRow key={file.file_id}>
-                            <TableCell>
-                              <Chip
-                                label={`処理順 ${displayOrder}`}
-                                color="secondary"
-                                size="small"
-                                sx={{
-                                  fontWeight: "bold",
-                                  fontSize: "0.75rem",
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell>{file.filename}</TableCell>
-                            <TableCell>
-                              <Chip
-                                label={getProcessingStepFromFilename(
-                                  file.filename
-                                )}
-                                color="primary"
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={getFileTypeLabel(file.filename)}
-                                color={getFileTypeColor(file.filename) as any}
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              {(file.file_size / 1024 / 1024).toFixed(2)} MB
-                            </TableCell>
-                            <TableCell>
-                              <Box sx={{ display: "flex", gap: 1 }}>
-                                {isImageFile(file.filename) && (
+                              <TableCell>
+                                <Chip
+                                  label={`処理順 ${displayOrder}`}
+                                  color="secondary"
+                                  size="small"
+                                  sx={{
+                                    fontWeight: "bold",
+                                    fontSize: "0.75rem",
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell>{file.filename}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={getProcessingStepFromFilename(
+                                    file.filename
+                                  )}
+                                  color="primary"
+                                  size="small"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={getFileTypeLabel(file.filename)}
+                                  color={getFileTypeColor(file.filename) as any}
+                                  size="small"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {(file.file_size / 1024 / 1024).toFixed(2)} MB
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: "flex", gap: 1 }}>
+                                  {isImageFile(file.filename) && (
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      startIcon={<Visibility />}
+                                      onClick={() =>
+                                        handlePreview(
+                                          file.file_id,
+                                          file.filename
+                                        )
+                                      }
+                                    >
+                                      プレビュー
+                                    </Button>
+                                  )}
+                                  {isJsonFile(file.filename) && (
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      startIcon={<Visibility />}
+                                      onClick={() =>
+                                        handleJsonPreview(
+                                          file.file_id,
+                                          file.filename
+                                        )
+                                      }
+                                    >
+                                      JSON表示
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="outlined"
                                     size="small"
-                                    startIcon={<Visibility />}
+                                    startIcon={<Download />}
                                     onClick={() =>
-                                      handlePreview(file.file_id, file.filename)
-                                    }
-                                  >
-                                    プレビュー
-                                  </Button>
-                                )}
-                                {isJsonFile(file.filename) && (
-                                  <Button
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={<Visibility />}
-                                    onClick={() =>
-                                      handleJsonPreview(
+                                      handleDownload(
                                         file.file_id,
                                         file.filename
                                       )
                                     }
                                   >
-                                    JSON表示
+                                    ダウンロード
                                   </Button>
-                                )}
-                                <Button
-                                  variant="outlined"
-                                  size="small"
-                                  startIcon={<Download />}
-                                  onClick={() =>
-                                    handleDownload(file.file_id, file.filename)
-                                  }
-                                >
-                                  ダウンロード
-                                </Button>
-                              </Box>
-                            </TableCell>
-                          </TableRow>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
                           );
                         })}
                     </TableBody>
@@ -1199,11 +1244,13 @@ export const ExecutionMonitor: React.FC = () => {
             {(() => {
               try {
                 if (!jsonPreviewDialog.content) return "コンテンツがありません";
-                
+
                 // 既にフォーマット済みの場合はそのまま表示
-                if (typeof jsonPreviewDialog.content === 'string' && 
-                    jsonPreviewDialog.content.startsWith('{') || 
-                    jsonPreviewDialog.content.startsWith('[')) {
+                if (
+                  (typeof jsonPreviewDialog.content === "string" &&
+                    jsonPreviewDialog.content.startsWith("{")) ||
+                  jsonPreviewDialog.content.startsWith("[")
+                ) {
                   try {
                     // JSONとして有効かチェック
                     const parsed = JSON.parse(jsonPreviewDialog.content);
