@@ -287,6 +287,34 @@ class ApiService {
     const response = await api.post(`/grpc-services/${serviceName}/restart`)
     return response.data
   }
+
+  // Camera Stream APIs
+  async getCameraStreamPipelines(): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/camera-stream/v1/camera-stream/pipelines')
+    return response.data
+  }
+
+  async getCameraStreamStatus(): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/camera-stream/v1/camera-stream/status')
+    return response.data
+  }
+
+  async testFrameProcessing(file: File, pipelineId: string, sourceId: string = 'test_camera'): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('pipeline_id', pipelineId)
+    formData.append('source_id', sourceId)
+
+    const response = await api.post('/camera-stream/v1/camera-stream/test-frame', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  }
 }
 
 export const apiService = new ApiService()

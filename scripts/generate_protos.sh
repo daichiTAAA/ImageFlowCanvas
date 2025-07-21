@@ -23,7 +23,8 @@ python -m grpc_tools.protoc \
     imageflow/v1/common.proto \
     imageflow/v1/resize.proto \
     imageflow/v1/ai_detection.proto \
-    imageflow/v1/filter.proto
+    imageflow/v1/filter.proto \
+    imageflow/v1/camera_stream.proto
 
 # Generate Python code specifically for backend
 python -m grpc_tools.protoc \
@@ -33,7 +34,8 @@ python -m grpc_tools.protoc \
     imageflow/v1/common.proto \
     imageflow/v1/resize.proto \
     imageflow/v1/ai_detection.proto \
-    imageflow/v1/filter.proto
+    imageflow/v1/filter.proto \
+    imageflow/v1/camera_stream.proto
 
 echo "Python gRPC code generation completed."
 

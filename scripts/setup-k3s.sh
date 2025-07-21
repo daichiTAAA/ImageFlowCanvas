@@ -84,6 +84,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/resize-grpc-ser
 kubectl wait --for=condition=available --timeout=300s deployment/ai-detection-grpc-service -n image-processing
 kubectl wait --for=condition=available --timeout=300s deployment/filter-grpc-service -n image-processing
 kubectl wait --for=condition=available --timeout=300s deployment/grpc-gateway -n image-processing
+kubectl wait --for=condition=available --timeout=300s deployment/camera-stream-grpc-service -n image-processing
 
 # Setup port forwarding script
 cat > scripts/port-forward.sh << 'EOF'

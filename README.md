@@ -60,6 +60,27 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 
 開発環境のセットアップは、お使いのOS（Linux, macOS, Windows）に応じて手順が異なります。
 
+### クイックセットアップ（推奨）
+
+**新規インストール（完全セットアップ）**:
+```bash
+# conda環境を作成・アクティベート
+conda create -n imageflowcanvas python=3.12 -y
+conda activate imageflowcanvas
+
+# 必要なパッケージをインストール
+pip install requests ultralytics grpcio grpcio-tools
+
+# 完全セットアップ（バッチ処理 + リアルタイム処理）
+sudo ./scripts/setup-complete.sh
+```
+
+**既存環境にカメラストリーミング機能を追加**:
+```bash
+# 既にImageFlowCanvasが動作している環境に、カメラストリーミング機能のみを追加
+./scripts/setup-camera-stream.sh
+```
+
 ### 共通設定（全OS共通）
 
 以下の手順は、Linux（直接）、macOS（Lima VM内）、Windows（WSL2内）すべてで実行します。
@@ -219,10 +240,20 @@ WindowsではWSL2を使用してLinux環境を作成し、その中で開発を�
 
 ### 使用方法
 
+#### バッチ処理
 1. **ログイン**: admin/admin123 または user/user123
 2. **パイプライン作成**: コンポーネントをドラッグ&ドロップで配置
 3. **実行**: 画像をアップロードしてパイプラインを実行（40-100msで完了）
 4. **監視**: リアルタイムで進捗を確認
+
+#### リアルタイムカメラ処理 🆕
+1. **ログイン**: admin/admin123 または user/user123
+2. **パイプライン作成**: まずWeb UIでパイプラインを作成・保存
+3. **カメラアクセス**: 「リアルタイム処理」タブを選択
+4. **カメラ初期化**: PCカメラへのアクセスを許可
+5. **パイプライン選択**: 作成したパイプラインを選択
+6. **ストリーミング開始**: リアルタイム処理を開始（<50msレイテンシ）
+7. **結果表示**: 映像にAI検知結果がリアルタイムでオーバーレイ表示
 
 ### gRPCサービスのテスト
 
@@ -235,7 +266,42 @@ WindowsではWSL2を使用してLinux環境を作成し、その中で開発を�
 # 個別サービスの動作確認
 kubectl get pods -n image-processing
 kubectl logs -n image-processing deployment/resize-grpc-service
+
+# カメラストリーミングのテスト 🆕
+python test_camera_stream_integration.py
 ```
+
+### カメラストリーミング機能 🆕
+
+#### 新機能の概要
+- **リアルタイム映像処理**: PCカメラからの映像をリアルタイムで処理（<50msレイテンシ）
+- **Web UI統合**: 既存のパイプライン作成機能と完全連携
+- **gRPCストリーミング**: 双方向ストリーミングによる高性能処理
+- **多様なパイプライン**: AIデータ検知、フィルタ処理など既存のコンポーネントをリアルタイムで利用
+
+#### セットアップ
+```bash
+# 新規セットアップ（完全版）
+sudo ./scripts/setup-complete.sh
+
+# 既存環境にカメラ機能を追加
+./scripts/setup-camera-stream.sh
+```
+
+#### 利用方法
+1. ブラウザで http://localhost:3000 にアクセス
+2. 「リアルタイム処理」タブを選択
+3. カメラアクセスを許可
+4. Web UIで作成したパイプラインを選択
+5. 「ストリーミング開始」をクリック
+6. リアルタイムでAI検知結果を確認
+
+#### 技術仕様
+- **プロトコル**: gRPC双方向ストリーミング
+- **WebSocket**: クライアント-バックエンド間通信
+- **処理レイテンシ**: 30-50ms
+- **対応カメラ**: PC/USB、Webカメラ
+- **同時ストリーム**: 複数カメラ対応
 
 
 ## 開発ガイド
@@ -303,7 +369,7 @@ ls -la generated/python/imageflow/v1/
 # ビルド前にディスク容量を確認
 df -h
 
-# gRPCサービスのビルド
+# gRPCサービスのビルド（カメラストリーミング含む）
 ./scripts/build_grpc_services.sh
 
 # バックエンドとフロントエンドサービスのビルド
@@ -366,6 +432,7 @@ DEPLOY=true ./scripts/build_web_services.sh
 - **resize-grpc-app**: 画像リサイズ処理gRPCサービス
 - **ai-detection-grpc-app**: YOLO11を使用した物体検知gRPCサービス
 - **filter-grpc-app**: 画像フィルタ処理gRPCサービス
+- **camera-stream-grpc-app**: リアルタイム映像処理gRPCサービス 🆕
 - **grpc-gateway**: HTTP-to-gRPC変換ゲートウェイ
 
 gRPCサービスは常駐型で、パイプライン処理時間を大幅に短縮します（60-94秒→1-3秒）。
@@ -373,7 +440,7 @@ gRPCサービスは常駐型で、パイプライン処理時間を大幅に短�
 # K3s内のgRPCサービスイメージ確認
 ```bash
 # gRPCサービスのイメージ一覧を確認
-sudo k3s ctr images list | grep -E "(resize-grpc-app|ai-detection-grpc-app|filter-grpc-app|grpc-gateway)"
+sudo k3s ctr images list | grep -E "(resize-grpc-app|ai-detection-grpc-app|filter-grpc-app|camera-stream-grpc-app|grpc-gateway)"
 
 # gRPCサービスの動作確認
 kubectl get pods -n image-processing
@@ -381,6 +448,9 @@ kubectl get services -n image-processing
 
 # gRPCサービスのテスト
 ./scripts/test_grpc_services.py
+
+# カメラストリーミングの動作確認 🆕
+kubectl logs -n image-processing deployment/camera-stream-grpc-service
 ```
 
 #### デプロイメントの確認
@@ -399,6 +469,7 @@ kubectl logs -f deployment/backend
 kubectl logs -f -n image-processing deployment/resize-grpc-service
 kubectl logs -f -n image-processing deployment/ai-detection-grpc-service
 kubectl logs -f -n image-processing deployment/filter-grpc-service
+kubectl logs -f -n image-processing deployment/camera-stream-grpc-service
 kubectl logs -f -n image-processing deployment/grpc-gateway
 
 # サービスの確認
