@@ -19,6 +19,7 @@ import numpy as np
 from typing import Dict, List
 import sys
 import os
+import concurrent.futures
 
 # Add generated proto path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../generated/python"))
@@ -97,7 +98,8 @@ async def get_available_pipelines(
 class CameraStreamManager:
     def __init__(self):
         self.camera_stream_endpoint = os.getenv(
-            "CAMERA_STREAM_GRPC_ENDPOINT", "camera-stream-grpc-service:9090"
+            "CAMERA_STREAM_GRPC_ENDPOINT",
+            "camera-stream-grpc-service.image-processing.svc.cluster.local:9090",
         )
         self.active_streams: Dict[str, asyncio.Task] = {}
 
@@ -129,7 +131,13 @@ async def camera_stream_websocket(websocket: WebSocket, source_id: str):
         # Keep connection alive and handle incoming frames
         async for data in websocket.iter_text():
             try:
+                logger.info(
+                    f"Received WebSocket data from {source_id}: {len(data)} chars"
+                )
                 message = json.loads(data)
+                logger.info(
+                    f"Parsed message type: {message.get('type', 'unknown')} from {source_id}"
+                )
 
                 if message.get("type") == "frame":
                     # Process incoming frame
@@ -138,8 +146,8 @@ async def camera_stream_websocket(websocket: WebSocket, source_id: str):
                     # Handle configuration updates
                     await handle_config_update(message, source_id)
 
-            except json.JSONDecodeError:
-                logger.error(f"Invalid JSON received from {source_id}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON received from {source_id}: {e}")
             except Exception as e:
                 logger.error(f"Error processing message from {source_id}: {e}")
 
@@ -149,11 +157,20 @@ async def camera_stream_websocket(websocket: WebSocket, source_id: str):
         logger.error(f"WebSocket error for {source_id}: {e}")
     finally:
         # Cleanup
+        logger.info(f"Cleaning up resources for {source_id}")
+
         if source_id in connected_clients:
             del connected_clients[source_id]
+            logger.info(f"Removed {source_id} from connected clients")
+
         if source_id in stream_manager.active_streams:
-            stream_manager.active_streams[source_id].cancel()
-            del stream_manager.active_streams[source_id]
+            try:
+                stream_manager.active_streams[source_id].cancel()
+                logger.info(f"Cancelled stream task for {source_id}")
+            except Exception as e:
+                logger.error(f"Error cancelling stream task for {source_id}: {e}")
+            finally:
+                del stream_manager.active_streams[source_id]
 
 
 async def handle_grpc_streaming(websocket: WebSocket, source_id: str):
@@ -183,42 +200,97 @@ async def handle_grpc_streaming(websocket: WebSocket, source_id: str):
         # Start gRPC streaming
         async def process_grpc_stream():
             try:
-                response_stream = client.ProcessVideoStream(frame_generator())
+                logger.info(f"Starting gRPC stream processing for {source_id}")
 
-                # Process responses from gRPC service
-                async for processed_frame in response_stream:
+                # Simpler approach: process frames one by one
+                while True:
                     try:
-                        # Send processed frame back to client via WebSocket
-                        response_data = {
-                            "type": "processed_frame",
-                            "source_id": processed_frame.source_id,
-                            "status": processed_frame.status,
-                            "processing_time_ms": processed_frame.processing_time_ms,
-                            "detections": [
-                                {
-                                    "class_name": detection.class_name,
-                                    "confidence": detection.confidence,
-                                    "bbox": {
-                                        "x1": detection.bbox.x1,
-                                        "y1": detection.bbox.y1,
-                                        "x2": detection.bbox.x2,
-                                        "y2": detection.bbox.y2,
-                                    },
-                                }
-                                for detection in processed_frame.detections
-                            ],
-                        }
+                        # Wait for frame from queue
+                        frame = await asyncio.wait_for(frame_queue.get(), timeout=30.0)
+                        if frame is None:  # Sentinel to stop
+                            break
 
-                        if processed_frame.error_message:
-                            response_data["error"] = processed_frame.error_message
+                        logger.info(f"Processing frame for {source_id}")
 
-                        await websocket.send_text(json.dumps(response_data))
+                        # Process single frame in executor
+                        loop = asyncio.get_event_loop()
 
-                    except Exception as e:
-                        logger.error(
-                            f"Error sending processed frame to {source_id}: {e}"
+                        def process_single_frame():
+                            try:
+                                # Create a simple generator for single frame
+                                def single_frame_gen():
+                                    yield frame
+
+                                logger.info(
+                                    f"Calling gRPC ProcessVideoStream for {source_id}"
+                                )
+
+                                # Call gRPC service
+                                response_stream = client.ProcessVideoStream(
+                                    single_frame_gen()
+                                )
+
+                                # Get first response
+                                for processed_frame in response_stream:
+                                    logger.info(
+                                        f"Received processed frame from gRPC for {source_id}"
+                                    )
+                                    return processed_frame
+
+                                logger.warning(
+                                    f"No response from gRPC service for {source_id}"
+                                )
+                                return None
+                            except Exception as e:
+                                logger.error(
+                                    f"gRPC processing error for {source_id}: {e}"
+                                )
+                                return None
+
+                        # Run in executor
+                        processed_frame = await loop.run_in_executor(
+                            None, process_single_frame
                         )
+
+                        if processed_frame:
+                            # Send processed frame back to client via WebSocket
+                            response_data = {
+                                "type": "processed_frame",
+                                "source_id": processed_frame.source_id,
+                                "status": processed_frame.status,
+                                "processing_time_ms": processed_frame.processing_time_ms,
+                                "detections": [
+                                    {
+                                        "class_name": detection.class_name,
+                                        "confidence": detection.confidence,
+                                        "bbox": {
+                                            "x1": detection.bbox.x1,
+                                            "y1": detection.bbox.y1,
+                                            "x2": detection.bbox.x2,
+                                            "y2": detection.bbox.y2,
+                                        },
+                                    }
+                                    for detection in processed_frame.detections
+                                ],
+                            }
+
+                            if processed_frame.error_message:
+                                response_data["error"] = processed_frame.error_message
+
+                            await websocket.send_text(json.dumps(response_data))
+                            logger.info(f"Sent processed frame result to {source_id}")
+                        else:
+                            logger.warning(
+                                f"No processed frame received for {source_id}"
+                            )
+
+                    except asyncio.TimeoutError:
+                        # Timeout waiting for frame - continue loop
+                        continue
+                    except Exception as e:
+                        logger.error(f"Error in frame processing loop: {e}")
                         break
+
             except Exception as e:
                 logger.error(f"gRPC streaming error for {source_id}: {e}")
 
@@ -236,6 +308,10 @@ async def process_incoming_frame(message: dict, source_id: str):
     Process incoming frame from WebSocket client
     """
     try:
+        logger.info(
+            f"Received frame from {source_id}: {message.get('type', 'unknown')}"
+        )
+
         # Extract frame data
         frame_data_b64 = message.get("frame_data")
         if not frame_data_b64:
@@ -244,6 +320,7 @@ async def process_incoming_frame(message: dict, source_id: str):
 
         # Decode base64 frame data
         frame_data = base64.b64decode(frame_data_b64)
+        logger.info(f"Decoded frame data size: {len(frame_data)} bytes")
 
         # Create VideoFrame message
         video_frame = camera_stream_pb2.VideoFrame()
@@ -257,6 +334,10 @@ async def process_incoming_frame(message: dict, source_id: str):
         metadata.height = message.get("height", 0)
         metadata.pipeline_id = message.get("pipeline_id", "ai_detection")
 
+        logger.info(
+            f"Frame metadata: {metadata.width}x{metadata.height}, pipeline: {metadata.pipeline_id}"
+        )
+
         # Add processing parameters
         processing_params = message.get("processing_params", {})
         for key, value in processing_params.items():
@@ -266,6 +347,9 @@ async def process_incoming_frame(message: dict, source_id: str):
         websocket = connected_clients.get(source_id)
         if websocket and hasattr(websocket, "frame_queue"):
             await websocket.frame_queue.put(video_frame)
+            logger.info(f"Frame queued for processing by {source_id}")
+        else:
+            logger.error(f"No frame queue found for {source_id}")
 
     except Exception as e:
         logger.error(f"Error processing incoming frame from {source_id}: {e}")
@@ -328,15 +412,23 @@ async def test_frame_processing(
         metadata.pipeline_id = pipeline_id
 
         # Process single frame (simulate streaming with single frame)
-        async def single_frame_generator():
+        def single_frame_generator():
             yield video_frame
 
-        # Get response using asyncio to handle the streaming properly
+        # Get response using run_in_executor to handle the gRPC call
         try:
-            response_stream = client.ProcessVideoStream(single_frame_generator())
+            loop = asyncio.get_event_loop()
 
-            # Get first (and only) response
-            async for processed_frame in response_stream:
+            def call_grpc_stream():
+                response_stream = client.ProcessVideoStream(single_frame_generator())
+                # Get first (and only) response
+                for processed_frame in response_stream:
+                    return processed_frame
+                return None
+
+            processed_frame = await loop.run_in_executor(None, call_grpc_stream)
+
+            if processed_frame:
                 result = {
                     "source_id": processed_frame.source_id,
                     "status": processed_frame.status,
@@ -360,14 +452,13 @@ async def test_frame_processing(
                     result["error"] = processed_frame.error_message
 
                 return result
+            else:
+                raise HTTPException(
+                    status_code=500, detail="No response from camera stream service"
+                )
         except Exception as e:
             logger.error(f"Error in gRPC stream: {e}")
             raise HTTPException(status_code=500, detail=f"gRPC streaming error: {e}")
-
-        # If no response received
-        raise HTTPException(
-            status_code=500, detail="No response from camera stream service"
-        )
 
     except grpc.RpcError as e:
         logger.error(f"gRPC error in test frame processing: {e}")

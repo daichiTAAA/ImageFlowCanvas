@@ -59,7 +59,7 @@ export const CameraStream: React.FC = () => {
   });
 
   const [showDetections, setShowDetections] = useState(true);
-  const [streamingRate, setStreamingRate] = useState(5); // frames per second
+  const [streamingRate, setStreamingRate] = useState(2); // frames per second (reduced for memory efficiency)
 
   // Load available pipelines on component mount
   useEffect(() => {
@@ -91,9 +91,9 @@ export const CameraStream: React.FC = () => {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 15 },
         },
         audio: false,
       });
@@ -135,6 +135,7 @@ export const CameraStream: React.FC = () => {
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
+        console.log("WebSocket opened, starting frame capture");
         setState((prev) => ({
           ...prev,
           isConnected: true,
@@ -200,8 +201,13 @@ export const CameraStream: React.FC = () => {
   };
 
   const startFrameCapture = () => {
+    console.log("Starting frame capture...");
     const captureFrame = () => {
-      if (!videoRef.current || !canvasRef.current || !state.isConnected) {
+      if (!videoRef.current || !canvasRef.current) {
+        console.log("Frame capture conditions not met:", {
+          hasVideo: !!videoRef.current,
+          hasCanvas: !!canvasRef.current,
+        });
         return;
       }
 
@@ -209,17 +215,42 @@ export const CameraStream: React.FC = () => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
 
-      if (!ctx) return;
+      if (!ctx) {
+        console.log("No canvas context available");
+        return;
+      }
 
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Set canvas dimensions to match video (reduced for memory efficiency)
+      const maxWidth = 640;
+      const maxHeight = 480;
+      const scale = Math.min(
+        maxWidth / video.videoWidth,
+        maxHeight / video.videoHeight,
+        1
+      );
+
+      canvas.width = Math.floor(video.videoWidth * scale);
+      canvas.height = Math.floor(video.videoHeight * scale);
+
+      console.log(
+        "Video dimensions:",
+        video.videoWidth,
+        "x",
+        video.videoHeight
+      );
+
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.log("Video not ready yet");
+        return;
+      }
 
       // Draw current frame to canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Convert to base64
-      const frameData = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+      // Convert to base64 with lower quality to reduce memory usage
+      const frameData = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
+
+      console.log("Captured frame data length:", frameData.length);
 
       // Send frame via WebSocket
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -233,11 +264,21 @@ export const CameraStream: React.FC = () => {
           processing_params: {},
         };
 
+        console.log("Sending frame message:", {
+          type: message.type,
+          dataLength: message.frame_data.length,
+          dimensions: `${message.width}x${message.height}`,
+          pipeline: message.pipeline_id,
+        });
+
         wsRef.current.send(JSON.stringify(message));
+      } else {
+        console.log("WebSocket not ready:", wsRef.current?.readyState);
       }
     };
 
     // Start capturing frames at specified rate
+    console.log("Setting up frame capture interval at", streamingRate, "fps");
     intervalRef.current = setInterval(captureFrame, 1000 / streamingRate);
   };
 
@@ -249,11 +290,20 @@ export const CameraStream: React.FC = () => {
   };
 
   const handleProcessedFrame = (frame: ProcessedFrame) => {
+    console.log("Received processed frame:", frame);
+
     setState((prev) => {
       const newFrameCount = prev.frameCount + 1;
       const newAvgTime =
         (prev.avgProcessingTime * prev.frameCount + frame.processing_time_ms) /
         newFrameCount;
+
+      console.log(
+        "Updated frame count:",
+        newFrameCount,
+        "avg time:",
+        newAvgTime
+      );
 
       return {
         ...prev,
@@ -265,7 +315,13 @@ export const CameraStream: React.FC = () => {
 
     // Draw detections if enabled
     if (showDetections && frame.detections) {
+      console.log("Drawing detections:", frame.detections);
       drawDetections(frame.detections);
+    } else {
+      console.log("No detections to draw:", {
+        showDetections,
+        detections: frame.detections,
+      });
     }
   };
 

@@ -360,7 +360,7 @@ spec:
           name: grpc
         env:
         - name: BACKEND_API_URL
-          value: "http://backend.default.svc.cluster.local:8000"
+          value: "http://backend-service.default.svc.cluster.local:8000"
         - name: RESIZE_GRPC_ENDPOINT
           value: "resize-grpc-service.image-processing.svc.cluster.local:9090"
         - name: AI_DETECTION_GRPC_ENDPOINT
@@ -372,7 +372,7 @@ spec:
         - name: MAX_CONCURRENT_STREAMS
           value: "10"
         - name: FRAME_SKIP_THRESHOLD
-          value: "100"
+          value: "500"
         resources:
           requests:
             cpu: 200m
