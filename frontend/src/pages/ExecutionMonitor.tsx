@@ -184,10 +184,16 @@ export const ExecutionMonitor: React.FC = () => {
   };
 
   const handleJsonPreviewClose = () => {
-    setJsonPreviewDialog({ open: false, fileId: "", filename: "", content: "" });
+    setJsonPreviewDialog({
+      open: false,
+      fileId: "",
+      filename: "",
+      content: "",
+    });
   };
 
-  const isImageFile = (filename: string) => {
+  const isImageFile = (filename: string | undefined | null) => {
+    if (!filename || typeof filename !== "string") return false;
     const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"];
     return imageExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
   };
@@ -195,53 +201,54 @@ export const ExecutionMonitor: React.FC = () => {
   // ファイル名から処理ステップを抽出
   const getProcessingStepFromFilename = (filename: string): string => {
     // 元画像のパターン: {execution_id}.{extension} または {execution_id}-input-{index}.{extension}
-    const nameWithoutExt = filename.split('.')[0];
-    
+    const nameWithoutExt = filename.split(".")[0];
+
     // execution_idのパターンをチェック（UUID形式）
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
     // 単純なexecution_idのみの場合（元画像）
     if (uuidPattern.test(nameWithoutExt)) {
-      return '元画像';
+      return "元画像";
     }
-    
+
     // input付きの場合（複数ファイルアップロード時の元画像）
-    if (nameWithoutExt.includes('-input-')) {
-      return '元画像';
+    if (nameWithoutExt.includes("-input-")) {
+      return "元画像";
     }
-    
+
     // 処理済みファイルのパターン: {execution_id}_{processing_step}.{extension}
-    const parts = filename.split('_');
+    const parts = filename.split("_");
     if (parts.length >= 2) {
-      const stepPart = parts.slice(1).join('_'); // execution_idの後の部分を取得
-      const stepName = stepPart.split('.')[0]; // 拡張子を除去
-      
+      const stepPart = parts.slice(1).join("_"); // execution_idの後の部分を取得
+      const stepName = stepPart.split(".")[0]; // 拡張子を除去
+
       // ステップ名を日本語に変換
       const stepLabels: Record<string, string> = {
-        'resize': '1. リサイズ処理',
-        'ai-detection': '2. 物体検知',
-        'filter': '3. フィルタ処理',
-        'enhancement': '4. 画質向上'
+        resize: "1. リサイズ処理",
+        "ai-detection": "2. 物体検知",
+        filter: "3. フィルタ処理",
+        enhancement: "4. 画質向上",
       };
-      
+
       return stepLabels[stepName] || stepName;
     }
-    
-    return '不明な処理';
+
+    return "不明な処理";
   };
 
   // 処理順序を取得（ソート用）
   const getProcessingOrder = (filename: string): number => {
     const stepInfo = getProcessingStepFromFilename(filename);
-    
+
     const orderMap: Record<string, number> = {
-      '元画像': 0,
-      '1. リサイズ処理': 1,
-      '2. 物体検知': 2,
-      '3. フィルタ処理': 3,
-      '4. 画質向上': 4
+      元画像: 0,
+      "1. リサイズ処理": 1,
+      "2. 物体検知": 2,
+      "3. フィルタ処理": 3,
+      "4. 画質向上": 4,
     };
-    
+
     return orderMap[stepInfo] || 999;
   };
 
@@ -258,18 +265,24 @@ export const ExecutionMonitor: React.FC = () => {
   const getFileTypeLabel = (filename: string) => {
     const type = getFileType(filename);
     switch (type) {
-      case "image": return "画像";
-      case "json": return "JSON";
-      default: return "その他";
+      case "image":
+        return "画像";
+      case "json":
+        return "JSON";
+      default:
+        return "その他";
     }
   };
 
   const getFileTypeColor = (filename: string) => {
     const type = getFileType(filename);
     switch (type) {
-      case "image": return "primary";
-      case "json": return "secondary";
-      default: return "default";
+      case "image":
+        return "primary";
+      case "json":
+        return "secondary";
+      default:
+        return "default";
     }
   };
 
@@ -500,8 +513,10 @@ export const ExecutionMonitor: React.FC = () => {
                             </Typography>
                           )
                         )}
-                      {execution.error_details.processing_errors.missing_files &&
-                        execution.error_details.processing_errors.missing_files.length > 0 && (
+                      {execution.error_details.processing_errors
+                        .missing_files &&
+                        execution.error_details.processing_errors.missing_files
+                          .length > 0 && (
                           <Box sx={{ mt: 1, ml: 1 }}>
                             <Typography
                               variant="caption"
@@ -630,14 +645,20 @@ export const ExecutionMonitor: React.FC = () => {
                 <Grid container spacing={2}>
                   {execution.output_files
                     .filter((file) => isImageFile(file.filename))
-                    .sort((a, b) => getProcessingOrder(a.filename) - getProcessingOrder(b.filename))
+                    .sort(
+                      (a, b) =>
+                        getProcessingOrder(a.filename) -
+                        getProcessingOrder(b.filename)
+                    )
                     .map((file) => (
                       <Grid item xs={12} sm={6} md={4} key={file.file_id}>
                         <Card>
                           <CardContent>
                             <Box sx={{ mb: 1 }}>
-                              <Chip 
-                                label={getProcessingStepFromFilename(file.filename)}
+                              <Chip
+                                label={getProcessingStepFromFilename(
+                                  file.filename
+                                )}
                                 color="primary"
                                 size="small"
                                 sx={{ mb: 1 }}
@@ -739,67 +760,76 @@ export const ExecutionMonitor: React.FC = () => {
                     </TableHead>
                     <TableBody>
                       {execution.output_files
-                        .sort((a, b) => getProcessingOrder(a.filename) - getProcessingOrder(b.filename))
+                        .sort(
+                          (a, b) =>
+                            getProcessingOrder(a.filename) -
+                            getProcessingOrder(b.filename)
+                        )
                         .map((file) => (
-                        <TableRow key={file.file_id}>
-                          <TableCell>{file.filename}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={getProcessingStepFromFilename(file.filename)}
-                              color="primary"
-                              size="small"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={getFileTypeLabel(file.filename)}
-                              color={getFileTypeColor(file.filename) as any}
-                              size="small"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {(file.file_size / 1024 / 1024).toFixed(2)} MB
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: "flex", gap: 1 }}>
-                              {isImageFile(file.filename) && (
-                                <Button
-                                  variant="outlined"
-                                  size="small"
-                                  startIcon={<Visibility />}
-                                  onClick={() =>
-                                    handlePreview(file.file_id, file.filename)
-                                  }
-                                >
-                                  プレビュー
-                                </Button>
-                              )}
-                              {isJsonFile(file.filename) && (
-                                <Button
-                                  variant="outlined"
-                                  size="small"
-                                  startIcon={<Visibility />}
-                                  onClick={() =>
-                                    handleJsonPreview(file.file_id, file.filename)
-                                  }
-                                >
-                                  JSON表示
-                                </Button>
-                              )}
-                              <Button
-                                variant="outlined"
+                          <TableRow key={file.file_id}>
+                            <TableCell>{file.filename}</TableCell>
+                            <TableCell>
+                              <Chip
+                                label={getProcessingStepFromFilename(
+                                  file.filename
+                                )}
+                                color="primary"
                                 size="small"
-                                startIcon={<Download />}
-                                onClick={() =>
-                                  handleDownload(file.file_id, file.filename)
-                                }
-                              >
-                                ダウンロード
-                              </Button>
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={getFileTypeLabel(file.filename)}
+                                color={getFileTypeColor(file.filename) as any}
+                                size="small"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {(file.file_size / 1024 / 1024).toFixed(2)} MB
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: "flex", gap: 1 }}>
+                                {isImageFile(file.filename) && (
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<Visibility />}
+                                    onClick={() =>
+                                      handlePreview(file.file_id, file.filename)
+                                    }
+                                  >
+                                    プレビュー
+                                  </Button>
+                                )}
+                                {isJsonFile(file.filename) && (
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<Visibility />}
+                                    onClick={() =>
+                                      handleJsonPreview(
+                                        file.file_id,
+                                        file.filename
+                                      )
+                                    }
+                                  >
+                                    JSON表示
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  startIcon={<Download />}
+                                  onClick={() =>
+                                    handleDownload(file.file_id, file.filename)
+                                  }
+                                >
+                                  ダウンロード
+                                </Button>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -992,9 +1022,8 @@ export const ExecutionMonitor: React.FC = () => {
               fontFamily: "monospace",
             }}
           >
-            {jsonPreviewDialog.content && 
-              JSON.stringify(JSON.parse(jsonPreviewDialog.content), null, 2)
-            }
+            {jsonPreviewDialog.content &&
+              JSON.stringify(JSON.parse(jsonPreviewDialog.content), null, 2)}
           </Box>
         </DialogContent>
         <DialogActions>

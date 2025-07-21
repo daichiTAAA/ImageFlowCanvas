@@ -72,6 +72,11 @@ class OutputFile(BaseModel):
             self.download_url = f"/v1/files/{self.file_id}/download"
 
 
+class ErrorDetails(BaseModel):
+    failed_nodes: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    processing_errors: Optional[Dict[str, Any]] = None
+
+
 class Execution(BaseModel):
     execution_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     pipeline_id: str
@@ -84,6 +89,7 @@ class Execution(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    error_details: Optional[ErrorDetails] = None
 
 
 class ExecutionRequest(BaseModel):

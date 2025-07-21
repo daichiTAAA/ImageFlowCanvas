@@ -1,16 +1,17 @@
 from typing import List, Optional, Dict, Any
 from fastapi import UploadFile
+import uuid
 from app.models.execution import (
     Execution,
     ExecutionRequest,
     ExecutionStatus,
     ExecutionProgress,
+    jst_now,
 )
 from app.services.file_service import FileService
 from app.services.kafka_service import KafkaService
 from app.services.grpc_pipeline_executor import get_grpc_pipeline_executor
 import uuid
-import json
 import asyncio
 import os
 import logging
@@ -42,8 +43,6 @@ class ExecutionService:
         """WebSocket マネージャーを遅延初期化"""
         if self.websocket_manager is None:
             try:
-                from app.services.websocket_manager import ConnectionManager
-
                 # グローバルインスタンスを取得（main.py で作成されているもの）
                 import app.main
 
@@ -86,8 +85,13 @@ class ExecutionService:
         # Execute pipeline directly using gRPC services
         # This eliminates the 750-1450ms overhead and achieves 40-100ms processing
         try:
+            # uploaded_files now contains actual MinIO object names
             # Start direct gRPC pipeline execution in background
-            asyncio.create_task(self._execute_pipeline_direct(execution_id, execution_request, uploaded_files))
+            asyncio.create_task(
+                self._execute_pipeline_direct(
+                    execution_id, execution_request, uploaded_files
+                )
+            )
             logger.info(f"Started direct gRPC pipeline execution for {execution_id}")
         except Exception as e:
             logger.error(f"Failed to start direct pipeline execution: {e}")
@@ -100,15 +104,26 @@ class ExecutionService:
                     "parameters": execution_request.parameters,
                     "priority": execution_request.priority,
                 }
-                await self.kafka_service.send_message("image-processing-requests", message)
-                logger.info(f"Fallback: sent execution to Kafka queue for {execution_id}")
+                await self.kafka_service.send_message(
+                    "image-processing-requests", message
+                )
+                logger.info(
+                    f"Fallback: sent execution to Kafka queue for {execution_id}"
+                )
             except Exception as kafka_error:
-                logger.error(f"Both direct execution and Kafka fallback failed: {kafka_error}")
+                logger.error(
+                    f"Both direct execution and Kafka fallback failed: {kafka_error}"
+                )
                 execution.status = ExecutionStatus.FAILED
 
         return execution
 
-    async def _execute_pipeline_direct(self, execution_id: str, execution_request: ExecutionRequest, input_files: List[str]):
+    async def _execute_pipeline_direct(
+        self,
+        execution_id: str,
+        execution_request: ExecutionRequest,
+        input_files: List[str],
+    ):
         """
         Execute pipeline directly using gRPC calls (40-100ms processing time)
         Ultra-fast execution using direct gRPC service calls
@@ -121,32 +136,105 @@ class ExecutionService:
 
             # Update status to running
             execution.status = ExecutionStatus.RUNNING
+            execution.started_at = jst_now()
             execution.progress.current_step = "処理開始"
             await self._notify_execution_update(execution)
 
             # Create pipeline configuration from execution request
-            pipeline_config = await self._build_pipeline_config(execution_request, input_files)
-            
+            pipeline_config = await self._build_pipeline_config(
+                execution_request, input_files
+            )
+
             # Execute pipeline using direct gRPC calls
-            result = await self.grpc_executor.execute_pipeline(pipeline_config, execution_id)
-            
+            result = await self.grpc_executor.execute_pipeline(
+                pipeline_config, execution_id
+            )
+
             # Update execution with results
-            if result['status'] == 'completed':
+            if result["status"] == "completed":
                 execution.status = ExecutionStatus.COMPLETED
                 execution.progress.current_step = "完了"
                 execution.progress.completed_steps = execution.progress.total_steps
                 execution.progress.percentage = 100.0
+                execution.completed_at = jst_now()
+
+                # Add execution steps based on pipeline config
+                from app.models.execution import ExecutionStep, OutputFile, StepStatus
+                import os
                 
-                # Add output files
-                if 'final_output_path' in result:
-                    execution.output_files = [result['final_output_path']]
+                pipeline_config = await self._build_pipeline_config(execution_request, input_files)
+                execution.steps = []
+                
+                for step_config in pipeline_config.get("steps", []):
+                    step = ExecutionStep(
+                        step_id=step_config["stepId"],
+                        name=step_config.get("componentName", step_config["stepId"]),
+                        component_name=step_config.get("componentName", step_config["stepId"]),
+                        status=StepStatus.COMPLETED,
+                        started_at=execution.started_at,
+                        completed_at=execution.completed_at
+                    )
+                    execution.steps.append(step)
+
+                # Add output files from all processing steps
+                output_files = []
+                
+                # Add results from each step
+                if "results" in result:
+                    for step_id, step_result in result["results"].items():
+                        if "output_path" in step_result and step_result["output_path"]:
+                            output_path = step_result["output_path"]
+                            filename = os.path.basename(output_path)
+                            
+                            if filename:
+                                # 実際のファイルサイズとコンテンツタイプを取得
+                                file_size, content_type = await self._get_file_info(output_path)
+                                
+                                # MinIOに保存されるファイル名（拡張子なし）をfile_idとして使用
+                                file_id = os.path.splitext(filename)[0]
+                                
+                                output_file = OutputFile(
+                                    file_id=file_id,
+                                    filename=filename,
+                                    file_size=file_size,
+                                    content_type=content_type,
+                                )
+                                output_files.append(output_file)
+                
+                # Add final output if available and not already included
+                if "final_output_path" in result and result["final_output_path"]:
+                    final_path = result["final_output_path"]
+                    filename = os.path.basename(final_path)
                     
-                logger.info(f"Direct gRPC pipeline execution completed for {execution_id} in {result.get('execution_time_ms', 0):.2f}ms")
+                    if filename:
+                        # Check if this file is not already in output_files
+                        existing_files = [f.filename for f in output_files]
+                        if filename not in existing_files:
+                            file_size, content_type = await self._get_file_info(final_path)
+                            
+                            # MinIOに保存されるファイル名（拡張子なし）をfile_idとして使用
+                            file_id = os.path.splitext(filename)[0]
+                            
+                            output_file = OutputFile(
+                                file_id=file_id,
+                                filename=filename,
+                                file_size=file_size,
+                                content_type=content_type,
+                            )
+                            output_files.append(output_file)
                 
+                execution.output_files = output_files
+
+                logger.info(
+                    f"Direct gRPC pipeline execution completed for {execution_id} in {result.get('execution_time_ms', 0):.2f}ms"
+                )
+
             else:
                 execution.status = ExecutionStatus.FAILED
-                execution.error_message = result.get('error', 'Unknown error')
-                logger.error(f"Direct gRPC pipeline execution failed for {execution_id}: {execution.error_message}")
+                execution.error_message = result.get("error", "Unknown error")
+                logger.error(
+                    f"Direct gRPC pipeline execution failed for {execution_id}: {execution.error_message}"
+                )
 
             await self._notify_execution_update(execution)
 
@@ -158,7 +246,9 @@ class ExecutionService:
                 execution.error_message = str(e)
                 await self._notify_execution_update(execution)
 
-    async def _build_pipeline_config(self, execution_request: ExecutionRequest, input_files: List[str]) -> Dict[str, Any]:
+    async def _build_pipeline_config(
+        self, execution_request: ExecutionRequest, input_files: List[str]
+    ) -> Dict[str, Any]:
         """Build pipeline configuration for direct gRPC execution"""
         # This is a simplified pipeline config - in a real implementation,
         # you would fetch the actual pipeline definition from the pipeline_service
@@ -170,35 +260,45 @@ class ExecutionService:
                     "componentName": "resize",
                     "parameters": {
                         "width": execution_request.parameters.get("target_width", 800),
-                        "height": execution_request.parameters.get("target_height", 600),
-                        "maintain_aspect_ratio": True
+                        "height": execution_request.parameters.get(
+                            "target_height", 600
+                        ),
+                        "maintain_aspect_ratio": True,
                     },
-                    "dependencies": []
+                    "dependencies": [],
                 },
                 {
-                    "stepId": "ai-detection-step", 
+                    "stepId": "ai-detection-step",
                     "componentName": "ai_detection",
                     "parameters": {
-                        "model_name": execution_request.parameters.get("model_name", "yolo"),
-                        "confidence_threshold": execution_request.parameters.get("confidence_threshold", 0.5),
-                        "draw_boxes": True
+                        "model_name": execution_request.parameters.get(
+                            "model_name", "yolo"
+                        ),
+                        "confidence_threshold": execution_request.parameters.get(
+                            "confidence_threshold", 0.5
+                        ),
+                        "draw_boxes": True,
                     },
-                    "dependencies": ["resize-step"]
+                    "dependencies": ["resize-step"],
                 },
                 {
                     "stepId": "filter-step",
-                    "componentName": "filter", 
+                    "componentName": "filter",
                     "parameters": {
-                        "filter_type": execution_request.parameters.get("filter_type", "gaussian"),
-                        "intensity": execution_request.parameters.get("filter_intensity", 1.0)
+                        "filter_type": execution_request.parameters.get(
+                            "filter_type", "gaussian"
+                        ),
+                        "intensity": execution_request.parameters.get(
+                            "filter_intensity", 1.0
+                        ),
                     },
-                    "dependencies": ["ai-detection-step"]
-                }
+                    "dependencies": ["ai-detection-step"],
+                },
             ],
             "globalParameters": {
                 "inputPath": input_files[0] if input_files else None,
-                "executionId": execution_request.pipeline_id
-            }
+                "executionId": execution_request.pipeline_id,
+            },
         }
 
     async def _notify_execution_update(self, execution: Execution):
@@ -206,9 +306,54 @@ class ExecutionService:
         websocket_manager = self.get_websocket_manager()
         if websocket_manager:
             try:
-                await websocket_manager.broadcast_execution_update(execution)
+                # Convert execution to dict for broadcasting
+                execution_dict = execution.dict()
+                await websocket_manager.broadcast_execution_update(execution.execution_id, execution_dict)
             except Exception as e:
                 logger.warning(f"Failed to broadcast execution update: {e}")
+
+    async def _get_file_info(self, file_path: str) -> tuple[int, str]:
+        """MinIOからファイルサイズとコンテンツタイプを取得"""
+        try:
+            # FileServiceを使用してMinIOからファイル情報を取得
+            file_info = await self.file_service.get_file_info(file_path)
+
+            if file_info:
+                file_size = file_info.get("size", 0)
+                content_type = file_info.get("content_type", "application/octet-stream")
+
+                # ファイル拡張子からコンテンツタイプを推定（MinIOから取得できない場合のフォールバック）
+                if content_type == "application/octet-stream":
+                    content_type = self._guess_content_type_from_filename(file_path)
+
+                return file_size, content_type
+            else:
+                # ファイル情報が取得できない場合のフォールバック
+                return 0, self._guess_content_type_from_filename(file_path)
+
+        except Exception as e:
+            logger.warning(f"Failed to get file info for {file_path}: {e}")
+            # エラーの場合はファイル名から推定
+            return 0, self._guess_content_type_from_filename(file_path)
+
+    def _guess_content_type_from_filename(self, filename: str) -> str:
+        """ファイル名からコンテンツタイプを推定"""
+        import os
+
+        ext = os.path.splitext(filename)[1].lower()
+        content_type_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".webp": "image/webp",
+            ".tiff": "image/tiff",
+            ".tif": "image/tiff",
+            ".svg": "image/svg+xml",
+        }
+
+        return content_type_map.get(ext, "image/jpeg")  # デフォルトはJPEG
 
     async def get_execution(self, execution_id: str) -> Optional[Execution]:
         """実行状況を取得"""
@@ -256,7 +401,10 @@ class ExecutionService:
         return running_executions
 
     async def update_execution_status(
-        self, execution_id: str, status: ExecutionStatus, progress_data: dict = None
+        self,
+        execution_id: str,
+        status: ExecutionStatus,
+        progress_data: Optional[dict] = None,
     ):
         """実行状況を更新（Kafkaコンシューマーから呼び出される）"""
         execution = self.executions.get(execution_id)

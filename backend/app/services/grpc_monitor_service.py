@@ -316,44 +316,6 @@ class GRPCMonitorService:
             logger.error(f"Unexpected error restarting service {service_name}: {e}")
             return False
 
-    async def _get_pod_info(self, service_info: Dict[str, Any]) -> Dict[str, Any]:
-        """ポッド情報を取得"""
-        if not self.k8s_core_v1:
-            return {}
-
-        try:
-            namespace = service_info["namespace"]
-            deployment_name = service_info["deployment"]
-
-            # ラベルセレクタでポッドを検索
-            label_selector = f"app={deployment_name.replace('-deployment', '')}"
-            pods = self.k8s_core_v1.list_namespaced_pod(
-                namespace=namespace, label_selector=label_selector
-            )
-
-            if pods.items:
-                pod = pods.items[0]  # 最初のポッドを取得
-                return {
-                    "name": pod.metadata.name,
-                    "status": pod.status.phase,
-                    "restart_count": sum(
-                        [
-                            container.restart_count
-                            for container in pod.status.container_statuses or []
-                        ]
-                    ),
-                    "created_time": (
-                        pod.metadata.creation_timestamp.isoformat()
-                        if pod.metadata.creation_timestamp
-                        else None
-                    ),
-                    "node_name": pod.spec.node_name,
-                }
-
-        except Exception as e:
-            logger.error(f"Failed to get pod info: {e}")
-
-        return {}
 
     async def _get_service_uptime(self, service_name: str) -> Optional[str]:
         """サービスのアップタイムを取得"""

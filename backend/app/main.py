@@ -18,6 +18,7 @@ from app.api import (
 )
 from app.services.execution_worker import execution_worker
 from app.database import init_db
+from app.services.websocket_manager import ConnectionManager
 
 # ログ設定を早期に初期化
 logging.basicConfig(
@@ -40,6 +41,9 @@ app = FastAPI(
     description="Dynamic image processing pipeline API",
     version="1.0.0",
 )
+
+# WebSocketマネージャーのグローバルインスタンス
+manager = ConnectionManager()
 
 
 # データベース初期化
