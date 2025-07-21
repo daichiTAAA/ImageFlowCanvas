@@ -1,4 +1,12 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Depends
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    HTTPException,
+    UploadFile,
+    File,
+    Depends,
+)
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
@@ -13,7 +21,7 @@ import sys
 import os
 
 # Add generated proto path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../generated/python'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../generated/python"))
 
 import grpc
 from imageflow.v1 import camera_stream_pb2
@@ -36,17 +44,16 @@ connected_clients: Dict[str, WebSocket] = {}
 pipeline_service = PipelineService()
 
 
-@router.get("/v1/camera-stream/pipelines")
+@router.get("/camera-stream/pipelines")
 async def get_available_pipelines(
-    user=Depends(get_current_user), 
-    db: AsyncSession = Depends(get_db)
+    user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """
     Get list of available pipelines for real-time camera stream processing
     """
     try:
         pipelines = await pipeline_service.get_all_pipelines(db)
-        
+
         # Format pipelines for camera stream usage
         camera_pipelines = []
         for pipeline in pipelines:
@@ -54,32 +61,34 @@ async def get_available_pipelines(
             # (contains supported component types)
             supported_components = {"resize", "ai_detection", "filter"}
             has_supported_components = any(
-                comp.component_type in supported_components 
+                comp.component_type in supported_components
                 for comp in pipeline.components
             )
-            
+
             if has_supported_components:
-                camera_pipelines.append({
-                    "id": pipeline.id,
-                    "name": pipeline.name,
-                    "description": pipeline.description,
-                    "components": [
-                        {
-                            "name": comp.name,
-                            "type": comp.component_type,
-                            "parameters": comp.parameters
-                        }
-                        for comp in pipeline.components
-                        if comp.component_type in supported_components
-                    ]
-                })
-        
+                camera_pipelines.append(
+                    {
+                        "id": pipeline.id,
+                        "name": pipeline.name,
+                        "description": pipeline.description,
+                        "components": [
+                            {
+                                "name": comp.name,
+                                "type": comp.component_type,
+                                "parameters": comp.parameters,
+                            }
+                            for comp in pipeline.components
+                            if comp.component_type in supported_components
+                        ],
+                    }
+                )
+
         return {
             "pipelines": camera_pipelines,
             "supported_components": list(supported_components),
-            "message": f"Found {len(camera_pipelines)} pipelines suitable for real-time processing"
+            "message": f"Found {len(camera_pipelines)} pipelines suitable for real-time processing",
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching pipelines for camera stream: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch pipelines: {e}")
@@ -87,9 +96,11 @@ async def get_available_pipelines(
 
 class CameraStreamManager:
     def __init__(self):
-        self.camera_stream_endpoint = os.getenv("CAMERA_STREAM_GRPC_ENDPOINT", "camera-stream-grpc-service:9090")
+        self.camera_stream_endpoint = os.getenv(
+            "CAMERA_STREAM_GRPC_ENDPOINT", "camera-stream-grpc-service:9090"
+        )
         self.active_streams: Dict[str, asyncio.Task] = {}
-        
+
     def get_camera_stream_client(self):
         """Get gRPC client for camera stream service"""
         channel = grpc.insecure_channel(self.camera_stream_endpoint)
@@ -107,33 +118,31 @@ async def camera_stream_websocket(websocket: WebSocket, source_id: str):
     """
     await websocket.accept()
     connected_clients[source_id] = websocket
-    
+
     logger.info(f"Camera stream WebSocket connected for source: {source_id}")
-    
+
     try:
         # Start gRPC streaming task
-        stream_task = asyncio.create_task(
-            handle_grpc_streaming(websocket, source_id)
-        )
+        stream_task = asyncio.create_task(handle_grpc_streaming(websocket, source_id))
         stream_manager.active_streams[source_id] = stream_task
-        
+
         # Keep connection alive and handle incoming frames
         async for data in websocket.iter_text():
             try:
                 message = json.loads(data)
-                
+
                 if message.get("type") == "frame":
                     # Process incoming frame
                     await process_incoming_frame(message, source_id)
                 elif message.get("type") == "config":
                     # Handle configuration updates
                     await handle_config_update(message, source_id)
-                    
+
             except json.JSONDecodeError:
                 logger.error(f"Invalid JSON received from {source_id}")
             except Exception as e:
                 logger.error(f"Error processing message from {source_id}: {e}")
-                
+
     except WebSocketDisconnect:
         logger.info(f"Camera stream WebSocket disconnected for source: {source_id}")
     except Exception as e:
@@ -153,13 +162,13 @@ async def handle_grpc_streaming(websocket: WebSocket, source_id: str):
     """
     try:
         client = stream_manager.get_camera_stream_client()
-        
+
         # Create a queue for frames to be sent to gRPC service
         frame_queue = asyncio.Queue()
-        
+
         # Store frame queue for this source
-        setattr(websocket, 'frame_queue', frame_queue)
-        
+        setattr(websocket, "frame_queue", frame_queue)
+
         async def frame_generator():
             """Generator for frames to send to gRPC service"""
             while True:
@@ -170,12 +179,12 @@ async def handle_grpc_streaming(websocket: WebSocket, source_id: str):
                     yield frame
                 except asyncio.CancelledError:
                     break
-        
+
         # Start gRPC streaming
         async def process_grpc_stream():
             try:
                 response_stream = client.ProcessVideoStream(frame_generator())
-                
+
                 # Process responses from gRPC service
                 async for processed_frame in response_stream:
                     try:
@@ -194,26 +203,28 @@ async def handle_grpc_streaming(websocket: WebSocket, source_id: str):
                                         "y1": detection.bbox.y1,
                                         "x2": detection.bbox.x2,
                                         "y2": detection.bbox.y2,
-                                    }
+                                    },
                                 }
                                 for detection in processed_frame.detections
-                            ]
+                            ],
                         }
-                        
+
                         if processed_frame.error_message:
                             response_data["error"] = processed_frame.error_message
-                        
+
                         await websocket.send_text(json.dumps(response_data))
-                        
+
                     except Exception as e:
-                        logger.error(f"Error sending processed frame to {source_id}: {e}")
+                        logger.error(
+                            f"Error sending processed frame to {source_id}: {e}"
+                        )
                         break
             except Exception as e:
                 logger.error(f"gRPC streaming error for {source_id}: {e}")
-        
+
         # Run the gRPC stream processing
         await process_grpc_stream()
-                
+
     except grpc.RpcError as e:
         logger.error(f"gRPC streaming error for {source_id}: {e}")
     except Exception as e:
@@ -230,32 +241,32 @@ async def process_incoming_frame(message: dict, source_id: str):
         if not frame_data_b64:
             logger.error(f"No frame data in message from {source_id}")
             return
-        
+
         # Decode base64 frame data
         frame_data = base64.b64decode(frame_data_b64)
-        
+
         # Create VideoFrame message
         video_frame = camera_stream_pb2.VideoFrame()
         video_frame.frame_data = frame_data
         video_frame.timestamp_ms = message.get("timestamp_ms", 0)
-        
+
         # Set metadata
         metadata = video_frame.metadata
         metadata.source_id = source_id
         metadata.width = message.get("width", 0)
         metadata.height = message.get("height", 0)
         metadata.pipeline_id = message.get("pipeline_id", "ai_detection")
-        
+
         # Add processing parameters
         processing_params = message.get("processing_params", {})
         for key, value in processing_params.items():
             metadata.processing_params[key] = str(value)
-        
+
         # Send frame to gRPC service via queue
         websocket = connected_clients.get(source_id)
-        if websocket and hasattr(websocket, 'frame_queue'):
+        if websocket and hasattr(websocket, "frame_queue"):
             await websocket.frame_queue.put(video_frame)
-        
+
     except Exception as e:
         logger.error(f"Error processing incoming frame from {source_id}: {e}")
 
@@ -267,26 +278,26 @@ async def handle_config_update(message: dict, source_id: str):
     try:
         config = message.get("config", {})
         logger.info(f"Config update for {source_id}: {config}")
-        
+
         # Send acknowledgment
         websocket = connected_clients.get(source_id)
         if websocket:
             response = {
                 "type": "config_ack",
                 "source_id": source_id,
-                "status": "updated"
+                "status": "updated",
             }
             await websocket.send_text(json.dumps(response))
-            
+
     except Exception as e:
         logger.error(f"Error handling config update for {source_id}: {e}")
 
 
-@router.post("/v1/camera-stream/test-frame")
+@router.post("/camera-stream/test-frame")
 async def test_frame_processing(
     file: UploadFile = File(...),
     pipeline_id: str = "ai_detection",
-    source_id: str = "test_camera"
+    source_id: str = "test_camera",
 ):
     """
     Test endpoint for single frame processing via camera stream service
@@ -294,36 +305,36 @@ async def test_frame_processing(
     try:
         # Read uploaded image
         image_data = await file.read()
-        
+
         # Validate image
         try:
             image = Image.open(io.BytesIO(image_data))
             width, height = image.size
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid image format: {e}")
-        
+
         # Create gRPC client
         client = stream_manager.get_camera_stream_client()
-        
+
         # Create VideoFrame
         video_frame = camera_stream_pb2.VideoFrame()
         video_frame.frame_data = image_data
         video_frame.timestamp_ms = int(asyncio.get_event_loop().time() * 1000)
-        
+
         metadata = video_frame.metadata
         metadata.source_id = source_id
         metadata.width = width
         metadata.height = height
         metadata.pipeline_id = pipeline_id
-        
+
         # Process single frame (simulate streaming with single frame)
         async def single_frame_generator():
             yield video_frame
-        
+
         # Get response using asyncio to handle the streaming properly
         try:
             response_stream = client.ProcessVideoStream(single_frame_generator())
-            
+
             # Get first (and only) response
             async for processed_frame in response_stream:
                 result = {
@@ -339,32 +350,36 @@ async def test_frame_processing(
                                 "y1": detection.bbox.y1,
                                 "x2": detection.bbox.x2,
                                 "y2": detection.bbox.y2,
-                            }
+                            },
                         }
                         for detection in processed_frame.detections
-                    ]
+                    ],
                 }
-                
+
                 if processed_frame.error_message:
                     result["error"] = processed_frame.error_message
-                
+
                 return result
         except Exception as e:
             logger.error(f"Error in gRPC stream: {e}")
             raise HTTPException(status_code=500, detail=f"gRPC streaming error: {e}")
-        
+
         # If no response received
-        raise HTTPException(status_code=500, detail="No response from camera stream service")
-        
+        raise HTTPException(
+            status_code=500, detail="No response from camera stream service"
+        )
+
     except grpc.RpcError as e:
         logger.error(f"gRPC error in test frame processing: {e}")
-        raise HTTPException(status_code=500, detail=f"gRPC service error: {e.details()}")
+        raise HTTPException(
+            status_code=500, detail=f"gRPC service error: {e.details()}"
+        )
     except Exception as e:
         logger.error(f"Error in test frame processing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/v1/camera-stream/status")
+@router.get("/camera-stream/status")
 async def get_streaming_status():
     """
     Get status of active camera streams
@@ -372,5 +387,5 @@ async def get_streaming_status():
     return {
         "active_streams": list(stream_manager.active_streams.keys()),
         "connected_clients": list(connected_clients.keys()),
-        "total_active": len(stream_manager.active_streams)
+        "total_active": len(stream_manager.active_streams),
     }

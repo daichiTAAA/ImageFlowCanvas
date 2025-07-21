@@ -131,7 +131,7 @@ export const CameraStream: React.FC = () => {
       // Connect to WebSocket
       const wsUrl = `${
         window.location.protocol === "https:" ? "wss:" : "ws:"
-      }//${window.location.host}/api/ws/camera-stream/pc_camera`;
+      }//${window.location.host}/ws/camera-stream/pc_camera`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
