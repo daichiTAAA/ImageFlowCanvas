@@ -64,6 +64,7 @@ build_service "resize-grpc" "$BASE_DIR/services/resize-grpc-app"
 build_service "ai-detection-grpc" "$BASE_DIR/services/ai-detection-grpc-app"
 build_service "filter-grpc" "$BASE_DIR/services/filter-grpc-app"
 build_service "grpc-gateway" "$BASE_DIR/services/grpc-gateway"
+build_service "camera-stream-grpc" "$BASE_DIR/services/camera-stream-grpc-app"
 
 echo "✅ All gRPC services built successfully!"
 
@@ -76,6 +77,7 @@ if [ "$PUSH" != "true" || "$DEPLOY" != "true" ]; then
     docker save "$REGISTRY/ai-detection-grpc:$TAG" | sudo k3s ctr images import -
     docker save "$REGISTRY/filter-grpc:$TAG" | sudo k3s ctr images import -
     docker save "$REGISTRY/grpc-gateway:$TAG" | sudo k3s ctr images import -
+    docker save "$REGISTRY/camera-stream-grpc:$TAG" | sudo k3s ctr images import -
     
     echo "✅ All gRPC images imported to K3s cluster!"
 fi
@@ -87,6 +89,7 @@ if [ "$PUSH" = "true" ]; then
     docker push "$REGISTRY/ai-detection-grpc:$TAG"
     docker push "$REGISTRY/filter-grpc:$TAG"
     docker push "$REGISTRY/grpc-gateway:$TAG"
+    docker push "$REGISTRY/camera-stream-grpc:$TAG"
     echo "✅ All gRPC images pushed to registry!"
 fi
 
@@ -109,6 +112,7 @@ if [ "$DEPLOY" = "true" ]; then
     kubectl rollout restart -n image-processing deployment/ai-detection-grpc-service
     kubectl rollout restart -n image-processing deployment/filter-grpc-service
     kubectl rollout restart -n image-processing deployment/grpc-gateway
+    kubectl rollout restart -n image-processing deployment/camera-stream-grpc-service
 
     echo "✅ gRPC services deployment completed!"
 fi
