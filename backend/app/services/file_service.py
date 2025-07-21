@@ -1,9 +1,11 @@
 from fastapi import UploadFile
 import os
 import uuid
-from typing import Tuple
+from typing import Tuple, List, Dict
 import aiofiles
 from io import BytesIO
+import json
+from datetime import datetime
 
 # Optional MinIO import for cases where MinIO is not available
 try:
@@ -219,3 +221,106 @@ class FileService:
             else:
                 print(f"Failed to get file info for {file_path}: {e}")
                 return None
+
+    async def list_files(
+        self, prefix: str = "", file_extension: str = None
+    ) -> List[Dict]:
+        """ファイル一覧を取得"""
+        if not self.minio_available:
+            # Mock mode
+            files = []
+            for file_id, file_data in self.mock_storage.items():
+                filename = file_data["filename"]
+                if prefix and not filename.startswith(prefix):
+                    continue
+                if file_extension and not filename.endswith(file_extension):
+                    continue
+
+                files.append(
+                    {
+                        "file_id": file_id,
+                        "filename": filename,
+                        "content_type": file_data["content_type"],
+                        "size": len(file_data["content"]),
+                        "last_modified": datetime.now().isoformat(),
+                    }
+                )
+            return files
+
+        try:
+            objects = self.minio_client.list_objects(
+                self.bucket_name, prefix=prefix, recursive=True
+            )
+
+            files = []
+            for obj in objects:
+                # Filter by file extension if specified
+                if file_extension and not obj.object_name.endswith(file_extension):
+                    continue
+
+                files.append(
+                    {
+                        "file_id": obj.object_name,
+                        "filename": os.path.basename(obj.object_name),
+                        "object_name": obj.object_name,
+                        "size": obj.size,
+                        "last_modified": (
+                            obj.last_modified.isoformat() if obj.last_modified else None
+                        ),
+                        "etag": obj.etag,
+                        "content_type": self._get_content_type_from_extension(
+                            obj.object_name
+                        ),
+                    }
+                )
+
+            return files
+        except Exception as e:
+            print(f"Failed to list files: {e}")
+            return []
+
+    async def get_json_content(self, file_path: str) -> Dict:
+        """JSONファイルの内容を取得"""
+        if not self.minio_available:
+            # Mock mode
+            file_id = os.path.basename(file_path)
+            if file_id in self.mock_storage:
+                try:
+                    content = self.mock_storage[file_id]["content"].decode("utf-8")
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid JSON content")
+            raise FileNotFoundError("File not found")
+
+        try:
+            object_name = file_path
+            if file_path.startswith("/"):
+                object_name = file_path[1:]
+
+            response = self.minio_client.get_object(self.bucket_name, object_name)
+            content = response.read().decode("utf-8")
+            return json.loads(content)
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON content")
+        except Exception as e:
+            if hasattr(e, "code") and e.code == "NoSuchKey":
+                raise FileNotFoundError("File not found")
+            raise Exception(f"Failed to get JSON content: {e}")
+
+    def _get_content_type_from_extension(self, filename: str) -> str:
+        """ファイル拡張子からコンテンツタイプを推定"""
+        ext = os.path.splitext(filename)[1].lower()
+        content_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".webp": "image/webp",
+            ".json": "application/json",
+            ".txt": "text/plain",
+            ".csv": "text/csv",
+            ".xml": "application/xml",
+            ".pdf": "application/pdf",
+        }
+        return content_types.get(ext, "application/octet-stream")

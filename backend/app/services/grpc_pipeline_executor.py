@@ -326,6 +326,12 @@ class GRPCPipelineExecutor:
         timeout = self.grpc_services["ai_detection"]["timeout"]
         response = await client.DetectObjects(request, timeout=timeout)
 
+        # Extract metadata from gRPC response
+        grpc_metadata = {}
+        if hasattr(response.result, 'metadata') and response.result.metadata:
+            for key, value in response.result.metadata.items():
+                grpc_metadata[key] = value
+
         return {
             "output_path": response.result.output_image.object_key,
             "metadata": {
@@ -344,6 +350,7 @@ class GRPCPipelineExecutor:
                     for det in response.detections
                 ],
                 "processing_time_ms": response.result.processing_time_seconds * 1000,
+                **grpc_metadata,  # Include the gRPC metadata containing json_output_file
             },
         }
 

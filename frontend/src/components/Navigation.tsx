@@ -5,6 +5,7 @@ import {
   Dashboard as DashboardIcon,
   Build as BuildIcon,
   Timeline as TimelineIcon,
+  Storage as StorageIcon,
 } from "@mui/icons-material";
 
 export const Navigation: React.FC = () => {

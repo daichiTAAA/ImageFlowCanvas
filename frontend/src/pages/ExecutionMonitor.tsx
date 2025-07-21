@@ -175,11 +175,52 @@ export const ExecutionMonitor: React.FC = () => {
 
   const handleJsonPreview = async (fileId: string, filename: string) => {
     try {
-      const response = await apiService.downloadFile(fileId);
-      const content = await response.text();
+      // JSONファイルかどうか確認
+      if (!filename.toLowerCase().endsWith('.json')) {
+        throw new Error("このファイルはJSONファイルではありません");
+      }
+
+      console.log(`JSONプレビュー要求: fileId=${fileId}, filename=${filename}`);
+      
+      // Use the new JSON preview API endpoint
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`/v1/files/${fileId}/preview`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`JSONファイルの読み込みに失敗しました: ${response.status}`);
+      }
+
+      const jsonData = await response.json();
+      const content = JSON.stringify(jsonData, null, 2);
       setJsonPreviewDialog({ open: true, fileId, filename, content });
     } catch (error) {
       console.error("Failed to load JSON file:", error);
+      // Fallback to original method if the new API fails
+      try {
+        console.log("フォールバック: downloadFile を使用");
+        const response = await apiService.downloadFile(fileId);
+        const content = await response.text();
+        
+        // バイナリデータ（画像など）でないか確認
+        if (content.startsWith('\uFFFD') || content.includes('JFIF')) {
+          throw new Error("このファイルはJSONファイルではありません（バイナリデータ）");
+        }
+        
+        setJsonPreviewDialog({ open: true, fileId, filename, content });
+      } catch (fallbackError) {
+        console.error("フォールバック方法も失敗:", fallbackError);
+        setJsonPreviewDialog({ 
+          open: true, 
+          fileId, 
+          filename, 
+          content: `エラー: JSONファイルの読み込みに失敗しました\n\n原因: ${fallbackError.message}`
+        });
+      }
     }
   };
 
@@ -328,7 +369,9 @@ export const ExecutionMonitor: React.FC = () => {
   };
 
   const isJsonFile = (filename: string) => {
-    return filename.toLowerCase().endsWith(".json");
+    const result = filename.toLowerCase().endsWith(".json");
+    console.log(`🔍 isJsonFile チェック: ${filename} -> ${result}`);
+    return result;
   };
 
   const getFileType = (filename: string) => {
@@ -690,7 +733,7 @@ export const ExecutionMonitor: React.FC = () => {
                 }`}
               />
               <Tab
-                label={`ファイル一覧 ${
+                label={`全ファイル ${
                   execution.output_files.length > 0
                     ? `(${execution.output_files.length})`
                     : ""
@@ -725,8 +768,13 @@ export const ExecutionMonitor: React.FC = () => {
                         getProcessingOrder(a.filename) -
                         getProcessingOrder(b.filename)
                     )
-                    .map((file, index) => (
-                      <Grid item xs={12} sm={6} md={4} key={file.file_id}>
+                    .map((file, index, sortedFiles) => {
+                      // 同じ処理順序のファイルは同じ番号を表示
+                      const currentOrder = getProcessingOrder(file.filename);
+                      const displayOrder = [...new Set(sortedFiles.map(f => getProcessingOrder(f.filename)))].indexOf(currentOrder) + 1;
+                      
+                      return (
+                        <Grid item xs={12} sm={6} md={4} key={file.file_id}>
                         <Card>
                           <CardContent>
                             <Box
@@ -746,7 +794,7 @@ export const ExecutionMonitor: React.FC = () => {
                                 }}
                               >
                                 <Chip
-                                  label={`処理順 ${index + 1}`}
+                                  label={`処理順 ${displayOrder}`}
                                   color="secondary"
                                   size="small"
                                   sx={{
@@ -835,14 +883,16 @@ export const ExecutionMonitor: React.FC = () => {
                             </Box>
                           </CardContent>
                         </Card>
-                      </Grid>
-                    ))}
+                        </Grid>
+                      );
+                    })}
                 </Grid>
               )}
             </Box>
           )}
 
-          {/* ファイル一覧タブ */}
+
+          {/* 全ファイル一覧タブ */}
           {resultsTabValue === 1 && (
             <Box>
               <Typography variant="h6" gutterBottom>
@@ -872,11 +922,16 @@ export const ExecutionMonitor: React.FC = () => {
                             getProcessingOrder(a.filename) -
                             getProcessingOrder(b.filename)
                         )
-                        .map((file: any, index: number) => (
-                          <TableRow key={file.file_id}>
+                        .map((file: any, index: number, sortedFiles: any[]) => {
+                          // 同じ処理順序のファイルは同じ番号を表示
+                          const currentOrder = getProcessingOrder(file.filename);
+                          const displayOrder = [...new Set(sortedFiles.map(f => getProcessingOrder(f.filename)))].indexOf(currentOrder) + 1;
+                          
+                          return (
+                            <TableRow key={file.file_id}>
                             <TableCell>
                               <Chip
-                                label={`処理順 ${index + 1}`}
+                                label={`処理順 ${displayOrder}`}
                                 color="secondary"
                                 size="small"
                                 sx={{
@@ -947,7 +1002,8 @@ export const ExecutionMonitor: React.FC = () => {
                               </Box>
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -1140,8 +1196,29 @@ export const ExecutionMonitor: React.FC = () => {
               fontFamily: "monospace",
             }}
           >
-            {jsonPreviewDialog.content &&
-              JSON.stringify(JSON.parse(jsonPreviewDialog.content), null, 2)}
+            {(() => {
+              try {
+                if (!jsonPreviewDialog.content) return "コンテンツがありません";
+                
+                // 既にフォーマット済みの場合はそのまま表示
+                if (typeof jsonPreviewDialog.content === 'string' && 
+                    jsonPreviewDialog.content.startsWith('{') || 
+                    jsonPreviewDialog.content.startsWith('[')) {
+                  try {
+                    // JSONとして有効かチェック
+                    const parsed = JSON.parse(jsonPreviewDialog.content);
+                    return JSON.stringify(parsed, null, 2);
+                  } catch {
+                    // 既にフォーマット済みの文字列の場合はそのまま表示
+                    return jsonPreviewDialog.content;
+                  }
+                }
+                return jsonPreviewDialog.content;
+              } catch (error) {
+                console.error("JSON表示エラー:", error);
+                return `エラー: JSONファイルの表示に失敗しました\n${error.message}`;
+              }
+            })()}
           </Box>
         </DialogContent>
         <DialogActions>

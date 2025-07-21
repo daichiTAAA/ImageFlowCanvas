@@ -233,6 +233,18 @@ class ApiService {
     return response.data
   }
 
+  async getFiles(): Promise<any[]> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/files/')
+    return response.data.files || response.data
+  }
+
+  async getFileContent(fileId: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/files/${fileId}/preview`)
+    return response.data
+  }
+
   async downloadFile(fileId: string): Promise<Blob> {
     const api = this.ensureApiInitialized()
     const response = await api.get(`/files/${fileId}`, {

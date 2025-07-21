@@ -185,7 +185,9 @@ class ExecutionService:
 
                 # Add results from each step
                 if "results" in result:
+                    print(f"🔍 Found {len(result['results'])} step results")
                     for step_id, step_result in result["results"].items():
+                        print(f"🔍 Processing step {step_id}: {step_result}")
                         if "output_path" in step_result and step_result["output_path"]:
                             output_path = step_result["output_path"]
                             filename = os.path.basename(output_path)
@@ -206,6 +208,34 @@ class ExecutionService:
                                     content_type=content_type,
                                 )
                                 output_files.append(output_file)
+                        
+                        # Check for additional files in metadata (e.g., JSON detection files)
+                        if "metadata" in step_result:
+                            metadata = step_result["metadata"]
+                            print(f"🔍 Found metadata: {metadata}")
+                            if "json_output_file" in metadata:
+                                json_filename = metadata["json_output_file"]
+                                json_content_type = metadata.get("json_content_type", "application/json")
+                                
+                                print(f"🎯 Processing JSON file: {json_filename}")
+                                
+                                # Get JSON file info
+                                json_file_size, _ = await self._get_file_info(json_filename)
+                                # Use full filename as file_id for JSON files to avoid conflicts
+                                json_file_id = json_filename
+                                
+                                json_output_file = OutputFile(
+                                    file_id=json_file_id,
+                                    filename=json_filename,
+                                    file_size=json_file_size,
+                                    content_type=json_content_type,
+                                )
+                                output_files.append(json_output_file)
+                                print(f"✅ Added JSON file: {json_filename}")
+                            else:
+                                print("❌ No json_output_file in metadata")
+                        else:
+                            print("❌ No metadata in step_result")
 
                 # Add final output if available and not already included
                 if "final_output_path" in result and result["final_output_path"]:
@@ -424,9 +454,13 @@ class ExecutionService:
             ".tiff": "image/tiff",
             ".tif": "image/tiff",
             ".svg": "image/svg+xml",
+            ".json": "application/json",
+            ".txt": "text/plain",
+            ".csv": "text/csv",
+            ".xml": "application/xml",
         }
 
-        return content_type_map.get(ext, "image/jpeg")  # デフォルトはJPEG
+        return content_type_map.get(ext, "application/octet-stream")  # デフォルトを変更
 
     async def get_execution(self, execution_id: str) -> Optional[Execution]:
         """実行状況を取得"""

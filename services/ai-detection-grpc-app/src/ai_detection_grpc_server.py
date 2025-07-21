@@ -152,33 +152,71 @@ class AIDetectionServiceImplementation(
             )
             logger.info(f"Uploaded detection result to {output_path}")
 
-            # Save detection metadata with consistent naming
-            metadata_path = output_path.replace(".png", "_detections.json").replace(
-                ".jpg", "_detections.json"
+            # Save detection metadata with enhanced information
+            metadata_path = output_path.replace(".png", ".json").replace(
+                ".jpg", ".json"
             )
             detection_data = {
+                "execution_id": request.execution_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "image_info": {
+                    "input_file": request.input_image.object_key,
+                    "output_file": output_path,
+                    "width": original_width,
+                    "height": original_height,
+                },
+                "model_info": {
+                    "name": request.model_name,
+                    "version": "v1.0",
+                    "confidence_threshold": request.confidence_threshold,
+                    "nms_threshold": request.nms_threshold,
+                },
+                "processing_info": {
+                    "inference_time_ms": inference_time * 1000,
+                    "total_processing_time_ms": (time.time() - start_time) * 1000,
+                },
                 "detections": [
                     {
                         "class_name": det["class_name"],
                         "confidence": det["confidence"],
                         "bbox": det["bbox"],
                         "class_id": det["class_id"],
+                        "bbox_area": (det["bbox"]["x2"] - det["bbox"]["x1"])
+                        * (det["bbox"]["y2"] - det["bbox"]["y1"]),
+                        "bbox_center": {
+                            "x": (det["bbox"]["x1"] + det["bbox"]["x2"]) / 2,
+                            "y": (det["bbox"]["y1"] + det["bbox"]["y2"]) / 2,
+                        },
                     }
                     for det in detections
                 ],
-                "model_name": request.model_name,
-                "confidence_threshold": request.confidence_threshold,
-                "total_detections": len(detections),
+                "summary": {
+                    "total_detections": len(detections),
+                    "classes_detected": list(
+                        set([det["class_name"] for det in detections])
+                    ),
+                    "highest_confidence": (
+                        max([det["confidence"] for det in detections])
+                        if detections
+                        else 0.0
+                    ),
+                    "average_confidence": (
+                        sum([det["confidence"] for det in detections]) / len(detections)
+                        if detections
+                        else 0.0
+                    ),
+                },
             }
 
             with open(f"/tmp/metadata_{request.execution_id}.json", "w") as f:
-                json.dump(detection_data, f)
+                json.dump(detection_data, f, indent=2, ensure_ascii=False)
 
             self.minio_client.fput_object(
                 request.input_image.bucket,
                 metadata_path,
                 f"/tmp/metadata_{request.execution_id}.json",
             )
+            logger.info(f"Uploaded detection JSON metadata to {metadata_path}")
 
             # Cleanup local files
             for temp_file in [
@@ -208,6 +246,11 @@ class AIDetectionServiceImplementation(
             )
             response.result.output_image.width = original_width
             response.result.output_image.height = original_height
+
+            # Add JSON detection file info to metadata
+            json_filename = f"{request.execution_id}_detected.json"
+            response.result.metadata["json_output_file"] = json_filename
+            response.result.metadata["json_content_type"] = "application/json"
 
             # Set timestamp
             now = Timestamp()
@@ -254,42 +297,88 @@ class AIDetectionServiceImplementation(
     def _perform_object_detection(
         self, image, model_name, confidence_threshold, nms_threshold
     ):
-        """Mock object detection implementation"""
-        # This is a simplified mock implementation
-        # In a real scenario, this would call Triton Inference Server
-
+        """Actual YOLO object detection implementation using ultralytics"""
         logger.info(
             f"Running {model_name} detection with confidence threshold {confidence_threshold}"
         )
 
-        # Mock detection results
-        detections = [
-            {
-                "class_name": "person",
-                "confidence": 0.85,
-                "class_id": 0,
-                "bbox": {"x1": 100.0, "y1": 50.0, "x2": 200.0, "y2": 300.0},
-            },
-            {
-                "class_name": "car",
-                "confidence": 0.72,
-                "class_id": 2,
-                "bbox": {"x1": 300.0, "y1": 200.0, "x2": 500.0, "y2": 350.0},
-            },
-        ]
+        try:
+            # Import ultralytics for YOLO detection
+            from ultralytics import YOLO
 
-        # Filter by confidence threshold
-        filtered_detections = [
-            det for det in detections if det["confidence"] >= confidence_threshold
-        ]
+            # Load YOLO model (will download if not exists)
+            if model_name.lower() in ["yolo", "yolo11", "yolov11"]:
+                model = YOLO("yolo11n.pt")  # Use YOLO11 nano model
+            elif model_name.lower() in ["yolov8", "yolo8"]:
+                model = YOLO("yolov8n.pt")  # Use YOLOv8 nano model
+            else:
+                # Default to YOLO11
+                model = YOLO("yolo11n.pt")
 
-        return filtered_detections
+            # Run inference
+            results = model(
+                image, conf=confidence_threshold, iou=nms_threshold, verbose=False
+            )
+
+            detections = []
+            for result in results:
+                if result.boxes is not None:
+                    for box in result.boxes:
+                        # Get detection data
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        confidence = float(box.conf[0].cpu().numpy())
+                        class_id = int(box.cls[0].cpu().numpy())
+
+                        # Get class name from model names
+                        class_name = (
+                            model.names[class_id]
+                            if class_id < len(model.names)
+                            else f"class_{class_id}"
+                        )
+
+                        detection = {
+                            "class_name": class_name,
+                            "confidence": confidence,
+                            "class_id": class_id,
+                            "bbox": {
+                                "x1": float(x1),
+                                "y1": float(y1),
+                                "x2": float(x2),
+                                "y2": float(y2),
+                            },
+                        }
+                        detections.append(detection)
+
+            logger.info(
+                f"Detected {len(detections)} objects: {[d['class_name'] for d in detections]}"
+            )
+            return detections
+
+        except Exception as e:
+            logger.error(f"Error in YOLO detection: {str(e)}")
+            # Fallback to mock detection on error
+            logger.warning("Falling back to mock detection due to error")
+            detections = [
+                {
+                    "class_name": "error_fallback",
+                    "confidence": 0.5,
+                    "class_id": 999,
+                    "bbox": {"x1": 100.0, "y1": 50.0, "x2": 200.0, "y2": 300.0},
+                },
+            ]
+            return detections
 
     def _draw_bounding_boxes(self, image, detections):
-        """Draw bounding boxes on image"""
+        """Draw bounding boxes on image with enhanced labels"""
         colors = {
             "person": (0, 255, 0),  # Green
             "car": (255, 0, 0),  # Blue
+            "horse": (255, 255, 0),  # Cyan
+            "dog": (255, 0, 255),  # Magenta
+            "cat": (0, 255, 255),  # Yellow
+            "bird": (128, 0, 128),  # Purple
+            "bicycle": (255, 128, 0),  # Orange
+            "motorcycle": (0, 128, 255),  # Light blue
             "default": (0, 0, 255),  # Red
         }
 
@@ -309,16 +398,48 @@ class AIDetectionServiceImplementation(
                 2,
             )
 
-            # Draw label
+            # Create label with background
             label = f"{class_name}: {confidence:.2f}"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            font_thickness = 2
+
+            # Get text size
+            (text_width, text_height), baseline = cv2.getTextSize(
+                label, font, font_scale, font_thickness
+            )
+
+            # Calculate label position
+            label_x = int(bbox["x1"])
+            label_y = int(bbox["y1"]) - 10
+
+            # Ensure label stays within image bounds
+            if label_y - text_height - 5 < 0:
+                label_y = int(bbox["y1"]) + text_height + 15
+
+            # Draw semi-transparent background rectangle for label
+            overlay = image.copy()
+            cv2.rectangle(
+                overlay,
+                (label_x, label_y - text_height - 5),
+                (label_x + text_width, label_y + baseline),
+                color,
+                -1,  # Fill rectangle
+            )
+
+            # Apply transparency to background
+            alpha = 0.7  # Transparency level (0.0 = fully transparent, 1.0 = opaque)
+            cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
+
+            # Draw text on top of background
             cv2.putText(
                 image,
                 label,
-                (int(bbox["x1"]), int(bbox["y1"]) - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                color,
-                2,
+                (label_x, label_y),
+                font,
+                font_scale,
+                (255, 255, 255),  # White text for better contrast
+                font_thickness,
             )
 
         return image
