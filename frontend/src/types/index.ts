@@ -121,3 +121,47 @@ export interface LoginResponse {
   token_type: string
   expires_in: number
 }
+
+// Camera Stream Types
+export interface CameraStreamPipeline {
+  id: string
+  name: string
+  description?: string
+  components: Array<{
+    name: string
+    type: ComponentType
+    parameters: Record<string, any>
+  }>
+}
+
+export interface CameraStreamPipelinesResponse {
+  pipelines: CameraStreamPipeline[]
+  supported_components: string[]
+  message: string
+}
+
+export interface CameraStreamStatus {
+  active_streams: string[]
+  connected_clients: string[]
+  total_active: number
+}
+
+export interface ProcessedFrame {
+  type: string
+  source_id: string
+  status: string
+  processing_time_ms: number
+  detections: Detection[]
+  error?: string
+}
+
+export interface Detection {
+  class_name: string
+  confidence: number
+  bbox: {
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+  }
+}
