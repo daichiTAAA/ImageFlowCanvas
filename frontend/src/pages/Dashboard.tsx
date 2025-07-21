@@ -29,6 +29,8 @@ import {
   Upload,
   Storage,
   Settings,
+  Visibility,
+  Edit,
 } from "@mui/icons-material";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useAuth } from "../services/AuthContext";
@@ -49,6 +51,9 @@ export const Dashboard: React.FC = () => {
   const [pipelineToDelete, setPipelineToDelete] = useState<Pipeline | null>(
     null
   );
+  const [pipelineDetailDialogOpen, setPipelineDetailDialogOpen] =
+    useState(false);
+  const [pipelineToView, setPipelineToView] = useState<Pipeline | null>(null);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -141,6 +146,11 @@ export const Dashboard: React.FC = () => {
   const handleDeletePipeline = (pipeline: Pipeline) => {
     setPipelineToDelete(pipeline);
     setDeleteDialogOpen(true);
+  };
+
+  const handleViewPipelineDetail = (pipeline: Pipeline) => {
+    setPipelineToView(pipeline);
+    setPipelineDetailDialogOpen(true);
   };
 
   const handleDeleteConfirm = () => {
@@ -289,9 +299,39 @@ export const Dashboard: React.FC = () => {
                     }}
                   >
                     <Typography variant="subtitle1">{pipeline.name}</Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography
+                      variant="body2"
+                      color="textSecondary"
+                      sx={{ mb: 1 }}
+                    >
                       {pipeline.description}
                     </Typography>
+
+                    {/* コンポーネント一覧を表示 */}
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="caption" color="textSecondary">
+                        コンポーネント ({pipeline.components.length}個):
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 0.5,
+                          mt: 0.5,
+                        }}
+                      >
+                        {pipeline.components.map((component, index) => (
+                          <Chip
+                            key={component.id}
+                            label={`${index + 1}. ${component.name}`}
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+
                     <Box sx={{ mt: 1, display: "flex", gap: 1 }}>
                       <Button
                         size="small"
@@ -300,6 +340,14 @@ export const Dashboard: React.FC = () => {
                         onClick={() => handleExecutePipeline(pipeline)}
                       >
                         実行
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Visibility />}
+                        onClick={() => handleViewPipelineDetail(pipeline)}
+                      >
+                        詳細
                       </Button>
                       <Button
                         size="small"
@@ -537,6 +585,154 @@ export const Dashboard: React.FC = () => {
             }
           >
             削除
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* パイプライン詳細ダイアログ */}
+      <Dialog
+        open={pipelineDetailDialogOpen}
+        onClose={() => setPipelineDetailDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>パイプライン詳細: {pipelineToView?.name}</DialogTitle>
+        <DialogContent>
+          {pipelineToView && (
+            <Box>
+              <Typography variant="body1" gutterBottom>
+                <strong>説明:</strong>{" "}
+                {pipelineToView.description || "説明なし"}
+              </Typography>
+
+              <Typography variant="body1" gutterBottom sx={{ mt: 2 }}>
+                <strong>作成日時:</strong>{" "}
+                {new Date(pipelineToView.created_at).toLocaleString()}
+              </Typography>
+
+              <Typography variant="body1" gutterBottom>
+                <strong>更新日時:</strong>{" "}
+                {new Date(pipelineToView.updated_at).toLocaleString()}
+              </Typography>
+
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
+                処理コンポーネント ({pipelineToView.components.length}個)
+              </Typography>
+
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>順序</TableCell>
+                      <TableCell>コンポーネント名</TableCell>
+                      <TableCell>タイプ</TableCell>
+                      <TableCell>パラメータ</TableCell>
+                      <TableCell>依存関係</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {pipelineToView.components.map((component, index) => (
+                      <TableRow key={component.id}>
+                        <TableCell>
+                          <Chip
+                            label={index + 1}
+                            color="primary"
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>{component.name}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={component.component_type}
+                            variant="outlined"
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {Object.keys(component.parameters).length > 0 ? (
+                            <Box>
+                              {Object.entries(component.parameters).map(
+                                ([key, value]) => (
+                                  <Typography
+                                    key={key}
+                                    variant="caption"
+                                    display="block"
+                                  >
+                                    {key}: {String(value)}
+                                  </Typography>
+                                )
+                              )}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="textSecondary">
+                              パラメータなし
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {component.dependencies.length > 0 ? (
+                            <Box>
+                              {component.dependencies.map((dep, depIndex) => (
+                                <Chip
+                                  key={depIndex}
+                                  label={dep}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ mr: 0.5, mb: 0.5 }}
+                                />
+                              ))}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="textSecondary">
+                              なし
+                            </Typography>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* パイプライン設定情報 */}
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
+                パイプライン情報
+              </Typography>
+
+              <Box sx={{ bgcolor: "#f5f5f5", p: 2, borderRadius: 1 }}>
+                <Typography variant="body2" gutterBottom>
+                  <strong>パイプラインID:</strong> {pipelineToView.id}
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                  <strong>総コンポーネント数:</strong>{" "}
+                  {pipelineToView.components.length}
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                  <strong>依存関係の数:</strong>{" "}
+                  {pipelineToView.components.reduce(
+                    (total, comp) => total + comp.dependencies.length,
+                    0
+                  )}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPipelineDetailDialogOpen(false)}>
+            閉じる
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Edit />}
+            onClick={() => {
+              setPipelineDetailDialogOpen(false);
+              navigate("/pipeline-builder", {
+                state: { editPipeline: pipelineToView },
+              });
+            }}
+          >
+            編集
           </Button>
         </DialogActions>
       </Dialog>

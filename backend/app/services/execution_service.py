@@ -161,38 +161,44 @@ class ExecutionService:
                 # Add execution steps based on pipeline config
                 from app.models.execution import ExecutionStep, OutputFile, StepStatus
                 import os
-                
-                pipeline_config = await self._build_pipeline_config(execution_request, input_files)
+
+                pipeline_config = await self._build_pipeline_config(
+                    execution_request, input_files
+                )
                 execution.steps = []
-                
+
                 for step_config in pipeline_config.get("steps", []):
                     step = ExecutionStep(
                         step_id=step_config["stepId"],
                         name=step_config.get("componentName", step_config["stepId"]),
-                        component_name=step_config.get("componentName", step_config["stepId"]),
+                        component_name=step_config.get(
+                            "componentName", step_config["stepId"]
+                        ),
                         status=StepStatus.COMPLETED,
                         started_at=execution.started_at,
-                        completed_at=execution.completed_at
+                        completed_at=execution.completed_at,
                     )
                     execution.steps.append(step)
 
                 # Add output files from all processing steps
                 output_files = []
-                
+
                 # Add results from each step
                 if "results" in result:
                     for step_id, step_result in result["results"].items():
                         if "output_path" in step_result and step_result["output_path"]:
                             output_path = step_result["output_path"]
                             filename = os.path.basename(output_path)
-                            
+
                             if filename:
                                 # 実際のファイルサイズとコンテンツタイプを取得
-                                file_size, content_type = await self._get_file_info(output_path)
-                                
+                                file_size, content_type = await self._get_file_info(
+                                    output_path
+                                )
+
                                 # MinIOに保存されるファイル名（拡張子なし）をfile_idとして使用
                                 file_id = os.path.splitext(filename)[0]
-                                
+
                                 output_file = OutputFile(
                                     file_id=file_id,
                                     filename=filename,
@@ -200,21 +206,23 @@ class ExecutionService:
                                     content_type=content_type,
                                 )
                                 output_files.append(output_file)
-                
+
                 # Add final output if available and not already included
                 if "final_output_path" in result and result["final_output_path"]:
                     final_path = result["final_output_path"]
                     filename = os.path.basename(final_path)
-                    
+
                     if filename:
                         # Check if this file is not already in output_files
                         existing_files = [f.filename for f in output_files]
                         if filename not in existing_files:
-                            file_size, content_type = await self._get_file_info(final_path)
-                            
+                            file_size, content_type = await self._get_file_info(
+                                final_path
+                            )
+
                             # MinIOに保存されるファイル名（拡張子なし）をfile_idとして使用
                             file_id = os.path.splitext(filename)[0]
-                            
+
                             output_file = OutputFile(
                                 file_id=file_id,
                                 filename=filename,
@@ -222,7 +230,7 @@ class ExecutionService:
                                 content_type=content_type,
                             )
                             output_files.append(output_file)
-                
+
                 execution.output_files = output_files
 
                 logger.info(
@@ -250,8 +258,71 @@ class ExecutionService:
         self, execution_request: ExecutionRequest, input_files: List[str]
     ) -> Dict[str, Any]:
         """Build pipeline configuration for direct gRPC execution"""
-        # This is a simplified pipeline config - in a real implementation,
-        # you would fetch the actual pipeline definition from the pipeline_service
+        from app.services.pipeline_service import PipelineService
+        from app.database import get_db
+
+        # Get actual pipeline definition from database
+        pipeline_service = PipelineService()
+        db_gen = get_db()
+        db = await db_gen.__anext__()
+
+        try:
+            pipeline = await pipeline_service.get_pipeline(
+                execution_request.pipeline_id, db
+            )
+
+            if not pipeline:
+                # Fallback to default pipeline if not found
+                logger.warning(
+                    f"Pipeline {execution_request.pipeline_id} not found, using fallback"
+                )
+                return self._get_fallback_pipeline_config(
+                    execution_request, input_files
+                )
+
+            # Build steps from pipeline components in the defined order
+            steps = []
+            for i, component in enumerate(pipeline.components):
+                step_id = f"{component.component_type}-step-{i}"
+
+                # Merge component parameters with execution request parameters
+                merged_parameters = component.parameters.copy()
+                merged_parameters.update(execution_request.parameters)
+
+                # Set up dependencies based on component order
+                dependencies = []
+                if i > 0:
+                    # Each component depends on the previous one (simple sequential execution)
+                    previous_component = pipeline.components[i - 1]
+                    dependencies = [f"{previous_component.component_type}-step-{i-1}"]
+
+                step = {
+                    "stepId": step_id,
+                    "componentName": component.component_type,
+                    "parameters": merged_parameters,
+                    "dependencies": dependencies,
+                }
+                steps.append(step)
+
+            return {
+                "pipelineId": execution_request.pipeline_id,
+                "steps": steps,
+                "globalParameters": {
+                    "inputPath": input_files[0] if input_files else None,
+                    "executionId": execution_request.pipeline_id,
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Error building pipeline config: {e}")
+            return self._get_fallback_pipeline_config(execution_request, input_files)
+        finally:
+            await db.close()
+
+    def _get_fallback_pipeline_config(
+        self, execution_request: ExecutionRequest, input_files: List[str]
+    ) -> Dict[str, Any]:
+        """Fallback pipeline configuration"""
         return {
             "pipelineId": execution_request.pipeline_id,
             "steps": [
@@ -308,7 +379,9 @@ class ExecutionService:
             try:
                 # Convert execution to dict for broadcasting
                 execution_dict = execution.dict()
-                await websocket_manager.broadcast_execution_update(execution.execution_id, execution_dict)
+                await websocket_manager.broadcast_execution_update(
+                    execution.execution_id, execution_dict
+                )
             except Exception as e:
                 logger.warning(f"Failed to broadcast execution update: {e}")
 

@@ -200,8 +200,11 @@ export const ExecutionMonitor: React.FC = () => {
 
   // ファイル名から処理ステップを抽出
   const getProcessingStepFromFilename = (filename: string): string => {
+    console.log(`🔍 処理ステップ抽出デバッグ - ファイル名: ${filename}`);
+
     // 元画像のパターン: {execution_id}.{extension} または {execution_id}-input-{index}.{extension}
     const nameWithoutExt = filename.split(".")[0];
+    console.log(`📝 拡張子なしファイル名: ${nameWithoutExt}`);
 
     // execution_idのパターンをチェック（UUID形式）
     const uuidPattern =
@@ -209,47 +212,119 @@ export const ExecutionMonitor: React.FC = () => {
 
     // 単純なexecution_idのみの場合（元画像）
     if (uuidPattern.test(nameWithoutExt)) {
+      console.log(`✅ 元画像パターンにマッチ`);
       return "元画像";
     }
 
     // input付きの場合（複数ファイルアップロード時の元画像）
     if (nameWithoutExt.includes("-input-")) {
+      console.log(`✅ 入力ファイルパターンにマッチ`);
       return "元画像";
     }
 
     // 処理済みファイルのパターン: {execution_id}_{processing_step}.{extension}
     const parts = filename.split("_");
+    console.log(`📂 アンダースコア分割結果:`, parts);
+
     if (parts.length >= 2) {
       const stepPart = parts.slice(1).join("_"); // execution_idの後の部分を取得
       const stepName = stepPart.split(".")[0]; // 拡張子を除去
+      console.log(`🎯 処理ステップ名: "${stepName}"`);
 
       // ステップ名を日本語に変換
       const stepLabels: Record<string, string> = {
-        resize: "1. リサイズ処理",
-        "ai-detection": "2. 物体検知",
-        filter: "3. フィルタ処理",
-        enhancement: "4. 画質向上",
+        resize: "リサイズ処理",
+        resized: "リサイズ処理",
+        "ai-detection": "物体検知",
+        detected: "物体検知",
+        detection: "物体検知",
+        filter: "フィルタ処理",
+        filtered: "フィルタ処理",
+        enhancement: "画質向上",
+        enhanced: "画質向上",
       };
 
-      return stepLabels[stepName] || stepName;
+      const result = stepLabels[stepName] || stepName;
+      console.log(`🏷️ 最終結果: "${result}"`);
+      return result;
     }
 
+    console.log(`❌ どのパターンにもマッチしませんでした`);
     return "不明な処理";
   };
 
-  // 処理順序を取得（ソート用）
+  // 処理順序を取得（パイプラインの実際のステップ順序に基づく）
   const getProcessingOrder = (filename: string): number => {
-    const stepInfo = getProcessingStepFromFilename(filename);
+    console.log(`🔍 処理順序取得デバッグ - ファイル名: ${filename}`);
 
-    const orderMap: Record<string, number> = {
+    // 元画像は常に最初
+    const stepInfo = getProcessingStepFromFilename(filename);
+    if (stepInfo === "元画像") {
+      console.log(`✅ 元画像として認識 - 順序: 0`);
+      return 0;
+    }
+
+    // パイプラインのステップ情報から順序を決定
+    if (execution?.steps && execution.steps.length > 0) {
+      console.log(`📝 実行ステップ情報を使用:`, execution.steps);
+
+      // ファイル名からステップ名を抽出してステップリストで検索
+      const parts = filename.split("_");
+
+      if (parts.length >= 2) {
+        const stepPart = parts.slice(1).join("_");
+        const stepName = stepPart.split(".")[0];
+        console.log(`🎯 抽出されたステップ名: "${stepName}"`);
+
+        // component_nameまたはname、stepIdでマッチするステップを検索
+        const stepIndex = execution.steps.findIndex((step: any) => {
+          const matches =
+            step.component_name
+              ?.toLowerCase()
+              .includes(stepName.toLowerCase()) ||
+            step.name?.toLowerCase().includes(stepName.toLowerCase()) ||
+            step.step_id?.toLowerCase().includes(stepName.toLowerCase()) ||
+            // 既知のマッピングも考慮
+            (stepName === "resized" &&
+              (step.component_name === "resize" ||
+                step.name?.includes("リサイズ"))) ||
+            (stepName === "detected" &&
+              (step.component_name === "ai_detection" ||
+                step.name?.includes("検知"))) ||
+            (stepName === "filtered" &&
+              (step.component_name === "filter" ||
+                step.name?.includes("フィルタ"))) ||
+            (stepName === "enhanced" &&
+              (step.component_name === "enhancement" ||
+                step.name?.includes("向上")));
+
+          console.log(
+            `🔍 ステップマッチチェック - ${step.component_name}(${step.name}): ${matches}`
+          );
+          return matches;
+        });
+
+        if (stepIndex !== -1) {
+          const order = stepIndex + 1; // 元画像が0なので、ステップは1から開始
+          console.log(`✅ ステップ順序発見 - ${stepName}: ${order}`);
+          return order;
+        }
+      }
+    }
+
+    // フォールバック: 固定マッピング
+    console.log(`⚠️ フォールバック順序マッピングを使用`);
+    const fallbackOrderMap: Record<string, number> = {
       元画像: 0,
-      "1. リサイズ処理": 1,
-      "2. 物体検知": 2,
-      "3. フィルタ処理": 3,
-      "4. 画質向上": 4,
+      リサイズ処理: 1,
+      物体検知: 2,
+      フィルタ処理: 3,
+      画質向上: 4,
     };
 
-    return orderMap[stepInfo] || 999;
+    const fallbackOrder = fallbackOrderMap[stepInfo] || 999;
+    console.log(`🔄 フォールバック順序: ${stepInfo} -> ${fallbackOrder}`);
+    return fallbackOrder;
   };
 
   const isJsonFile = (filename: string) => {
@@ -650,18 +725,49 @@ export const ExecutionMonitor: React.FC = () => {
                         getProcessingOrder(a.filename) -
                         getProcessingOrder(b.filename)
                     )
-                    .map((file) => (
+                    .map((file, index) => (
                       <Grid item xs={12} sm={6} md={4} key={file.file_id}>
                         <Card>
                           <CardContent>
-                            <Box sx={{ mb: 1 }}>
+                            <Box
+                              sx={{
+                                mb: 1,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                }}
+                              >
+                                <Chip
+                                  label={`処理順 ${index + 1}`}
+                                  color="secondary"
+                                  size="small"
+                                  sx={{
+                                    fontWeight: "bold",
+                                    fontSize: "0.75rem",
+                                  }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  color="textSecondary"
+                                >
+                                  →
+                                </Typography>
+                              </Box>
                               <Chip
                                 label={getProcessingStepFromFilename(
                                   file.filename
                                 )}
                                 color="primary"
                                 size="small"
-                                sx={{ mb: 1 }}
+                                sx={{ mb: 0 }}
                               />
                             </Box>
                             <Typography variant="subtitle2" gutterBottom noWrap>
@@ -751,6 +857,7 @@ export const ExecutionMonitor: React.FC = () => {
                   <Table>
                     <TableHead>
                       <TableRow>
+                        <TableCell width="60px">順序</TableCell>
                         <TableCell>ファイル名</TableCell>
                         <TableCell>処理ステップ</TableCell>
                         <TableCell>タイプ</TableCell>
@@ -761,12 +868,23 @@ export const ExecutionMonitor: React.FC = () => {
                     <TableBody>
                       {execution.output_files
                         .sort(
-                          (a, b) =>
+                          (a: any, b: any) =>
                             getProcessingOrder(a.filename) -
                             getProcessingOrder(b.filename)
                         )
-                        .map((file) => (
+                        .map((file: any, index: number) => (
                           <TableRow key={file.file_id}>
+                            <TableCell>
+                              <Chip
+                                label={`処理順 ${index + 1}`}
+                                color="secondary"
+                                size="small"
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "0.75rem",
+                                }}
+                              />
+                            </TableCell>
                             <TableCell>{file.filename}</TableCell>
                             <TableCell>
                               <Chip
