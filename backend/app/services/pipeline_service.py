@@ -16,6 +16,23 @@ class PipelineService:
     def __init__(self):
         pass
 
+    def _migrate_component_data(self, comp_data: dict) -> dict:
+        """既存のcomponent_type値を新しい値にマイグレーション"""
+        migrated_data = comp_data.copy()
+
+        # 古い値を新しい値にマッピング
+        component_type_mapping = {
+            "detection": "ai_detection",
+            # 必要に応じて他のマッピングも追加
+        }
+
+        if "component_type" in migrated_data:
+            old_type = migrated_data["component_type"]
+            if old_type in component_type_mapping:
+                migrated_data["component_type"] = component_type_mapping[old_type]
+
+        return migrated_data
+
     async def get_all_pipelines(self, db: AsyncSession) -> List[Pipeline]:
         """全パイプラインを取得"""
         result = await db.execute(select(PipelineModel))
@@ -26,7 +43,10 @@ class PipelineService:
                 id=str(model.id),
                 name=model.name,
                 description=model.description,
-                components=[PipelineComponent(**comp) for comp in model.components],
+                components=[
+                    PipelineComponent(**self._migrate_component_data(comp))
+                    for comp in model.components
+                ],
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -49,7 +69,10 @@ class PipelineService:
             id=str(model.id),
             name=model.name,
             description=model.description,
-            components=[PipelineComponent(**comp) for comp in model.components],
+            components=[
+                PipelineComponent(**self._migrate_component_data(comp))
+                for comp in model.components
+            ],
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
