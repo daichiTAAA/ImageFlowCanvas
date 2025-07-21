@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Card,
@@ -16,20 +16,15 @@ import {
   Paper,
   Switch,
   FormControlLabel,
-} from '@mui/material';
-import {
-  Camera,
-  CameraAlt,
-  PlayArrow,
-  StopCircle,
-} from '@mui/icons-material';
-import { apiService } from '../services/api';
+} from "@mui/material";
+import { Camera, CameraAlt, PlayArrow, StopCircle } from "@mui/icons-material";
+import { apiService } from "../services/api";
 import {
   CameraStreamPipelinesResponse,
   CameraStreamPipeline,
   ProcessedFrame,
   Detection,
-} from '../types';
+} from "../types";
 
 interface CameraStreamState {
   isInitialized: boolean;
@@ -56,7 +51,7 @@ export const CameraStream: React.FC = () => {
     isStreaming: false,
     isConnected: false,
     error: null,
-    selectedPipeline: '',
+    selectedPipeline: "",
     pipelines: [],
     lastProcessedFrame: null,
     frameCount: 0,
@@ -73,15 +68,17 @@ export const CameraStream: React.FC = () => {
 
   const loadPipelines = async () => {
     try {
-      const response: CameraStreamPipelinesResponse = await apiService.getCameraStreamPipelines();
-      setState(prev => ({
+      const response: CameraStreamPipelinesResponse =
+        await apiService.getCameraStreamPipelines();
+      setState((prev) => ({
         ...prev,
         pipelines: response.pipelines,
-        selectedPipeline: response.pipelines.length > 0 ? response.pipelines[0].id : '',
+        selectedPipeline:
+          response.pipelines.length > 0 ? response.pipelines[0].id : "",
         error: null,
       }));
     } catch (error) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         error: `パイプラインの読み込みに失敗しました: ${error}`,
       }));
@@ -90,31 +87,31 @@ export const CameraStream: React.FC = () => {
 
   const initializeCamera = async () => {
     try {
-      setState(prev => ({ ...prev, error: null }));
-      
+      setState((prev) => ({ ...prev, error: null }));
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          frameRate: { ideal: 30 }
+          frameRate: { ideal: 30 },
         },
-        audio: false
+        audio: false,
       });
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
-        
+
         videoRef.current.onloadedmetadata = () => {
-          setState(prev => ({ 
-            ...prev, 
+          setState((prev) => ({
+            ...prev,
             isInitialized: true,
-            error: null 
+            error: null,
           }));
         };
       }
     } catch (error) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         error: `カメラの初期化に失敗しました: ${error}`,
       }));
@@ -123,26 +120,28 @@ export const CameraStream: React.FC = () => {
 
   const startStreaming = async () => {
     if (!state.selectedPipeline) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
-        error: 'パイプラインを選択してください',
+        error: "パイプラインを選択してください",
       }));
       return;
     }
 
     try {
       // Connect to WebSocket
-      const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/camera-stream/ws/camera-stream/pc_camera`;
+      const wsUrl = `${
+        window.location.protocol === "https:" ? "wss:" : "ws:"
+      }//${window.location.host}/api/ws/camera-stream/pc_camera`;
       const ws = new WebSocket(wsUrl);
-      
+
       ws.onopen = () => {
-        setState(prev => ({ 
-          ...prev, 
-          isConnected: true, 
+        setState((prev) => ({
+          ...prev,
+          isConnected: true,
           isStreaming: true,
-          error: null 
+          error: null,
         }));
-        
+
         // Start sending frames
         startFrameCapture();
       };
@@ -152,21 +151,21 @@ export const CameraStream: React.FC = () => {
           const data: ProcessedFrame = JSON.parse(event.data);
           handleProcessedFrame(data);
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          console.error("Error parsing WebSocket message:", error);
         }
       };
 
       ws.onclose = () => {
-        setState(prev => ({ 
-          ...prev, 
-          isConnected: false, 
-          isStreaming: false 
+        setState((prev) => ({
+          ...prev,
+          isConnected: false,
+          isStreaming: false,
         }));
         stopFrameCapture();
       };
 
       ws.onerror = (error) => {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           error: `WebSocket接続エラー: ${error}`,
           isConnected: false,
@@ -177,7 +176,7 @@ export const CameraStream: React.FC = () => {
 
       wsRef.current = ws;
     } catch (error) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         error: `ストリーミング開始に失敗しました: ${error}`,
       }));
@@ -189,10 +188,10 @@ export const CameraStream: React.FC = () => {
       wsRef.current.close();
       wsRef.current = null;
     }
-    
+
     stopFrameCapture();
-    
-    setState(prev => ({
+
+    setState((prev) => ({
       ...prev,
       isStreaming: false,
       isConnected: false,
@@ -208,7 +207,7 @@ export const CameraStream: React.FC = () => {
 
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
 
       if (!ctx) return;
 
@@ -220,18 +219,18 @@ export const CameraStream: React.FC = () => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       // Convert to base64
-      const frameData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      const frameData = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
 
       // Send frame via WebSocket
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         const message = {
-          type: 'frame',
+          type: "frame",
           frame_data: frameData,
           timestamp_ms: Date.now(),
           width: canvas.width,
           height: canvas.height,
           pipeline_id: state.selectedPipeline,
-          processing_params: {}
+          processing_params: {},
         };
 
         wsRef.current.send(JSON.stringify(message));
@@ -250,10 +249,12 @@ export const CameraStream: React.FC = () => {
   };
 
   const handleProcessedFrame = (frame: ProcessedFrame) => {
-    setState(prev => {
+    setState((prev) => {
       const newFrameCount = prev.frameCount + 1;
-      const newAvgTime = (prev.avgProcessingTime * prev.frameCount + frame.processing_time_ms) / newFrameCount;
-      
+      const newAvgTime =
+        (prev.avgProcessingTime * prev.frameCount + frame.processing_time_ms) /
+        newFrameCount;
+
       return {
         ...prev,
         lastProcessedFrame: frame,
@@ -273,7 +274,7 @@ export const CameraStream: React.FC = () => {
 
     const canvas = overlayCanvasRef.current;
     const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
 
     if (!ctx) return;
 
@@ -290,10 +291,10 @@ export const CameraStream: React.FC = () => {
     const scaleY = rect.height / video.videoHeight;
 
     // Draw detection boxes
-    ctx.strokeStyle = '#ff0000';
+    ctx.strokeStyle = "#ff0000";
     ctx.lineWidth = 2;
-    ctx.font = '14px Arial';
-    ctx.fillStyle = '#ff0000';
+    ctx.font = "14px Arial";
+    ctx.fillStyle = "#ff0000";
 
     detections.forEach((detection) => {
       const x1 = detection.bbox.x1 * scaleX;
@@ -305,22 +306,24 @@ export const CameraStream: React.FC = () => {
       ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
       // Draw label
-      const label = `${detection.class_name} (${Math.round(detection.confidence * 100)}%)`;
+      const label = `${detection.class_name} (${Math.round(
+        detection.confidence * 100
+      )}%)`;
       const textWidth = ctx.measureText(label).width;
-      
+
       // Draw background for text
-      ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+      ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
       ctx.fillRect(x1, y1 - 20, textWidth + 4, 16);
-      
+
       // Draw text
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = "#ffffff";
       ctx.fillText(label, x1 + 2, y1 - 6);
     });
   };
 
   const handlePipelineChange = (pipelineId: string) => {
-    setState(prev => ({ ...prev, selectedPipeline: pipelineId }));
-    
+    setState((prev) => ({ ...prev, selectedPipeline: pipelineId }));
+
     // If currently streaming, restart with new pipeline
     if (state.isStreaming) {
       stopStreaming();
@@ -330,14 +333,14 @@ export const CameraStream: React.FC = () => {
 
   const cleanupResources = useCallback(() => {
     stopStreaming();
-    
+
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    
-    setState(prev => ({ 
-      ...prev, 
+
+    setState((prev) => ({
+      ...prev,
       isInitialized: false,
       isStreaming: false,
       isConnected: false,
@@ -411,7 +414,7 @@ export const CameraStream: React.FC = () => {
                 />
               </Box>
 
-              <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
+              <Box sx={{ display: "flex", gap: 1, flexDirection: "column" }}>
                 {!state.isInitialized ? (
                   <Button
                     variant="contained"
@@ -459,20 +462,24 @@ export const CameraStream: React.FC = () => {
                 <Typography variant="subtitle2" gutterBottom>
                   ステータス
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                   <Chip
-                    label={state.isInitialized ? 'カメラ初期化済み' : 'カメラ未初期化'}
-                    color={state.isInitialized ? 'success' : 'default'}
+                    label={
+                      state.isInitialized
+                        ? "カメラ初期化済み"
+                        : "カメラ未初期化"
+                    }
+                    color={state.isInitialized ? "success" : "default"}
                     size="small"
                   />
                   <Chip
-                    label={state.isConnected ? '接続中' : '未接続'}
-                    color={state.isConnected ? 'success' : 'default'}
+                    label={state.isConnected ? "接続中" : "未接続"}
+                    color={state.isConnected ? "success" : "default"}
                     size="small"
                   />
                   <Chip
-                    label={state.isStreaming ? 'ストリーミング中' : '停止中'}
-                    color={state.isStreaming ? 'primary' : 'default'}
+                    label={state.isStreaming ? "ストリーミング中" : "停止中"}
+                    color={state.isStreaming ? "primary" : "default"}
                     size="small"
                   />
                 </Box>
@@ -504,48 +511,48 @@ export const CameraStream: React.FC = () => {
                 カメラ映像
               </Typography>
 
-              <Box sx={{ position: 'relative', display: 'inline-block' }}>
+              <Box sx={{ position: "relative", display: "inline-block" }}>
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
                   style={{
-                    width: '100%',
-                    maxWidth: '640px',
-                    height: 'auto',
-                    backgroundColor: '#000',
-                    borderRadius: '4px',
+                    width: "100%",
+                    maxWidth: "640px",
+                    height: "auto",
+                    backgroundColor: "#000",
+                    borderRadius: "4px",
                   }}
                 />
-                
+
                 {/* Overlay canvas for detections */}
                 <canvas
                   ref={overlayCanvasRef}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     top: 0,
                     left: 0,
-                    width: '100%',
-                    height: '100%',
-                    pointerEvents: 'none',
+                    width: "100%",
+                    height: "100%",
+                    pointerEvents: "none",
                   }}
                 />
 
                 {!state.isInitialized && (
                   <Box
                     sx={{
-                      position: 'absolute',
+                      position: "absolute",
                       top: 0,
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                      color: 'white',
-                      borderRadius: '4px',
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "rgba(0, 0, 0, 0.7)",
+                      color: "white",
+                      borderRadius: "4px",
                     }}
                   >
                     <Typography>カメラを初期化してください</Typography>
@@ -554,10 +561,7 @@ export const CameraStream: React.FC = () => {
               </Box>
 
               {/* Hidden canvas for frame capture */}
-              <canvas
-                ref={canvasRef}
-                style={{ display: 'none' }}
-              />
+              <canvas ref={canvasRef} style={{ display: "none" }} />
 
               {/* Processing Results */}
               {state.lastProcessedFrame && (
@@ -572,21 +576,26 @@ export const CameraStream: React.FC = () => {
                     <Typography variant="body2">
                       処理時間: {state.lastProcessedFrame.processing_time_ms}ms
                     </Typography>
-                    {state.lastProcessedFrame.detections && state.lastProcessedFrame.detections.length > 0 && (
-                      <Box sx={{ mt: 1 }}>
-                        <Typography variant="body2" gutterBottom>
-                          検出結果:
-                        </Typography>
-                        {state.lastProcessedFrame.detections.map((detection, index) => (
-                          <Chip
-                            key={index}
-                            label={`${detection.class_name} (${Math.round(detection.confidence * 100)}%)`}
-                            size="small"
-                            sx={{ mr: 1, mb: 1 }}
-                          />
-                        ))}
-                      </Box>
-                    )}
+                    {state.lastProcessedFrame.detections &&
+                      state.lastProcessedFrame.detections.length > 0 && (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" gutterBottom>
+                            検出結果:
+                          </Typography>
+                          {state.lastProcessedFrame.detections.map(
+                            (detection, index) => (
+                              <Chip
+                                key={index}
+                                label={`${detection.class_name} (${Math.round(
+                                  detection.confidence * 100
+                                )}%)`}
+                                size="small"
+                                sx={{ mr: 1, mb: 1 }}
+                              />
+                            )
+                          )}
+                        </Box>
+                      )}
                     {state.lastProcessedFrame.error && (
                       <Alert severity="error" sx={{ mt: 1 }}>
                         {state.lastProcessedFrame.error}

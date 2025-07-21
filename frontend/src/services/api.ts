@@ -291,13 +291,13 @@ class ApiService {
   // Camera Stream APIs
   async getCameraStreamPipelines(): Promise<any> {
     const api = this.ensureApiInitialized()
-    const response = await api.get('/camera-stream/v1/camera-stream/pipelines')
+    const response = await api.get('/camera-stream/pipelines')
     return response.data
   }
 
   async getCameraStreamStatus(): Promise<any> {
     const api = this.ensureApiInitialized()
-    const response = await api.get('/camera-stream/v1/camera-stream/status')
+    const response = await api.get('/camera-stream/status')
     return response.data
   }
 
@@ -308,7 +308,7 @@ class ApiService {
     formData.append('pipeline_id', pipelineId)
     formData.append('source_id', sourceId)
 
-    const response = await api.post('/camera-stream/v1/camera-stream/test-frame', formData, {
+    const response = await api.post('/camera-stream/test-frame', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
