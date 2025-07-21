@@ -45,7 +45,7 @@ echo "  ✓ Built $REGISTRY/frontend:$TAG"
 echo "✅ All web services built successfully!"
 
 # Import images to K3s cluster if not in registry mode
-if [ "$PUSH" != "true" || "$DEPLOY" != "true" ]; then
+if [ "$PUSH" != "true" ] || [ "$DEPLOY" != "true" ]; then
     echo "📥 Importing web service images to K3s cluster..."
     
     # Save images as tar files and import to K3s

@@ -69,7 +69,7 @@ build_service "camera-stream-grpc" "$BASE_DIR/services/camera-stream-grpc-app"
 echo "✅ All gRPC services built successfully!"
 
 # Import images to K3s cluster if not in registry mode
-if [ "$PUSH" != "true" || "$DEPLOY" != "true" ]; then
+if [ "$PUSH" != "true" ] || [ "$DEPLOY" != "true" ]; then
     echo "📥 Importing gRPC images to K3s cluster..."
     
     # Save images as tar files and import to K3s
