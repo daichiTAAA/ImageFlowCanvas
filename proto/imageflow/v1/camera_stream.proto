@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "google/protobuf/timestamp.proto";
+import "imageflow/v1/common.proto";
+import "imageflow/v1/ai_detection.proto";
+
+// Real-time camera stream processing service
+service CameraStreamProcessor {
+  // Bidirectional streaming RPC for real-time video processing
+  rpc ProcessVideoStream(stream VideoFrame) returns (stream ProcessedFrame);
+}
+
+// Video frame sent from client to server
+message VideoFrame {
+  bytes frame_data = 1;              // JPEG/PNG encoded image data
+  int64 timestamp_ms = 2;            // Frame capture timestamp (Unix ms)
+  VideoMetadata metadata = 3;        // Frame metadata
+}
+
+// Video frame metadata
+message VideoMetadata {
+  string source_id = 1;              // Unique camera ID
+  int32 width = 2;                   // Frame width
+  int32 height = 3;                  // Frame height
+  string pipeline_id = 4;            // Processing pipeline ID to apply
+  map<string, string> processing_params = 5; // Dynamic parameters (AI model name, etc.)
+}
+
+// Processed frame returned from server to client
+message ProcessedFrame {
+  bytes processed_data = 1;          // Processed image data (optional)
+  string source_id = 2;              // Original camera ID
+  int64 processing_time_ms = 3;      // Server-side processing time
+  repeated Detection detections = 4; // AI detection results (reuses existing Detection)
+  StreamProcessingStatus status = 5; // Processing status
+  string error_message = 6;          // Error message if processing failed
+  google.protobuf.Timestamp processed_at = 7; // Processing completion timestamp
+}
+
+// Processing status specific to real-time streaming (to avoid conflicts with existing enum)
+enum StreamProcessingStatus {
+  STREAM_PROCESSING_STATUS_UNSPECIFIED = 0;
+  STREAM_PROCESSING_STATUS_SUCCESS = 1;
+  STREAM_PROCESSING_STATUS_PARTIAL = 2;    // Partial processing due to performance constraints
+  STREAM_PROCESSING_STATUS_FAILED = 3;
+  STREAM_PROCESSING_STATUS_SKIPPED = 4;    // Frame skipped due to high load
+}

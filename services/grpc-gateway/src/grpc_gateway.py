@@ -19,6 +19,8 @@ from imageflow.v1 import ai_detection_pb2
 from imageflow.v1 import ai_detection_pb2_grpc
 from imageflow.v1 import filter_pb2
 from imageflow.v1 import filter_pb2_grpc
+from imageflow.v1 import camera_stream_pb2
+from imageflow.v1 import camera_stream_pb2_grpc
 from imageflow.v1 import common_pb2
 
 # Setup logging
@@ -36,10 +38,12 @@ class GRPCClients:
         self.resize_endpoint = os.getenv("RESIZE_GRPC_ENDPOINT", "resize-grpc-service:9090")
         self.ai_detection_endpoint = os.getenv("AI_DETECTION_GRPC_ENDPOINT", "ai-detection-grpc-service:9090")
         self.filter_endpoint = os.getenv("FILTER_GRPC_ENDPOINT", "filter-grpc-service:9090")
+        self.camera_stream_endpoint = os.getenv("CAMERA_STREAM_GRPC_ENDPOINT", "camera-stream-grpc-service:9090")
         
         logger.info(f"Resize service: {self.resize_endpoint}")
         logger.info(f"AI Detection service: {self.ai_detection_endpoint}")
         logger.info(f"Filter service: {self.filter_endpoint}")
+        logger.info(f"Camera Stream service: {self.camera_stream_endpoint}")
 
     def get_resize_client(self):
         channel = grpc.insecure_channel(self.resize_endpoint)
@@ -52,6 +56,10 @@ class GRPCClients:
     def get_filter_client(self):
         channel = grpc.insecure_channel(self.filter_endpoint)
         return filter_pb2_grpc.FilterServiceStub(channel)
+    
+    def get_camera_stream_client(self):
+        channel = grpc.insecure_channel(self.camera_stream_endpoint)
+        return camera_stream_pb2_grpc.CameraStreamProcessorStub(channel)
 
 grpc_clients = GRPCClients()
 
@@ -235,16 +243,16 @@ async def health_detection():
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Detection service unhealthy: {e}")
 
-@app.get("/v1/health/filter")
-async def health_filter():
-    """Check filter service health"""
+@app.get("/v1/health/camera_stream")
+async def health_camera_stream():
+    """Check camera stream service health"""
     try:
-        client = grpc_clients.get_filter_client()
-        request = common_pb2.HealthCheckRequest(service="filter")
+        client = grpc_clients.get_camera_stream_client()
+        request = common_pb2.HealthCheckRequest(service="camera_stream")
         response = client.Health(request)
-        return {"service": "filter", "status": "healthy"}
+        return {"service": "camera_stream", "status": "healthy"}
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Filter service unhealthy: {e}")
+        raise HTTPException(status_code=503, detail=f"Camera stream service unhealthy: {e}")
 
 if __name__ == "__main__":
     port = int(os.getenv("HTTP_PORT", "8080"))
