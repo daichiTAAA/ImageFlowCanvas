@@ -15,6 +15,14 @@ message ImageData {
   google.protobuf.Timestamp created_at = 7;
 }
 
+// 直接画像バイトデータ構造（リアルタイム処理用）
+message ImageBytes {
+  bytes data = 1;
+  string format = 2;  // "JPEG", "PNG", etc.
+  int32 width = 3;
+  int32 height = 4;
+}
+
 // 処理ステータス
 enum ProcessingStatus {
   PROCESSING_STATUS_UNSPECIFIED = 0;
@@ -29,6 +37,7 @@ message ProcessingResult {
   ProcessingStatus status = 1;
   string message = 2;
   ImageData output_image = 3;
+  bytes output_data = 7;  // Direct output bytes for real-time processing
   map<string, string> metadata = 4;
   google.protobuf.Timestamp processed_at = 5;
   double processing_time_seconds = 6;

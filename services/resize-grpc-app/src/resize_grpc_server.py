@@ -90,32 +90,54 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
         )
 
         try:
-            # Download image from MinIO with timing
-            download_start = time.time()
             local_input = f"/tmp/input_{request.execution_id}_{int(time.time())}"
             local_output = f"/tmp/output_{request.execution_id}_{int(time.time())}"
 
-            logger.info(
-                f"Downloading {request.input_image.object_key} from bucket {request.input_image.bucket}"
-            )
+            # Check if input is direct bytes or MinIO reference
+            if request.HasField("input_bytes"):
+                # Handle direct byte input (for real-time streaming)
+                logger.info("Processing direct image bytes input")
 
-            # Ensure bucket exists before attempting download
-            if not self.minio_client.bucket_exists(request.input_image.bucket):
-                raise ValueError(f"Bucket {request.input_image.bucket} does not exist")
+                # Write bytes directly to temporary file
+                with open(local_input, "wb") as f:
+                    f.write(request.input_bytes.data)
 
-            self.minio_client.fget_object(
-                request.input_image.bucket, request.input_image.object_key, local_input
-            )
-            download_time = time.time() - download_start
-            logger.info(f"Download completed in {download_time:.2f}s")
+                logger.info(
+                    f"Saved {len(request.input_bytes.data)} bytes to {local_input}"
+                )
+
+            elif request.HasField("input_image"):
+                # Handle MinIO reference input (for batch processing)
+                logger.info("Processing MinIO image reference input")
+
+                # Download image from MinIO with timing
+                download_start = time.time()
+
+                logger.info(
+                    f"Downloading {request.input_image.object_key} from bucket {request.input_image.bucket}"
+                )
+
+                # Ensure bucket exists before attempting download
+                if not self.minio_client.bucket_exists(request.input_image.bucket):
+                    raise ValueError(
+                        f"Bucket {request.input_image.bucket} does not exist"
+                    )
+
+                self.minio_client.fget_object(
+                    request.input_image.bucket,
+                    request.input_image.object_key,
+                    local_input,
+                )
+                download_time = time.time() - download_start
+                logger.info(f"Download completed in {download_time:.2f}s")
+            else:
+                raise ValueError("Request must have either input_bytes or input_image")
 
             # Load and process image with timing
             processing_start = time.time()
             image = cv2.imread(local_input)
             if image is None:
-                raise ValueError(
-                    f"Could not read input image: {request.input_image.object_key}"
-                )
+                raise ValueError(f"Could not read input image from {local_input}")
 
             original_height, original_width = image.shape[:2]
             logger.info(f"Original image size: {original_width}x{original_height}")
@@ -146,36 +168,99 @@ class ResizeServiceImplementation(resize_pb2_grpc.ResizeServiceServicer):
             )
             logger.info(f"Resized image to {new_width}x{new_height}")
 
-            # Save resized image with workflow-expected naming
-            # ワークフローでは {execution_id}_resized.jpg を期待している
-            execution_id = request.execution_id
-            output_path = f"{execution_id}_resized.jpg"
+            # For real-time processing (input_bytes), return direct bytes
+            if request.HasField("input_bytes"):
+                # Convert resized image to JPEG bytes
+                # Convert BGR (OpenCV) to RGB (Pillow)
+                resized_rgb = cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(resized_rgb)
 
-            # Use Pillow for reliable JPEG saving
-            # Convert BGR (OpenCV) to RGB (Pillow)
-            resized_rgb = cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(resized_rgb)
+                # Set quality based on request
+                if request.quality == resize_pb2.RESIZE_QUALITY_BEST:
+                    jpeg_quality = 95
+                elif request.quality == resize_pb2.RESIZE_QUALITY_GOOD:
+                    jpeg_quality = 85
+                else:  # RESIZE_QUALITY_FAST
+                    jpeg_quality = 75
 
-            # Set quality based on request
-            if request.quality == resize_pb2.RESIZE_QUALITY_BEST:
-                jpeg_quality = 95
-            elif request.quality == resize_pb2.RESIZE_QUALITY_GOOD:
-                jpeg_quality = 85
-            else:  # RESIZE_QUALITY_FAST
-                jpeg_quality = 75
+                # Save to bytes buffer
+                import io
 
-            pil_image.save(local_output, "JPEG", quality=jpeg_quality, optimize=True)
-            processing_time = time.time() - processing_start
-            logger.info(f"Processing completed in {processing_time:.2f}s")
+                img_buffer = io.BytesIO()
+                pil_image.save(img_buffer, format="JPEG", quality=jpeg_quality)
+                img_bytes = img_buffer.getvalue()
 
-            # Upload to MinIO with timing
-            upload_start = time.time()
-            if not self.minio_client.bucket_exists(request.input_image.bucket):
-                self.minio_client.make_bucket(request.input_image.bucket)
+                # Create response with direct bytes
+                response = resize_pb2.ResizeResponse()
+                response.result.status = common_pb2.PROCESSING_STATUS_COMPLETED
+                response.result.message = (
+                    f"Image resized successfully to {new_width}x{new_height}"
+                )
+                response.result.output_data = img_bytes  # Store the actual image bytes
 
-            self.minio_client.fput_object(
-                request.input_image.bucket, output_path, local_output
-            )
+                # Set metadata
+                response.result.output_image.content_type = "image/jpeg"
+                response.result.output_image.width = new_width
+                response.result.output_image.height = new_height
+
+                # Set timestamp
+                now = Timestamp()
+                now.FromDatetime(datetime.now(timezone.utc))
+                response.result.processed_at.CopyFrom(now)
+                response.result.processing_time_seconds = time.time() - start_time
+
+                # Set metadata
+                response.metadata.original_width = original_width
+                response.metadata.original_height = original_height
+                response.metadata.target_width = new_width
+                response.metadata.target_height = new_height
+                response.metadata.scale_factor = scale_factor
+                response.metadata.processing_time_ms = (time.time() - start_time) * 1000
+
+                logger.info(
+                    f"Resize completed successfully, returning {len(img_bytes)} bytes"
+                )
+
+                # Clean up
+                if os.path.exists(local_input):
+                    os.remove(local_input)
+
+                return response
+
+            # For MinIO-based processing (input_image), upload to MinIO
+            else:
+                # Save resized image with workflow-expected naming
+                # ワークフローでは {execution_id}_resized.jpg を期待している
+                execution_id = request.execution_id
+                output_path = f"{execution_id}_resized.jpg"
+
+                # Use Pillow for reliable JPEG saving
+                # Convert BGR (OpenCV) to RGB (Pillow)
+                resized_rgb = cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(resized_rgb)
+
+                # Set quality based on request
+                if request.quality == resize_pb2.RESIZE_QUALITY_BEST:
+                    jpeg_quality = 95
+                elif request.quality == resize_pb2.RESIZE_QUALITY_GOOD:
+                    jpeg_quality = 85
+                else:  # RESIZE_QUALITY_FAST
+                    jpeg_quality = 75
+
+                pil_image.save(
+                    local_output, "JPEG", quality=jpeg_quality, optimize=True
+                )
+                processing_time = time.time() - processing_start
+                logger.info(f"Processing completed in {processing_time:.2f}s")
+
+                # Upload to MinIO with timing
+                upload_start = time.time()
+                if not self.minio_client.bucket_exists(request.input_image.bucket):
+                    self.minio_client.make_bucket(request.input_image.bucket)
+
+                self.minio_client.fput_object(
+                    request.input_image.bucket, output_path, local_output
+                )
             upload_time = time.time() - upload_start
             logger.info(f"Upload completed in {upload_time:.2f}s")
 

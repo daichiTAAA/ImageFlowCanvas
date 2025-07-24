@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from imageflow.v1 import common_pb2 as imageflow_dot_v1_dot_common__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1fimageflow/v1/ai_detection.proto\x12\x0cimageflow.v1\x1a\x19imageflow/v1/common.proto\"\xe9\x01\n\x10\x44\x65tectionRequest\x12,\n\x0binput_image\x18\x01 \x01(\x0b\x32\x17.imageflow.v1.ImageData\x12\x12\n\nmodel_name\x18\x02 \x01(\t\x12\x1c\n\x14\x63onfidence_threshold\x18\x03 \x01(\x02\x12\x15\n\rnms_threshold\x18\x04 \x01(\x02\x12\x12\n\ndraw_boxes\x18\x05 \x01(\x08\x12\x14\n\x0c\x65xecution_id\x18\x06 \x01(\t\x12\x34\n\x13resize_metadata_ref\x18\x07 \x01(\x0b\x32\x17.imageflow.v1.ImageData\"\xa3\x01\n\x11\x44\x65tectionResponse\x12.\n\x06result\x18\x01 \x01(\x0b\x32\x1e.imageflow.v1.ProcessingResult\x12+\n\ndetections\x18\x02 \x03(\x0b\x32\x17.imageflow.v1.Detection\x12\x31\n\x08metadata\x18\x03 \x01(\x0b\x32\x1f.imageflow.v1.DetectionMetadata\"n\n\tDetection\x12\x12\n\nclass_name\x18\x01 \x01(\t\x12\x12\n\nconfidence\x18\x02 \x01(\x02\x12\'\n\x04\x62\x62ox\x18\x03 \x01(\x0b\x32\x19.imageflow.v1.BoundingBox\x12\x10\n\x08\x63lass_id\x18\x04 \x01(\x05\"=\n\x0b\x42oundingBox\x12\n\n\x02x1\x18\x01 \x01(\x02\x12\n\n\x02y1\x18\x02 \x01(\x02\x12\n\n\x02x2\x18\x03 \x01(\x02\x12\n\n\x02y2\x18\x04 \x01(\x02\"\xbd\x01\n\x11\x44\x65tectionMetadata\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x15\n\rmodel_version\x18\x02 \x01(\t\x12\x1c\n\x14\x63onfidence_threshold\x18\x03 \x01(\x02\x12\x15\n\rnms_threshold\x18\x04 \x01(\x02\x12\x18\n\x10total_detections\x18\x05 \x01(\x05\x12\x19\n\x11inference_time_ms\x18\x06 \x01(\x01\x12\x13\n\x0bnms_time_ms\x18\x07 \x01(\x01\x32\x91\x02\n\x12\x41IDetectionService\x12P\n\rDetectObjects\x12\x1e.imageflow.v1.DetectionRequest\x1a\x1f.imageflow.v1.DetectionResponse\x12Z\n\x13\x44\x65tectObjectsStream\x12\x1e.imageflow.v1.DetectionRequest\x1a\x1f.imageflow.v1.DetectionResponse(\x01\x30\x01\x12M\n\x06Health\x12 .imageflow.v1.HealthCheckRequest\x1a!.imageflow.v1.HealthCheckResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1fimageflow/v1/ai_detection.proto\x12\x0cimageflow.v1\x1a\x19imageflow/v1/common.proto\"\xa5\x02\n\x10\x44\x65tectionRequest\x12.\n\x0binput_image\x18\x01 \x01(\x0b\x32\x17.imageflow.v1.ImageDataH\x00\x12/\n\x0binput_bytes\x18\x08 \x01(\x0b\x32\x18.imageflow.v1.ImageBytesH\x00\x12\x12\n\nmodel_name\x18\x02 \x01(\t\x12\x1c\n\x14\x63onfidence_threshold\x18\x03 \x01(\x02\x12\x15\n\rnms_threshold\x18\x04 \x01(\x02\x12\x12\n\ndraw_boxes\x18\x05 \x01(\x08\x12\x14\n\x0c\x65xecution_id\x18\x06 \x01(\t\x12\x34\n\x13resize_metadata_ref\x18\x07 \x01(\x0b\x32\x17.imageflow.v1.ImageDataB\x07\n\x05input\"\xa3\x01\n\x11\x44\x65tectionResponse\x12.\n\x06result\x18\x01 \x01(\x0b\x32\x1e.imageflow.v1.ProcessingResult\x12+\n\ndetections\x18\x02 \x03(\x0b\x32\x17.imageflow.v1.Detection\x12\x31\n\x08metadata\x18\x03 \x01(\x0b\x32\x1f.imageflow.v1.DetectionMetadata\"n\n\tDetection\x12\x12\n\nclass_name\x18\x01 \x01(\t\x12\x12\n\nconfidence\x18\x02 \x01(\x02\x12\'\n\x04\x62\x62ox\x18\x03 \x01(\x0b\x32\x19.imageflow.v1.BoundingBox\x12\x10\n\x08\x63lass_id\x18\x04 \x01(\x05\"=\n\x0b\x42oundingBox\x12\n\n\x02x1\x18\x01 \x01(\x02\x12\n\n\x02y1\x18\x02 \x01(\x02\x12\n\n\x02x2\x18\x03 \x01(\x02\x12\n\n\x02y2\x18\x04 \x01(\x02\"\xbd\x01\n\x11\x44\x65tectionMetadata\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x15\n\rmodel_version\x18\x02 \x01(\t\x12\x1c\n\x14\x63onfidence_threshold\x18\x03 \x01(\x02\x12\x15\n\rnms_threshold\x18\x04 \x01(\x02\x12\x18\n\x10total_detections\x18\x05 \x01(\x05\x12\x19\n\x11inference_time_ms\x18\x06 \x01(\x01\x12\x13\n\x0bnms_time_ms\x18\x07 \x01(\x01\x32\x91\x02\n\x12\x41IDetectionService\x12P\n\rDetectObjects\x12\x1e.imageflow.v1.DetectionRequest\x1a\x1f.imageflow.v1.DetectionResponse\x12Z\n\x13\x44\x65tectObjectsStream\x12\x1e.imageflow.v1.DetectionRequest\x1a\x1f.imageflow.v1.DetectionResponse(\x01\x30\x01\x12M\n\x06Health\x12 .imageflow.v1.HealthCheckRequest\x1a!.imageflow.v1.HealthCheckResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,15 +33,15 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'imageflow.v1.ai_detection_p
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_DETECTIONREQUEST']._serialized_start=77
-  _globals['_DETECTIONREQUEST']._serialized_end=310
-  _globals['_DETECTIONRESPONSE']._serialized_start=313
-  _globals['_DETECTIONRESPONSE']._serialized_end=476
-  _globals['_DETECTION']._serialized_start=478
-  _globals['_DETECTION']._serialized_end=588
-  _globals['_BOUNDINGBOX']._serialized_start=590
-  _globals['_BOUNDINGBOX']._serialized_end=651
-  _globals['_DETECTIONMETADATA']._serialized_start=654
-  _globals['_DETECTIONMETADATA']._serialized_end=843
-  _globals['_AIDETECTIONSERVICE']._serialized_start=846
-  _globals['_AIDETECTIONSERVICE']._serialized_end=1119
+  _globals['_DETECTIONREQUEST']._serialized_end=370
+  _globals['_DETECTIONRESPONSE']._serialized_start=373
+  _globals['_DETECTIONRESPONSE']._serialized_end=536
+  _globals['_DETECTION']._serialized_start=538
+  _globals['_DETECTION']._serialized_end=648
+  _globals['_BOUNDINGBOX']._serialized_start=650
+  _globals['_BOUNDINGBOX']._serialized_end=711
+  _globals['_DETECTIONMETADATA']._serialized_start=714
+  _globals['_DETECTIONMETADATA']._serialized_end=903
+  _globals['_AIDETECTIONSERVICE']._serialized_start=906
+  _globals['_AIDETECTIONSERVICE']._serialized_end=1179
 # @@protoc_insertion_point(module_scope)

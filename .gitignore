@@ -385,3 +385,4 @@ models/*/1/*.pb
 models/*/1/*.trt
 models/*/1/*.engine
 
+test.png

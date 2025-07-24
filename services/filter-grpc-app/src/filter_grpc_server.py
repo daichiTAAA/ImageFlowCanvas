@@ -86,23 +86,41 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
         )
 
         try:
-            # Download image from MinIO
             local_input = f"/tmp/input_{request.execution_id}"
             local_output = f"/tmp/output_{request.execution_id}"
 
-            logger.info(
-                f"Downloading {request.input_image.object_key} from bucket {request.input_image.bucket}"
-            )
-            self.minio_client.fget_object(
-                request.input_image.bucket, request.input_image.object_key, local_input
-            )
+            # Check if input is direct bytes or MinIO reference
+            if request.HasField("input_bytes"):
+                # Handle direct byte input (for real-time streaming)
+                logger.info("Processing direct image bytes input")
+
+                # Write bytes directly to temporary file
+                with open(local_input, "wb") as f:
+                    f.write(request.input_bytes.data)
+
+                logger.info(
+                    f"Saved {len(request.input_bytes.data)} bytes to {local_input}"
+                )
+
+            elif request.HasField("input_image"):
+                # Handle MinIO reference input (for batch processing)
+                logger.info("Processing MinIO image reference input")
+
+                logger.info(
+                    f"Downloading {request.input_image.object_key} from bucket {request.input_image.bucket}"
+                )
+                self.minio_client.fget_object(
+                    request.input_image.bucket,
+                    request.input_image.object_key,
+                    local_input,
+                )
+            else:
+                raise ValueError("Request must have either input_bytes or input_image")
 
             # Load image
             image = cv2.imread(local_input)
             if image is None:
-                raise ValueError(
-                    f"Could not read input image: {request.input_image.object_key}"
-                )
+                raise ValueError(f"Could not read input image from {local_input}")
 
             original_height, original_width = image.shape[:2]
             logger.info(f"Processing image size: {original_width}x{original_height}")
@@ -112,58 +130,104 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
                 image, request.filter_type, request.intensity, request.parameters
             )
 
-            # Save filtered image with workflow-expected naming
-            # ワークフローでは {execution_id}_final.jpg を期待している
-            execution_id = request.execution_id
-            output_path = f"{execution_id}_final.jpg"
+            # For real-time processing (input_bytes), return direct bytes
+            if request.HasField("input_bytes"):
+                # Convert filtered image to JPEG bytes
+                # Convert BGR (OpenCV) to RGB (Pillow)
+                filtered_rgb = cv2.cvtColor(filtered_image, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(filtered_rgb)
 
-            # Use Pillow for reliable JPEG saving
-            # Convert BGR (OpenCV) to RGB (Pillow)
-            filtered_rgb = cv2.cvtColor(filtered_image, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(filtered_rgb)
-            pil_image.save(local_output, "JPEG", quality=85, optimize=True)
+                # Save to bytes buffer
+                import io
 
-            # Upload to MinIO
-            if not self.minio_client.bucket_exists(request.input_image.bucket):
-                self.minio_client.make_bucket(request.input_image.bucket)
+                img_buffer = io.BytesIO()
+                pil_image.save(img_buffer, format="JPEG", quality=85)
+                img_bytes = img_buffer.getvalue()
 
-            self.minio_client.fput_object(
-                request.input_image.bucket, output_path, local_output
-            )
-            logger.info(f"Uploaded filtered image to {output_path}")
+                # Create response with direct bytes
+                response = filter_pb2.FilterResponse()
+                response.result.status = common_pb2.PROCESSING_STATUS_COMPLETED
+                response.result.message = f"Filter {filter_pb2.FilterType.Name(request.filter_type)} applied successfully"
+                response.result.output_data = img_bytes  # Store the actual image bytes
 
-            # Cleanup local files
-            if os.path.exists(local_input):
-                os.remove(local_input)
-            if os.path.exists(local_output):
-                os.remove(local_output)
+                # Set metadata
+                response.result.output_image.content_type = "image/jpeg"
+                response.result.output_image.width = original_width
+                response.result.output_image.height = original_height  # Set timestamp
+                now = Timestamp()
+                now.FromDatetime(datetime.now(timezone.utc))
+                response.result.processed_at.CopyFrom(now)
+                response.result.processing_time_seconds = time.time() - start_time
 
-            processing_time = time.time() - start_time
+                # Set metadata
+                response.metadata.filter_type = request.filter_type
+                response.metadata.intensity = request.intensity
+                response.metadata.processing_time_ms = (time.time() - start_time) * 1000
 
-            # Create response
-            response = filter_pb2.FilterResponse()
+                logger.info(
+                    f"Filter applied successfully, returning {len(img_bytes)} bytes"
+                )
 
-            # Set processing result
-            response.result.status = common_pb2.PROCESSING_STATUS_COMPLETED
-            response.result.message = f"Filter {filter_pb2.FilterType.Name(request.filter_type)} applied successfully"
+                # Clean up
+                if os.path.exists(local_input):
+                    os.remove(local_input)
 
-            # Set output image info
-            response.result.output_image.bucket = request.input_image.bucket
-            response.result.output_image.object_key = output_path
-            response.result.output_image.content_type = (
-                "image/jpeg" if output_path.endswith(".jpg") else "image/png"
-            )
-            response.result.output_image.width = original_width
-            response.result.output_image.height = original_height
+                return response
 
-            # Set timestamp
-            now = Timestamp()
-            now.FromDatetime(datetime.now(timezone.utc))
-            response.result.processed_at.CopyFrom(now)
-            response.result.processing_time_seconds = processing_time
+            # For MinIO-based processing (input_image), upload to MinIO
+            else:
+                # Save filtered image with workflow-expected naming
+                # ワークフローでは {execution_id}_final.jpg を期待している
+                execution_id = request.execution_id
+                output_path = f"{execution_id}_final.jpg"
 
-            # Set metadata
-            response.metadata.filter_type = request.filter_type
+                # Use Pillow for reliable JPEG saving
+                # Convert BGR (OpenCV) to RGB (Pillow)
+                filtered_rgb = cv2.cvtColor(filtered_image, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(filtered_rgb)
+                pil_image.save(local_output, "JPEG", quality=85, optimize=True)
+
+                # Upload to MinIO
+                if not self.minio_client.bucket_exists(request.input_image.bucket):
+                    self.minio_client.make_bucket(request.input_image.bucket)
+
+                self.minio_client.fput_object(
+                    request.input_image.bucket, output_path, local_output
+                )
+                logger.info(f"Uploaded filtered image to {output_path}")
+
+                # Cleanup local files
+                if os.path.exists(local_input):
+                    os.remove(local_input)
+                if os.path.exists(local_output):
+                    os.remove(local_output)
+
+                processing_time = time.time() - start_time
+
+                # Create response
+                response = filter_pb2.FilterResponse()
+
+                # Set processing result
+                response.result.status = common_pb2.PROCESSING_STATUS_COMPLETED
+                response.result.message = f"Filter {filter_pb2.FilterType.Name(request.filter_type)} applied successfully"
+
+                # Set output image info
+                response.result.output_image.bucket = request.input_image.bucket
+                response.result.output_image.object_key = output_path
+                response.result.output_image.content_type = (
+                    "image/jpeg" if output_path.endswith(".jpg") else "image/png"
+                )
+                response.result.output_image.width = original_width
+                response.result.output_image.height = original_height
+
+                # Set timestamp
+                now = Timestamp()
+                now.FromDatetime(datetime.now(timezone.utc))
+                response.result.processed_at.CopyFrom(now)
+                response.result.processing_time_seconds = processing_time
+
+                # Set metadata
+                response.metadata.filter_type = request.filter_type
             response.metadata.intensity = request.intensity
             for key, value in request.parameters.items():
                 response.metadata.applied_parameters[key] = value

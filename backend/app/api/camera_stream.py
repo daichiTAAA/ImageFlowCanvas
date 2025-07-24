@@ -13,6 +13,7 @@ import json
 import logging
 import base64
 import io
+import time
 from PIL import Image
 import cv2
 import numpy as np
@@ -118,10 +119,15 @@ async def camera_stream_websocket(websocket: WebSocket, source_id: str):
     WebSocket endpoint for real-time camera streaming
     Receives video frames via WebSocket and processes them through gRPC streaming
     """
+    logger.info(f"=== NEW WEBSOCKET CONNECTION ATTEMPT ===")
+    logger.info(f"Source ID: {source_id}")
+    logger.info(f"WebSocket client: {websocket.client}")
+
     await websocket.accept()
     connected_clients[source_id] = websocket
 
     logger.info(f"Camera stream WebSocket connected for source: {source_id}")
+    logger.info(f"Total connected clients: {len(connected_clients)}")
 
     try:
         # Start gRPC streaming task
@@ -134,10 +140,19 @@ async def camera_stream_websocket(websocket: WebSocket, source_id: str):
                 logger.info(
                     f"Received WebSocket data from {source_id}: {len(data)} chars"
                 )
+
+                # Debug: Log first 200 chars of data to see what we're receiving
+                logger.debug(
+                    f"WebSocket data preview from {source_id}: {data[:200]}..."
+                )
+
                 message = json.loads(data)
                 logger.info(
                     f"Parsed message type: {message.get('type', 'unknown')} from {source_id}"
                 )
+
+                # Debug: Log message keys to understand structure
+                logger.debug(f"Message keys from {source_id}: {list(message.keys())}")
 
                 if message.get("type") == "frame":
                     # Process incoming frame
@@ -211,6 +226,9 @@ async def handle_grpc_streaming(websocket: WebSocket, source_id: str):
                             break
 
                         logger.info(f"Processing frame for {source_id}")
+                        logger.debug(
+                            f"Frame metadata: source_id={frame.metadata.source_id}, size={len(frame.frame_data)}, dimensions={frame.metadata.width}x{frame.metadata.height}"
+                        )
 
                         # Process single frame in executor
                         loop = asyncio.get_event_loop()
@@ -244,6 +262,11 @@ async def handle_grpc_streaming(websocket: WebSocket, source_id: str):
                             except Exception as e:
                                 logger.error(
                                     f"gRPC processing error for {source_id}: {e}"
+                                )
+                                import traceback
+
+                                logger.error(
+                                    f"gRPC traceback: {traceback.format_exc()}"
                                 )
                                 return None
 
@@ -312,15 +335,27 @@ async def process_incoming_frame(message: dict, source_id: str):
             f"Received frame from {source_id}: {message.get('type', 'unknown')}"
         )
 
+        # Debug: Log all message keys
+        logger.debug(f"Frame message keys: {list(message.keys())}")
+        logger.debug(
+            f"Frame message values (except frame_data): {dict((k, v) for k, v in message.items() if k != 'frame_data')}"
+        )
+
         # Extract frame data
         frame_data_b64 = message.get("frame_data")
         if not frame_data_b64:
             logger.error(f"No frame data in message from {source_id}")
+            logger.error(f"Available keys: {list(message.keys())}")
             return
 
         # Decode base64 frame data
-        frame_data = base64.b64decode(frame_data_b64)
-        logger.info(f"Decoded frame data size: {len(frame_data)} bytes")
+        try:
+            frame_data = base64.b64decode(frame_data_b64)
+            logger.info(f"Decoded frame data size: {len(frame_data)} bytes")
+        except Exception as e:
+            logger.error(f"Failed to decode base64 frame data from {source_id}: {e}")
+            logger.error(f"Frame data preview: {frame_data_b64[:100]}...")
+            return
 
         # Create VideoFrame message
         video_frame = camera_stream_pb2.VideoFrame()
@@ -348,11 +383,21 @@ async def process_incoming_frame(message: dict, source_id: str):
         if websocket and hasattr(websocket, "frame_queue"):
             await websocket.frame_queue.put(video_frame)
             logger.info(f"Frame queued for processing by {source_id}")
+            logger.debug(
+                f"Queue size after adding frame: {websocket.frame_queue.qsize()}"
+            )
         else:
             logger.error(f"No frame queue found for {source_id}")
+            logger.error(f"Websocket exists: {websocket is not None}")
+            logger.error(
+                f"Has frame_queue attr: {hasattr(websocket, 'frame_queue') if websocket else 'N/A'}"
+            )
 
     except Exception as e:
         logger.error(f"Error processing incoming frame from {source_id}: {e}")
+        import traceback
+
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 async def handle_config_update(message: dict, source_id: str):
@@ -403,7 +448,7 @@ async def test_frame_processing(
         # Create VideoFrame
         video_frame = camera_stream_pb2.VideoFrame()
         video_frame.frame_data = image_data
-        video_frame.timestamp_ms = int(asyncio.get_event_loop().time() * 1000)
+        video_frame.timestamp_ms = int(time.time() * 1000)  # UNIX時間を使用
 
         metadata = video_frame.metadata
         metadata.source_id = source_id

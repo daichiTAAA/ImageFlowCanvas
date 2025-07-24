@@ -35,7 +35,7 @@ from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -74,12 +74,18 @@ class CameraStreamProcessorImplementation(
 
         # Backend API endpoint for pipeline definitions
         self.backend_api_url = os.getenv(
-            "BACKEND_API_URL", "http://backend.default.svc.cluster.local:8000"
+            "BACKEND_API_URL", "http://backend-service.default.svc.cluster.local:8000"
         )
+
+        # Service-to-service authentication bypass
+        self.service_auth_token = os.getenv("SERVICE_AUTH_TOKEN", None)
+        self.skip_auth = os.getenv("SKIP_SERVICE_AUTH", "true").lower() == "true"
 
         # Frame processing parameters
         self.max_concurrent_streams = int(os.getenv("MAX_CONCURRENT_STREAMS", "10"))
-        self.frame_skip_threshold = int(os.getenv("FRAME_SKIP_THRESHOLD", "100"))  # ms
+        self.frame_skip_threshold = int(
+            os.getenv("FRAME_SKIP_THRESHOLD", "1000")
+        )  # ms - 1秒に延長
 
         # Initialize gRPC connections
         self.channels = {}
@@ -142,8 +148,29 @@ class CameraStreamProcessorImplementation(
 
         try:
             # Fetch pipeline definition from backend API
+            # Prepare headers for service-to-service authentication
+            headers = {}
+
+            # Add service bypass header for internal communication
+            if self.skip_auth:
+                headers["X-Service-Internal"] = "true"
+                headers["X-Service-Name"] = "camera-stream-grpc"
+                logger.debug(f"Added service bypass headers: {headers}")
+
+            # Add service token if available
+            if self.service_auth_token:
+                headers["Authorization"] = f"Bearer {self.service_auth_token}"
+                logger.debug(f"Added service token to headers")
+
+            logger.debug(
+                f"Making request to: {self.backend_api_url}/v1/pipelines/{pipeline_id}"
+            )
+            logger.debug(f"Request headers: {headers}")
+
             response = requests.get(
-                f"{self.backend_api_url}/api/pipelines/{pipeline_id}", timeout=5
+                f"{self.backend_api_url}/v1/pipelines/{pipeline_id}",
+                headers=headers,
+                timeout=5,
             )
             if response.status_code == 200:
                 pipeline_def = response.json()
@@ -216,6 +243,15 @@ class CameraStreamProcessorImplementation(
         processed_frame = camera_stream_pb2.ProcessedFrame()
         processed_frame.source_id = video_frame.metadata.source_id
 
+        # フレーム受信時の詳細ログ
+        logger.debug(f"=== Processing Video Frame ===")
+        logger.debug(f"Source ID: {video_frame.metadata.source_id}")
+        logger.debug(f"Pipeline ID: {video_frame.metadata.pipeline_id}")
+        logger.debug(f"Frame data size: {len(video_frame.frame_data)} bytes")
+        logger.debug(
+            f"Frame dimensions: {video_frame.metadata.width}x{video_frame.metadata.height}"
+        )
+
         try:
             # Check if we should skip this frame for performance
             if self._should_skip_frame(video_frame):
@@ -223,6 +259,9 @@ class CameraStreamProcessorImplementation(
                     camera_stream_pb2.STREAM_PROCESSING_STATUS_SKIPPED
                 )
                 processed_frame.error_message = "Frame skipped due to high load"
+                logger.info(
+                    f"Frame SKIPPED for source {video_frame.metadata.source_id}"
+                )
                 return processed_frame
 
             # Get pipeline definition based on metadata
@@ -285,12 +324,35 @@ class CameraStreamProcessorImplementation(
         """
         # Simple heuristic: check frame age
         current_time = int(time.time() * 1000)
-        frame_age = current_time - video_frame.timestamp_ms
+        frame_timestamp = video_frame.timestamp_ms
+        frame_age = current_time - frame_timestamp
+
+        # 時刻情報をより詳細にログ出力
+        from datetime import datetime
+
+        current_datetime = datetime.fromtimestamp(current_time / 1000.0)
+        frame_datetime = datetime.fromtimestamp(frame_timestamp / 1000.0)
+
+        logger.debug(f"=== Frame Timing Analysis ===")
+        logger.debug(
+            f"Current time: {current_time}ms ({current_datetime.strftime('%H:%M:%S.%f')[:-3]})"
+        )
+        logger.debug(
+            f"Frame timestamp: {frame_timestamp}ms ({frame_datetime.strftime('%H:%M:%S.%f')[:-3]})"
+        )
+        logger.debug(f"Frame age: {frame_age}ms")
+        logger.debug(f"Skip threshold: {self.frame_skip_threshold}ms")
+        logger.debug(f"Will skip: {frame_age > self.frame_skip_threshold}")
 
         if frame_age > self.frame_skip_threshold:
-            logger.debug(f"Skipping old frame (age: {frame_age}ms)")
+            logger.warning(
+                f"SKIPPING old frame - Age: {frame_age}ms > Threshold: {self.frame_skip_threshold}ms"
+            )
             return True
 
+        logger.debug(
+            f"PROCESSING frame - Age: {frame_age}ms <= Threshold: {self.frame_skip_threshold}ms"
+        )
         return False
 
     def _execute_pipeline(
@@ -323,7 +385,10 @@ class CameraStreamProcessorImplementation(
                     current_data = self._execute_resize(current_data, component_params)
                 elif component_type == "ai_detection":
                     detections = self._execute_ai_detection(
-                        current_data, component_params
+                        current_data,
+                        component_params,
+                        video_frame.metadata.width,
+                        video_frame.metadata.height,
                     )
                     result["detections"].extend(detections)
                 elif component_type == "filter":
@@ -370,20 +435,31 @@ class CameraStreamProcessorImplementation(
 
             # Create resize request
             request = resize_pb2.ResizeRequest()
-            request.image_data = frame_data
-            request.width = params.get("width", 640)
-            request.height = params.get("height", 480)
-            request.format = common_pb2.IMAGE_FORMAT_JPEG
+
+            # Create ImageBytes for input_bytes
+            image_bytes = common_pb2.ImageBytes()
+            image_bytes.data = frame_data
+            image_bytes.format = "JPEG"
+
+            request.input_bytes.CopyFrom(image_bytes)
+            request.target_width = params.get("width", 640)
+            request.target_height = params.get("height", 480)
 
             # Call resize service
             response = client.ResizeImage(
                 request, timeout=self.grpc_services["resize"]["timeout"]
             )
 
-            if response.status == common_pb2.PROCESSING_STATUS_SUCCESS:
-                return response.resized_image_data
+            if response.result.status == common_pb2.PROCESSING_STATUS_COMPLETED:
+                # Check if we have direct output data (for real-time processing)
+                if response.result.output_data:
+                    return response.result.output_data
+                # Otherwise use MinIO reference data (shouldn't happen in real-time)
+                else:
+                    logger.error("Resize failed: No output data in response")
+                    return frame_data
             else:
-                logger.error(f"Resize failed: {response.error_message}")
+                logger.error(f"Resize failed: {response.result.message}")
                 return frame_data
 
         except Exception as e:
@@ -391,7 +467,7 @@ class CameraStreamProcessorImplementation(
             return frame_data
 
     def _execute_ai_detection(
-        self, frame_data: bytes, params: Dict[str, Any]
+        self, frame_data: bytes, params: Dict[str, Any], width: int = 0, height: int = 0
     ) -> List[ai_detection_pb2.Detection]:
         """Execute AI detection through gRPC service"""
         try:
@@ -403,27 +479,26 @@ class CameraStreamProcessorImplementation(
 
             # Create detection request
             request = ai_detection_pb2.DetectionRequest()
-            request.image_data = frame_data
+
+            # Create ImageBytes for input_bytes
+            image_bytes = common_pb2.ImageBytes()
+            image_bytes.data = frame_data
+            image_bytes.format = "JPEG"
+            image_bytes.width = width
+            image_bytes.height = height
+
+            request.input_bytes.CopyFrom(image_bytes)
             request.model_name = params.get("model_name", "yolo11n")
             request.confidence_threshold = params.get("confidence_threshold", 0.5)
-            request.format = common_pb2.IMAGE_FORMAT_JPEG
 
             # Call AI detection service
             response = client.DetectObjects(
                 request, timeout=self.grpc_services["ai_detection"]["timeout"]
             )
 
-            if response.status == common_pb2.PROCESSING_STATUS_SUCCESS:
-                # Convert AI detection results to camera stream format
-                detections = []
-                for det in response.detections:
-                    camera_detection = camera_stream_pb2.Detection()
-                    camera_detection.class_name = det.class_name
-                    camera_detection.confidence = det.confidence
-                    # Copy bounding box
-                    camera_detection.bbox.CopyFrom(det.bbox)
-                    detections.append(camera_detection)
-                return detections
+            if response.result.status == common_pb2.PROCESSING_STATUS_COMPLETED:
+                # Return AI detection results directly (they're already in the correct format)
+                return list(response.detections)
             else:
                 logger.error(f"AI detection failed: {response.error_message}")
                 return []
@@ -443,9 +518,14 @@ class CameraStreamProcessorImplementation(
 
             # Create filter request
             request = filter_pb2.FilterRequest()
-            request.image_data = frame_data
-            request.filter_type = params.get("filter_type", "blur")
-            request.format = common_pb2.IMAGE_FORMAT_JPEG
+
+            # Create ImageBytes for input_bytes
+            image_bytes = common_pb2.ImageBytes()
+            image_bytes.data = frame_data
+            image_bytes.format = "JPEG"
+
+            request.input_bytes.CopyFrom(image_bytes)
+            request.filter_type = params.get("filter_type", filter_pb2.FILTER_TYPE_BLUR)
 
             # Add filter parameters
             for key, value in params.items():
@@ -457,10 +537,16 @@ class CameraStreamProcessorImplementation(
                 request, timeout=self.grpc_services["filter"]["timeout"]
             )
 
-            if response.status == common_pb2.PROCESSING_STATUS_SUCCESS:
-                return response.filtered_image_data
+            if response.result.status == common_pb2.PROCESSING_STATUS_COMPLETED:
+                # Check if we have direct output data (for real-time processing)
+                if response.result.output_data:
+                    return response.result.output_data
+                # Otherwise use MinIO reference data (shouldn't happen in real-time)
+                else:
+                    logger.error("Filter failed: No output data in response")
+                    return frame_data
             else:
-                logger.error(f"Filter failed: {response.error_message}")
+                logger.error(f"Filter failed: {response.result.message}")
                 return frame_data
 
         except Exception as e:

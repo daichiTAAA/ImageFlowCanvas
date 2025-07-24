@@ -200,8 +200,23 @@ export const CameraStream: React.FC = () => {
   };
 
   const startFrameCapture = () => {
+    console.log("🎥 Starting frame capture...");
+    console.log("WebSocket state:", state.isConnected);
+    console.log("WebSocket ref readyState:", wsRef.current?.readyState);
+    console.log("Video ref:", videoRef.current);
+    console.log("Canvas ref:", canvasRef.current);
+
     const captureFrame = () => {
-      if (!videoRef.current || !canvasRef.current || !state.isConnected) {
+      // Check WebSocket directly instead of relying on state
+      const isWsConnected =
+        wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
+
+      if (!videoRef.current || !canvasRef.current || !isWsConnected) {
+        console.log("⚠️ Frame capture skipped - missing requirements:");
+        console.log("- Video ref:", !!videoRef.current);
+        console.log("- Canvas ref:", !!canvasRef.current);
+        console.log("- WebSocket connected:", isWsConnected);
+        console.log("- WebSocket readyState:", wsRef.current?.readyState);
         return;
       }
 
@@ -209,11 +224,16 @@ export const CameraStream: React.FC = () => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
 
-      if (!ctx) return;
+      if (!ctx) {
+        console.log("❌ Failed to get canvas context");
+        return;
+      }
 
       // Set canvas dimensions to match video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
+
+      console.log(`📸 Capturing frame: ${canvas.width}x${canvas.height}`);
 
       // Draw current frame to canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -233,11 +253,30 @@ export const CameraStream: React.FC = () => {
           processing_params: {},
         };
 
+        console.log("📤 Sending frame via WebSocket:", {
+          type: message.type,
+          timestamp: message.timestamp_ms,
+          size: `${message.width}x${message.height}`,
+          pipeline: message.pipeline_id,
+          dataLength: frameData.length,
+        });
+
         wsRef.current.send(JSON.stringify(message));
+      } else {
+        console.log("❌ WebSocket not ready for sending:", {
+          exists: !!wsRef.current,
+          readyState: wsRef.current?.readyState,
+          expectedState: WebSocket.OPEN,
+        });
       }
     };
 
     // Start capturing frames at specified rate
+    console.log(
+      `🔄 Starting interval with ${streamingRate} fps (${
+        1000 / streamingRate
+      }ms)`
+    );
     intervalRef.current = setInterval(captureFrame, 1000 / streamingRate);
   };
 

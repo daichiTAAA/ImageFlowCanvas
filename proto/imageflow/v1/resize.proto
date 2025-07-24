@@ -12,7 +12,10 @@ service ResizeService {
 }
 
 message ResizeRequest {
-  ImageData input_image = 1;
+  oneof input {
+    ImageData input_image = 1;
+    ImageBytes input_bytes = 7;  // For direct byte data input
+  }
   int32 target_width = 2;
   int32 target_height = 3;
   bool maintain_aspect_ratio = 4;

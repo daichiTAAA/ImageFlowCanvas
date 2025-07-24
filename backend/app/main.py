@@ -23,7 +23,7 @@ from app.services.websocket_manager import ConnectionManager
 
 # ログ設定を早期に初期化
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
@@ -94,9 +94,7 @@ app.include_router(
     grpc_services.router, prefix="/v1/grpc-services", tags=["grpc-services"]
 )
 # Health monitoring endpoints (no auth required)
-app.include_router(
-    grpc_services.router, prefix="/v1/monitoring", tags=["monitoring"]
-)
+app.include_router(grpc_services.router, prefix="/v1/monitoring", tags=["monitoring"])
 
 
 @app.on_event("startup")

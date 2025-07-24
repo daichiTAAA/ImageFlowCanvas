@@ -12,7 +12,10 @@ service AIDetectionService {
 }
 
 message DetectionRequest {
-  ImageData input_image = 1;
+  oneof input {
+    ImageData input_image = 1;
+    ImageBytes input_bytes = 8;  // For direct byte data input
+  }
   string model_name = 2;
   float confidence_threshold = 3;
   float nms_threshold = 4;

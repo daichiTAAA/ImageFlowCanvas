@@ -5,6 +5,10 @@ from app.models.pipeline import Pipeline, PipelineCreateRequest, PipelineUpdateR
 from app.services.pipeline_service import PipelineService
 from app.services.auth_service import get_current_user
 from app.database import get_db
+import logging
+
+# ログ設定
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 pipeline_service = PipelineService()
@@ -33,9 +37,18 @@ async def get_pipeline(
     pipeline_id: str, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """特定のパイプラインを取得"""
+    logger.debug(f"=== Pipeline API Request ===")
+    logger.debug(f"Pipeline ID: {pipeline_id}")
+    logger.debug(f"User: {user}")
+    logger.debug(f"User type: {type(user)}")
+    logger.debug(f"Is service account: {user.get('is_service', False)}")
+
     pipeline = await pipeline_service.get_pipeline(pipeline_id, db)
     if not pipeline:
+        logger.warning(f"Pipeline not found: {pipeline_id}")
         raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    logger.info(f"Pipeline retrieved successfully: {pipeline_id}")
     return pipeline
 
 

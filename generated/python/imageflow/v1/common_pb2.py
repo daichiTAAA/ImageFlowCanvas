@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19imageflow/v1/common.proto\x12\x0cimageflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa8\x01\n\tImageData\x12\x0e\n\x06\x62ucket\x18\x01 \x01(\t\x12\x12\n\nobject_key\x18\x02 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x03 \x01(\t\x12\x12\n\nsize_bytes\x18\x04 \x01(\x03\x12\r\n\x05width\x18\x05 \x01(\x05\x12\x0e\n\x06height\x18\x06 \x01(\x05\x12.\n\ncreated_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"\xc6\x02\n\x10ProcessingResult\x12.\n\x06status\x18\x01 \x01(\x0e\x32\x1e.imageflow.v1.ProcessingStatus\x12\x0f\n\x07message\x18\x02 \x01(\t\x12-\n\x0coutput_image\x18\x03 \x01(\x0b\x32\x17.imageflow.v1.ImageData\x12>\n\x08metadata\x18\x04 \x03(\x0b\x32,.imageflow.v1.ProcessingResult.MetadataEntry\x12\x30\n\x0cprocessed_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x1f\n\x17processing_time_seconds\x18\x06 \x01(\x01\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"%\n\x12HealthCheckRequest\x12\x0f\n\x07service\x18\x01 \x01(\t\"\xa7\x01\n\x13HealthCheckResponse\x12?\n\x06status\x18\x01 \x01(\x0e\x32/.imageflow.v1.HealthCheckResponse.ServingStatus\"O\n\rServingStatus\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0b\n\x07SERVING\x10\x01\x12\x0f\n\x0bNOT_SERVING\x10\x02\x12\x13\n\x0fSERVICE_UNKNOWN\x10\x03*\xb2\x01\n\x10ProcessingStatus\x12!\n\x1dPROCESSING_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n\x19PROCESSING_STATUS_PENDING\x10\x01\x12\x1d\n\x19PROCESSING_STATUS_RUNNING\x10\x02\x12\x1f\n\x1bPROCESSING_STATUS_COMPLETED\x10\x03\x12\x1c\n\x18PROCESSING_STATUS_FAILED\x10\x04\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19imageflow/v1/common.proto\x12\x0cimageflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa8\x01\n\tImageData\x12\x0e\n\x06\x62ucket\x18\x01 \x01(\t\x12\x12\n\nobject_key\x18\x02 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x03 \x01(\t\x12\x12\n\nsize_bytes\x18\x04 \x01(\x03\x12\r\n\x05width\x18\x05 \x01(\x05\x12\x0e\n\x06height\x18\x06 \x01(\x05\x12.\n\ncreated_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"I\n\nImageBytes\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0e\n\x06\x66ormat\x18\x02 \x01(\t\x12\r\n\x05width\x18\x03 \x01(\x05\x12\x0e\n\x06height\x18\x04 \x01(\x05\"\xdb\x02\n\x10ProcessingResult\x12.\n\x06status\x18\x01 \x01(\x0e\x32\x1e.imageflow.v1.ProcessingStatus\x12\x0f\n\x07message\x18\x02 \x01(\t\x12-\n\x0coutput_image\x18\x03 \x01(\x0b\x32\x17.imageflow.v1.ImageData\x12\x13\n\x0boutput_data\x18\x07 \x01(\x0c\x12>\n\x08metadata\x18\x04 \x03(\x0b\x32,.imageflow.v1.ProcessingResult.MetadataEntry\x12\x30\n\x0cprocessed_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x1f\n\x17processing_time_seconds\x18\x06 \x01(\x01\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"%\n\x12HealthCheckRequest\x12\x0f\n\x07service\x18\x01 \x01(\t\"\xa7\x01\n\x13HealthCheckResponse\x12?\n\x06status\x18\x01 \x01(\x0e\x32/.imageflow.v1.HealthCheckResponse.ServingStatus\"O\n\rServingStatus\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0b\n\x07SERVING\x10\x01\x12\x0f\n\x0bNOT_SERVING\x10\x02\x12\x13\n\x0fSERVICE_UNKNOWN\x10\x03*\xb2\x01\n\x10ProcessingStatus\x12!\n\x1dPROCESSING_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n\x19PROCESSING_STATUS_PENDING\x10\x01\x12\x1d\n\x19PROCESSING_STATUS_RUNNING\x10\x02\x12\x1f\n\x1bPROCESSING_STATUS_COMPLETED\x10\x03\x12\x1c\n\x18PROCESSING_STATUS_FAILED\x10\x04\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,18 +34,20 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_PROCESSINGRESULT_METADATAENTRY']._loaded_options = None
   _globals['_PROCESSINGRESULT_METADATAENTRY']._serialized_options = b'8\001'
-  _globals['_PROCESSINGSTATUS']._serialized_start=786
-  _globals['_PROCESSINGSTATUS']._serialized_end=964
+  _globals['_PROCESSINGSTATUS']._serialized_start=882
+  _globals['_PROCESSINGSTATUS']._serialized_end=1060
   _globals['_IMAGEDATA']._serialized_start=77
   _globals['_IMAGEDATA']._serialized_end=245
-  _globals['_PROCESSINGRESULT']._serialized_start=248
-  _globals['_PROCESSINGRESULT']._serialized_end=574
-  _globals['_PROCESSINGRESULT_METADATAENTRY']._serialized_start=527
-  _globals['_PROCESSINGRESULT_METADATAENTRY']._serialized_end=574
-  _globals['_HEALTHCHECKREQUEST']._serialized_start=576
-  _globals['_HEALTHCHECKREQUEST']._serialized_end=613
-  _globals['_HEALTHCHECKRESPONSE']._serialized_start=616
-  _globals['_HEALTHCHECKRESPONSE']._serialized_end=783
-  _globals['_HEALTHCHECKRESPONSE_SERVINGSTATUS']._serialized_start=704
-  _globals['_HEALTHCHECKRESPONSE_SERVINGSTATUS']._serialized_end=783
+  _globals['_IMAGEBYTES']._serialized_start=247
+  _globals['_IMAGEBYTES']._serialized_end=320
+  _globals['_PROCESSINGRESULT']._serialized_start=323
+  _globals['_PROCESSINGRESULT']._serialized_end=670
+  _globals['_PROCESSINGRESULT_METADATAENTRY']._serialized_start=623
+  _globals['_PROCESSINGRESULT_METADATAENTRY']._serialized_end=670
+  _globals['_HEALTHCHECKREQUEST']._serialized_start=672
+  _globals['_HEALTHCHECKREQUEST']._serialized_end=709
+  _globals['_HEALTHCHECKRESPONSE']._serialized_start=712
+  _globals['_HEALTHCHECKRESPONSE']._serialized_end=879
+  _globals['_HEALTHCHECKRESPONSE_SERVINGSTATUS']._serialized_start=800
+  _globals['_HEALTHCHECKRESPONSE_SERVINGSTATUS']._serialized_end=879
 # @@protoc_insertion_point(module_scope)

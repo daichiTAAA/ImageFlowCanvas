@@ -12,7 +12,10 @@ service FilterService {
 }
 
 message FilterRequest {
-  ImageData input_image = 1;
+  oneof input {
+    ImageData input_image = 1;
+    ImageBytes input_bytes = 6;  // For direct byte data input
+  }
   FilterType filter_type = 2;
   float intensity = 3;
   map<string, string> parameters = 4;

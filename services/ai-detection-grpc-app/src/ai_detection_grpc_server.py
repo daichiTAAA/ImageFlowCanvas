@@ -110,91 +110,109 @@ class AIDetectionServiceImplementation(
         )
 
         try:
-            # Download image from MinIO
             local_input = f"/tmp/input_{request.execution_id}"
             local_output = f"/tmp/output_{request.execution_id}"
 
-            # Check if bucket exists
-            bucket_name = request.input_image.bucket
-            object_key = request.input_image.object_key
+            # Check if input is direct bytes or MinIO reference
+            if request.HasField("input_bytes"):
+                # Handle direct byte input (for real-time streaming)
+                logger.info("Processing direct image bytes input")
 
-            logger.info(f"Checking bucket '{bucket_name}' existence...")
-            if not self.minio_client.bucket_exists(bucket_name):
-                raise ValueError(f"Bucket '{bucket_name}' does not exist")
+                # Write bytes directly to temporary file
+                with open(local_input, "wb") as f:
+                    f.write(request.input_bytes.data)
 
-            # List objects in bucket for debugging
-            logger.info(f"Listing objects in bucket '{bucket_name}'...")
-            try:
-                objects = list(
-                    self.minio_client.list_objects(
-                        bucket_name, prefix="", recursive=True
-                    )
+                logger.info(
+                    f"Saved {len(request.input_bytes.data)} bytes to {local_input}"
                 )
-                logger.info(f"Found {len(objects)} objects in bucket:")
-                for obj in objects[:10]:  # Show first 10 objects
-                    logger.info(
-                        f"  - {obj.object_name} (size: {obj.size}, modified: {obj.last_modified})"
+
+            elif request.HasField("input_image"):
+                # Handle MinIO reference input (for batch processing)
+                logger.info("Processing MinIO image reference input")
+
+                # Download image from MinIO
+                bucket_name = request.input_image.bucket
+                object_key = request.input_image.object_key
+
+                logger.info(f"Checking bucket '{bucket_name}' existence...")
+                if not self.minio_client.bucket_exists(bucket_name):
+                    raise ValueError(f"Bucket '{bucket_name}' does not exist")
+
+                # List objects in bucket for debugging
+                logger.info(f"Listing objects in bucket '{bucket_name}'...")
+                try:
+                    objects = list(
+                        self.minio_client.list_objects(
+                            bucket_name, prefix="", recursive=True
+                        )
                     )
-                if len(objects) > 10:
-                    logger.info(f"  ... and {len(objects) - 10} more objects")
-            except Exception as list_error:
-                logger.warning(f"Could not list objects in bucket: {list_error}")
+                    logger.info(f"Found {len(objects)} objects in bucket:")
+                    for obj in objects[:10]:  # Show first 10 objects
+                        logger.info(
+                            f"  - {obj.object_name} (size: {obj.size}, modified: {obj.last_modified})"
+                        )
+                    if len(objects) > 10:
+                        logger.info(f"  ... and {len(objects) - 10} more objects")
+                except Exception as list_error:
+                    logger.warning(f"Could not list objects in bucket: {list_error}")
 
-            # Check if the specific object exists
-            logger.info(
-                f"Checking if object '{object_key}' exists in bucket '{bucket_name}'..."
-            )
-            try:
-                self.minio_client.stat_object(bucket_name, object_key)
-                logger.info(f"Object '{object_key}' exists")
-            except Exception as stat_error:
-                logger.error(f"Object '{object_key}' does not exist: {stat_error}")
+                # Check if the specific object exists
+                logger.info(
+                    f"Checking if object '{object_key}' exists in bucket '{bucket_name}'..."
+                )
+                try:
+                    self.minio_client.stat_object(bucket_name, object_key)
+                    logger.info(f"Object '{object_key}' exists")
+                except Exception as stat_error:
+                    logger.error(f"Object '{object_key}' does not exist: {stat_error}")
 
-                # Try to find similar objects (with potential extensions)
-                possible_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]
-                found_alternative = False
+                    # Try to find similar objects (with potential extensions)
+                    possible_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]
+                    found_alternative = False
 
-                for ext in possible_extensions:
-                    try_key = object_key + ext
-                    try:
-                        self.minio_client.stat_object(bucket_name, try_key)
-                        logger.info(f"Found alternative object: '{try_key}'")
-                        object_key = try_key  # Use the found object
-                        found_alternative = True
-                        break
-                    except:
-                        continue
-
-                if not found_alternative:
-                    # Try without execution_id suffix and with extensions
-                    base_name = (
-                        object_key.split("_")[0] if "_" in object_key else object_key
-                    )
                     for ext in possible_extensions:
-                        try_key = base_name + ext
+                        try_key = object_key + ext
                         try:
                             self.minio_client.stat_object(bucket_name, try_key)
-                            logger.info(f"Found base name alternative: '{try_key}'")
-                            object_key = try_key
+                            logger.info(f"Found alternative object: '{try_key}'")
+                            object_key = try_key  # Use the found object
                             found_alternative = True
                             break
                         except:
                             continue
 
-                if not found_alternative:
-                    raise ValueError(
-                        f"Could not find object '{request.input_image.object_key}' or any alternative in bucket '{bucket_name}'"
-                    )
+                    if not found_alternative:
+                        # Try without execution_id suffix and with extensions
+                        base_name = (
+                            object_key.split("_")[0]
+                            if "_" in object_key
+                            else object_key
+                        )
+                        for ext in possible_extensions:
+                            try_key = base_name + ext
+                            try:
+                                self.minio_client.stat_object(bucket_name, try_key)
+                                logger.info(f"Found base name alternative: '{try_key}'")
+                                object_key = try_key
+                                found_alternative = True
+                                break
+                            except:
+                                continue
 
-            logger.info(f"Downloading '{object_key}' from bucket '{bucket_name}'")
-            self.minio_client.fget_object(bucket_name, object_key, local_input)
+                    if not found_alternative:
+                        raise ValueError(
+                            f"Could not find object '{request.input_image.object_key}' or any alternative in bucket '{bucket_name}'"
+                        )
+
+                logger.info(f"Downloading '{object_key}' from bucket '{bucket_name}'")
+                self.minio_client.fget_object(bucket_name, object_key, local_input)
+            else:
+                raise ValueError("Request must have either input_bytes or input_image")
 
             # Load image
             image = cv2.imread(local_input)
             if image is None:
-                raise ValueError(
-                    f"Could not read input image: {request.input_image.object_key}"
-                )
+                raise ValueError(f"Could not read input image from {local_input}")
 
             original_height, original_width = image.shape[:2]
             logger.info(f"Processing image size: {original_width}x{original_height}")
@@ -214,24 +232,76 @@ class AIDetectionServiceImplementation(
             if request.draw_boxes and detections:
                 output_image = self._draw_bounding_boxes(output_image, detections)
 
-            # Save output image with workflow-expected naming
-            # ワークフローでは {execution_id}_detected.jpg を期待している
-            execution_id = request.execution_id
-            output_path = f"{execution_id}_detected.jpg"
+            # For real-time processing (input_bytes), skip MinIO upload
+            if request.HasField("input_bytes"):
+                # Real-time processing: return response directly without MinIO upload
+                processing_time = time.time() - start_time
 
-            # Use Pillow for reliable JPEG saving
-            # Convert BGR (OpenCV) to RGB (Pillow)
-            output_rgb = cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(output_rgb)
-            pil_image.save(local_output, "JPEG", quality=85, optimize=True)
+                # Create response
+                response = ai_detection_pb2.DetectionResponse()
 
-            # Upload to MinIO
-            if not self.minio_client.bucket_exists(request.input_image.bucket):
-                self.minio_client.make_bucket(request.input_image.bucket)
+                # Set processing result
+                response.result.status = common_pb2.PROCESSING_STATUS_COMPLETED
+                response.result.message = (
+                    f"Object detection completed. Found {len(detections)} objects."
+                )
 
-            self.minio_client.fput_object(
-                request.input_image.bucket, output_path, local_output
-            )
+                # Set timestamp
+                now = Timestamp()
+                now.FromDatetime(datetime.now(timezone.utc))
+                response.result.processed_at.CopyFrom(now)
+                response.result.processing_time_seconds = processing_time
+
+                # Add detections
+                for detection in detections:
+                    det_proto = response.detections.add()
+                    det_proto.class_name = detection["class_name"]
+                    det_proto.confidence = detection["confidence"]
+                    det_proto.class_id = detection["class_id"]
+                    det_proto.bbox.x1 = detection["bbox"]["x1"]
+                    det_proto.bbox.y1 = detection["bbox"]["y1"]
+                    det_proto.bbox.x2 = detection["bbox"]["x2"]
+                    det_proto.bbox.y2 = detection["bbox"]["y2"]
+
+                # Set metadata
+                response.metadata.model_name = request.model_name
+                response.metadata.model_version = "v1.0"
+                response.metadata.confidence_threshold = request.confidence_threshold
+                response.metadata.nms_threshold = request.nms_threshold
+                response.metadata.total_detections = len(detections)
+                response.metadata.inference_time_ms = inference_time * 1000
+                response.metadata.nms_time_ms = 0  # Mock value
+
+                logger.info(
+                    f"AI detection completed successfully for real-time processing, detected {len(detections)} objects"
+                )
+
+                # Clean up
+                if os.path.exists(local_input):
+                    os.remove(local_input)
+
+                return response
+
+            # For MinIO-based processing (input_image), upload to MinIO
+            else:
+                # Save output image with workflow-expected naming
+                # ワークフローでは {execution_id}_detected.jpg を期待している
+                execution_id = request.execution_id
+                output_path = f"{execution_id}_detected.jpg"
+
+                # Use Pillow for reliable JPEG saving
+                # Convert BGR (OpenCV) to RGB (Pillow)
+                output_rgb = cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(output_rgb)
+                pil_image.save(local_output, "JPEG", quality=85, optimize=True)
+
+                # Upload to MinIO
+                if not self.minio_client.bucket_exists(request.input_image.bucket):
+                    self.minio_client.make_bucket(request.input_image.bucket)
+
+                self.minio_client.fput_object(
+                    request.input_image.bucket, output_path, local_output
+                )
             logger.info(f"Uploaded detection result to {output_path}")
 
             # Save detection metadata with enhanced information
