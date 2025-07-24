@@ -1,3 +1,5 @@
+import time
+import asyncio
 from fastapi import UploadFile
 import os
 import uuid
@@ -23,47 +25,110 @@ class FileService:
         self.minio_available = MINIO_AVAILABLE
         self.bucket_name = "imageflow-files"
         self.mock_storage = {}  # For mock mode
+        self.max_retries = 3
+        self.retry_delay = 1  # seconds
 
         print(f"FileService: MINIO_AVAILABLE = {MINIO_AVAILABLE}")
 
         if self.minio_available:
-            try:
-                # Kubernetes環境ではサービス名を使用
-                minio_endpoint = os.getenv("MINIO_ENDPOINT", "minio-service:9000")
-                self.minio_client = Minio(
-                    endpoint=minio_endpoint,
-                    access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
-                    secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
-                    secure=False,
-                )
-                print(f"FileService: Connecting to MinIO at {minio_endpoint}")
-                self._ensure_bucket_exists()
-                print(
-                    f"FileService: MinIO connection successful, bucket '{self.bucket_name}' ready"
-                )
-                print(f"FileService: Running in MinIO mode")
-            except Exception as e:
-                print(
-                    f"FileService: MinIO connection failed, falling back to mock mode: {e}"
-                )
-                self.minio_available = False
+            self._initialize_minio_with_retry()
         else:
             self.minio_client = None
 
         if not self.minio_available:
             print("FileService: Running in mock mode")
 
-    def _ensure_bucket_exists(self):
-        """バケットが存在することを確認し、なければ作成"""
-        if not self.minio_available:
-            return
+    def _initialize_minio_with_retry(self):
+        """MinIOの初期化をリトライ付きで実行"""
+        minio_endpoint = os.getenv("MINIO_ENDPOINT", "minio-service:9000")
 
-        try:
-            if not self.minio_client.bucket_exists(self.bucket_name):
-                self.minio_client.make_bucket(self.bucket_name)
-        except Exception as e:
-            print(f"Error creating bucket: {e}")
-            self.minio_available = False
+        for attempt in range(self.max_retries):
+            try:
+                print(
+                    f"FileService: Attempting to connect to MinIO at {minio_endpoint} (attempt {attempt + 1}/{self.max_retries})"
+                )
+
+                self.minio_client = Minio(
+                    endpoint=minio_endpoint,
+                    access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+                    secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+                    secure=False,
+                )
+
+                # 接続テスト - バケット一覧を取得してみる
+                buckets = list(self.minio_client.list_buckets())
+                print(
+                    f"FileService: MinIO connection test successful. Found {len(buckets)} buckets"
+                )
+
+                # バケットの確保を試行
+                success = self._ensure_bucket_exists_with_retry()
+                if success:
+                    print(
+                        f"FileService: MinIO connection successful, bucket '{self.bucket_name}' ready"
+                    )
+                    print(f"FileService: Running in MinIO mode")
+                    return
+                else:
+                    print(
+                        f"FileService: Bucket creation failed on attempt {attempt + 1}"
+                    )
+
+            except Exception as e:
+                print(
+                    f"FileService: MinIO connection attempt {attempt + 1} failed: {e}"
+                )
+                if attempt < self.max_retries - 1:
+                    print(f"FileService: Retrying in {self.retry_delay} seconds...")
+                    time.sleep(self.retry_delay)
+                    self.retry_delay *= 2  # Exponential backoff
+                else:
+                    print(
+                        f"FileService: All {self.max_retries} connection attempts failed, falling back to mock mode"
+                    )
+                    self.minio_available = False
+
+    def _ensure_bucket_exists_with_retry(self) -> bool:
+        """バケット作成をリトライ付きで実行"""
+        if not self.minio_available:
+            return False
+
+        for attempt in range(self.max_retries):
+            try:
+                # バケット存在確認
+                bucket_exists = self.minio_client.bucket_exists(self.bucket_name)
+                print(
+                    f"FileService: Bucket '{self.bucket_name}' exists: {bucket_exists}"
+                )
+
+                if not bucket_exists:
+                    print(f"FileService: Creating bucket '{self.bucket_name}'...")
+                    self.minio_client.make_bucket(self.bucket_name)
+                    print(
+                        f"FileService: Bucket '{self.bucket_name}' created successfully"
+                    )
+
+                # 作成後の確認
+                if self.minio_client.bucket_exists(self.bucket_name):
+                    print(f"FileService: Bucket '{self.bucket_name}' is ready")
+                    return True
+                else:
+                    print(
+                        f"FileService: Bucket verification failed on attempt {attempt + 1}"
+                    )
+
+            except Exception as e:
+                print(
+                    f"FileService: Bucket operation attempt {attempt + 1} failed: {e}"
+                )
+                if attempt < self.max_retries - 1:
+                    time.sleep(1)
+
+        return False
+
+    def _ensure_bucket_exists(self):
+        """バケットが存在することを確認し、なければ作成（レガシーメソッド）"""
+        return self._ensure_bucket_exists_with_retry()
 
     async def upload_file(self, file: UploadFile, file_id: str = None) -> str:
         """ファイルをMinIOにアップロード"""

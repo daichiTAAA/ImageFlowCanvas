@@ -54,12 +54,26 @@ class AIDetectionServiceImplementation(
 
     def _create_minio_client(self):
         """Create MinIO client with optimized settings"""
-        self.minio_client = Minio(
-            self.minio_endpoint,
-            access_key=self.minio_access_key,
-            secret_key=self.minio_secret_key,
-            secure=False,
-        )
+        try:
+            self.minio_client = Minio(
+                self.minio_endpoint,
+                access_key=self.minio_access_key,
+                secret_key=self.minio_secret_key,
+                secure=False,
+            )
+            logger.info(
+                f"MinIO client created successfully for endpoint: {self.minio_endpoint}"
+            )
+
+            # Test connection
+            buckets = self.minio_client.list_buckets()
+            logger.info(
+                f"MinIO connection successful. Available buckets: {[b.name for b in buckets]}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create MinIO client: {e}")
+            raise
 
     def _warm_up(self):
         """Pre-warm AI detection and OpenCV for better performance"""
@@ -100,12 +114,80 @@ class AIDetectionServiceImplementation(
             local_input = f"/tmp/input_{request.execution_id}"
             local_output = f"/tmp/output_{request.execution_id}"
 
+            # Check if bucket exists
+            bucket_name = request.input_image.bucket
+            object_key = request.input_image.object_key
+
+            logger.info(f"Checking bucket '{bucket_name}' existence...")
+            if not self.minio_client.bucket_exists(bucket_name):
+                raise ValueError(f"Bucket '{bucket_name}' does not exist")
+
+            # List objects in bucket for debugging
+            logger.info(f"Listing objects in bucket '{bucket_name}'...")
+            try:
+                objects = list(
+                    self.minio_client.list_objects(
+                        bucket_name, prefix="", recursive=True
+                    )
+                )
+                logger.info(f"Found {len(objects)} objects in bucket:")
+                for obj in objects[:10]:  # Show first 10 objects
+                    logger.info(
+                        f"  - {obj.object_name} (size: {obj.size}, modified: {obj.last_modified})"
+                    )
+                if len(objects) > 10:
+                    logger.info(f"  ... and {len(objects) - 10} more objects")
+            except Exception as list_error:
+                logger.warning(f"Could not list objects in bucket: {list_error}")
+
+            # Check if the specific object exists
             logger.info(
-                f"Downloading {request.input_image.object_key} from bucket {request.input_image.bucket}"
+                f"Checking if object '{object_key}' exists in bucket '{bucket_name}'..."
             )
-            self.minio_client.fget_object(
-                request.input_image.bucket, request.input_image.object_key, local_input
-            )
+            try:
+                self.minio_client.stat_object(bucket_name, object_key)
+                logger.info(f"Object '{object_key}' exists")
+            except Exception as stat_error:
+                logger.error(f"Object '{object_key}' does not exist: {stat_error}")
+
+                # Try to find similar objects (with potential extensions)
+                possible_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]
+                found_alternative = False
+
+                for ext in possible_extensions:
+                    try_key = object_key + ext
+                    try:
+                        self.minio_client.stat_object(bucket_name, try_key)
+                        logger.info(f"Found alternative object: '{try_key}'")
+                        object_key = try_key  # Use the found object
+                        found_alternative = True
+                        break
+                    except:
+                        continue
+
+                if not found_alternative:
+                    # Try without execution_id suffix and with extensions
+                    base_name = (
+                        object_key.split("_")[0] if "_" in object_key else object_key
+                    )
+                    for ext in possible_extensions:
+                        try_key = base_name + ext
+                        try:
+                            self.minio_client.stat_object(bucket_name, try_key)
+                            logger.info(f"Found base name alternative: '{try_key}'")
+                            object_key = try_key
+                            found_alternative = True
+                            break
+                        except:
+                            continue
+
+                if not found_alternative:
+                    raise ValueError(
+                        f"Could not find object '{request.input_image.object_key}' or any alternative in bucket '{bucket_name}'"
+                    )
+
+            logger.info(f"Downloading '{object_key}' from bucket '{bucket_name}'")
+            self.minio_client.fget_object(bucket_name, object_key, local_input)
 
             # Load image
             image = cv2.imread(local_input)
