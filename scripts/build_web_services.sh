@@ -68,10 +68,10 @@ if [ "$DEPLOY" = "true" ]; then
     echo "🚀 Deploying web services to Kubernetes..."
 
     echo "🔐 Applying RBAC configuration for gRPC monitoring..."
-    kubectl apply -f k8s/grpc/grpc-monitor-rbac.yaml
+    kubectl apply -f deploy/k3s/grpc/grpc-monitor-rbac.yaml
 
     echo "🌐 Deploying backend and frontend..."
-    kubectl apply -f k8s/core/app-deployments.yaml
+    kubectl apply -f deploy/k3s/core/app-deployments.yaml
 
     echo "🔄 Restarting web services to apply changes..."
     kubectl rollout restart deployment/frontend deployment/backend
@@ -83,8 +83,8 @@ echo "🎉 Web services build completed successfully!"
 echo ""
 echo "Next steps:"
 echo "1. For manual Kubernetes deployment:"
-echo "   kubectl apply -f k8s/grpc/grpc-monitor-rbac.yaml"
-echo "   kubectl apply -f k8s/core/app-deployments.yaml"
+echo "   kubectl apply -f deploy/k3s/grpc/grpc-monitor-rbac.yaml"
+echo "   kubectl apply -f deploy/k3s/core/app-deployments.yaml"
 echo ""
 echo "2. For automated deployment with rollout:"
 echo "   DEPLOY=true ./scripts/build_web_services.sh"
