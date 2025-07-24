@@ -187,6 +187,39 @@ sudo ./scripts/setup-k3s.sh
 - Nomad UI: http://localhost:4646
 - Consul UI: http://localhost:8500
 
+### 📊 環境状態確認
+
+すべての環境の状態を一度に確認できます：
+
+```bash
+# すべての環境の状態確認
+./scripts/status.sh
+
+# 特定の環境のみ確認
+./scripts/status.sh compose    # Docker Compose
+./scripts/status.sh k3s        # K3s
+./scripts/status.sh nomad      # Nomad
+```
+
+### 🔄 環境の切り替え
+
+異なる環境間での切り替えは簡単です：
+
+```bash
+# Docker Composeを停止してK3sを開始
+./scripts/run-compose.sh down
+sudo ./scripts/setup-k3s.sh
+
+# K3sからNomadに切り替え
+kubectl delete --all deployments --all-namespaces
+./scripts/setup-nomad-consul.sh
+
+# すべて停止
+./scripts/run-compose.sh down                    # Docker Compose停止
+kubectl delete --all deployments --all-namespaces # K3s停止  
+./scripts/setup-nomad-consul.sh stop            # Nomad停止
+```
+
 ### 🖥️ OS別セットアップ詳細
 
 上記のクイックスタートが動作しない場合や、詳細な設定が必要な場合は以下を参照してください。

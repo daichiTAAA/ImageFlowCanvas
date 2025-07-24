@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Database
   postgres:
@@ -85,7 +83,7 @@ services:
       - "8011:8001"  # gRPC port 
       - "8002:8002"  # Metrics port
     volumes:
-      - ./models:/models
+      - ../../models:/models
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
       interval: 30s

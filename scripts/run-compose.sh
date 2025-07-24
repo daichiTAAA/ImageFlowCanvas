@@ -26,7 +26,7 @@ cd "$COMPOSE_DIR"
 case "$ACTION" in
     "up" | "start")
         echo "🚀 Starting ImageFlowCanvas services..."
-        docker-compose up -d
+        docker compose up -d
         echo "✅ Services started successfully!"
         echo ""
         echo "🌐 Access points:"
@@ -36,7 +36,7 @@ case "$ACTION" in
         echo "  - gRPC Gateway: http://localhost:8080/health"
         echo ""
         echo "📊 Service status:"
-        docker-compose ps
+        docker compose ps
         ;;
     
     "build")
@@ -49,7 +49,7 @@ case "$ACTION" in
         
         # Start services
         cd "$COMPOSE_DIR"
-        docker-compose up -d --build
+        docker compose up -d --build
         echo "✅ Services built and started successfully!"
         
         echo ""
@@ -62,13 +62,13 @@ case "$ACTION" in
     
     "stop")
         echo "⏹️  Stopping ImageFlowCanvas services..."
-        docker-compose stop
+        docker compose stop
         echo "✅ Services stopped successfully!"
         ;;
     
     "down")
         echo "🗑️  Stopping and removing ImageFlowCanvas services..."
-        docker-compose down
+        docker compose down
         echo "✅ Services stopped and removed successfully!"
         echo ""
         echo "💾 To remove persistent data, run:"
@@ -77,23 +77,23 @@ case "$ACTION" in
     
     "logs")
         echo "📋 Showing ImageFlowCanvas service logs..."
-        docker-compose logs -f
+        docker compose logs -f
         ;;
     
     "status" | "ps")
         echo "📊 ImageFlowCanvas service status:"
-        docker-compose ps
+        docker compose ps
         ;;
     
     "restart")
         echo "🔄 Restarting ImageFlowCanvas services..."
-        docker-compose restart
+        docker compose restart
         echo "✅ Services restarted successfully!"
         ;;
     
     "pull")
         echo "📥 Pulling latest images..."
-        docker-compose pull
+        docker compose pull
         echo "✅ Images updated successfully!"
         ;;
     
