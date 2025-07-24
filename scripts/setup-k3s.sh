@@ -41,10 +41,10 @@ echo "Applying custom configurations..."
 
 # Create default namespace resources
 echo "Creating core infrastructure..."
-kubectl apply -f k8s/core/minio-pv-pvc.yaml
-kubectl apply -f k8s/core/minio-deployment.yaml
-kubectl apply -f k8s/core/kafka-deployment.yaml
-kubectl apply -f k8s/core/triton-deployment.yaml
+kubectl apply -f deploy/k3s/core/minio-pv-pvc.yaml
+kubectl apply -f deploy/k3s/core/minio-deployment.yaml
+kubectl apply -f deploy/k3s/core/kafka-deployment.yaml
+kubectl apply -f deploy/k3s/core/triton-deployment.yaml
 
 # Wait for core services to be ready
 echo "Waiting for core services to be ready..."
@@ -66,7 +66,7 @@ docker save imageflow/frontend:latest | sudo k3s ctr images import -
 
 # Deploy backend and frontend
 echo "Deploying backend and frontend..."
-kubectl apply -f k8s/core/app-deployments.yaml
+kubectl apply -f deploy/k3s/core/app-deployments.yaml
 
 # Wait for backend to be ready
 echo "Waiting for backend to be ready..."
@@ -74,9 +74,8 @@ kubectl wait --for=condition=available --timeout=300s deployment/backend -n defa
 
 # Deploy gRPC services
 echo "Deploying gRPC services..."
-kubectl apply -f k8s/grpc/namespace-config.yaml
-kubectl apply -f k8s/grpc/grpc-services.yaml
-kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml
+kubectl apply -f deploy/k3s/grpc/namespace-config.yaml
+kubectl apply -f deploy/k3s/grpc/grpc-services.yaml
 
 # Wait for gRPC services to be ready
 echo "Waiting for gRPC services to be ready..."

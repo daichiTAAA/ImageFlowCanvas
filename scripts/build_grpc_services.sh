@@ -98,14 +98,14 @@ if [ "$DEPLOY" = "true" ]; then
     echo "🚀 Deploying gRPC services to Kubernetes..."
 
     echo "🏗️  Applying namespace configuration..."
-    kubectl apply -f k8s/grpc/namespace-config.yaml
+    kubectl apply -f deploy/k3s/grpc/namespace-config.yaml
 
     echo "🔐 Applying RBAC configuration..."
-    kubectl apply -f k8s/grpc/grpc-workflow-rbac.yaml
-    kubectl apply -f k8s/grpc/grpc-workflow-token.yaml
+    kubectl apply -f deploy/k3s/grpc/grpc-workflow-rbac.yaml
+    kubectl apply -f deploy/k3s/grpc/grpc-workflow-token.yaml
 
     echo "🎯 Deploying gRPC services..."
-    kubectl apply -f k8s/grpc/grpc-services.yaml
+    kubectl apply -f deploy/k3s/grpc/grpc-services.yaml
 
     echo "🔄 Restarting gRPC services to apply changes..."
     kubectl rollout restart -n image-processing deployment/resize-grpc-service
@@ -121,11 +121,10 @@ echo "🎉 gRPC services build completed successfully!"
 echo ""
 echo "Next steps:"
 echo "1. For manual Kubernetes deployment:"
-echo "   kubectl apply -f k8s/grpc/namespace-config.yaml"
-echo "   kubectl apply -f k8s/grpc/grpc-workflow-rbac.yaml"
-echo "   kubectl apply -f k8s/grpc/grpc-workflow-token.yaml"
-echo "   kubectl apply -f k8s/grpc/grpc-services.yaml"
-echo "   kubectl apply -f k8s/workflows/grpc-pipeline-templates.yaml"
+echo "   kubectl apply -f deploy/k3s/grpc/namespace-config.yaml"
+echo "   kubectl apply -f deploy/k3s/grpc/grpc-workflow-rbac.yaml"
+echo "   kubectl apply -f deploy/k3s/grpc/grpc-workflow-token.yaml"
+echo "   kubectl apply -f deploy/k3s/grpc/grpc-services.yaml"
 echo ""
 echo "2. For automated deployment with rollout:"
 echo "   DEPLOY=true ./scripts/build_grpc_services.sh"

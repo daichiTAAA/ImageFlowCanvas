@@ -56,13 +56,59 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 - **Communication**: gRPC + Protocol Buffers（直接呼び出し）
 - **Service Gateway**: gRPC Gateway for HTTP compatibility
 
+## 📁 プロジェクト構成
+
+```
+ImageFlowCanvas/
+├── deploy/                          # デプロイ設定（環境別）
+│   ├── compose/
+│   │   └── docker-compose.yml      # Docker Compose設定
+│   ├── k3s/
+│   │   ├── core/                   # コアサービス（MinIO, Kafka, etc）
+│   │   └── grpc/                   # gRPCサービス設定
+│   └── nomad/
+│       ├── infrastructure.nomad    # インフラサービス
+│       ├── grpc-services.nomad     # gRPCサービス
+│       └── application.nomad       # アプリケーション
+│
+├── scripts/                        # ビルド・デプロイスクリプト
+│   ├── build_services.sh          # 共通ビルドスクリプト
+│   ├── run-compose.sh             # Docker Compose管理
+│   ├── setup-k3s.sh               # K3sセットアップ
+│   └── setup-nomad-consul.sh      # Nomadセットアップ
+│
+├── services/                       # gRPCサービス
+│   ├── resize-grpc-app/           # 画像リサイズ
+│   ├── ai-detection-grpc-app/     # AI物体検知
+│   ├── filter-grpc-app/           # 画像フィルタ
+│   ├── camera-stream-grpc-app/    # カメラストリーミング
+│   └── grpc-gateway/              # gRPCゲートウェイ
+│
+├── backend/                        # バックエンドAPI
+├── frontend/                       # フロントエンド
+└── proto/                          # Protocol Buffers定義
+```
+
+### 🔄 環境比較
+
+| 環境 | 用途 | 利点 | 欠点 |
+|------|------|------|------|
+| **Docker Compose** | ローカル開発・テスト | • 簡単セットアップ<br>• 軽量<br>• 1コマンドで起動 | • 本番環境と差異<br>• スケーリング制限 |
+| **K3s** | ステージング・本番 | • Kubernetes準拠<br>• 高可用性<br>• 本番環境に近い | • 設定複雑<br>• リソース消費大 |
+| **Nomad** | 混合ワークロード | • 軽量オーケストレーター<br>• .NET/Java対応<br>• 柔軟なスケジュール | • エコシステム小<br>• 学習コスト |
+
 ## セットアップ
 
-開発環境のセットアップは、お使いのOS（Linux, macOS, Windows）に応じて手順が異なります。
+ImageFlowCanvasは、3つの異なるデプロイメント環境をサポートしています：
 
-### クイックセットアップ（推奨）
+- **Docker Compose**: ローカルでの手軽な開発・テスト用
+- **K3s**: 本番に近い環境でのステージング・検証用  
+- **Nomad**: 混合ワークロード（.NET EXEなど）を視野に入れた本番・ステージング用
 
-**新規インストール（完全セットアップ）**:
+### 🚀 クイックスタート
+
+どの環境でも、まず共通の準備作業を行います：
+
 ```bash
 # conda環境を作成・アクティベート
 conda create -n imageflowcanvas python=3.12 -y
@@ -71,174 +117,162 @@ conda activate imageflowcanvas
 # 必要なパッケージをインストール
 pip install requests ultralytics grpcio grpcio-tools
 
-# 完全セットアップ（バッチ処理 + リアルタイム処理）
-sudo ./scripts/setup-complete.sh
-```
-
-**既存環境にカメラストリーミング機能を追加**:
-```bash
-# 既にImageFlowCanvasが動作している環境に、カメラストリーミング機能のみを追加
-./scripts/setup-camera-stream.sh
-```
-
-### 共通設定（全OS共通）
-
-以下の手順は、Linux（直接）、macOS（Lima VM内）、Windows（WSL2内）すべてで実行します。
-
-```bash
-# アーキテクチャの確認
-uname -m  # x86_64 または aarch64 を確認
-
-# miniforgeのインストール（アーキテクチャ別）
-# x86_64の場合
-curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
-
-# ARM64 (aarch64) の場合
-# curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -o miniforge.sh
-
-bash miniforge.sh -b -p $HOME/miniforge
-echo "export PATH=\$HOME/miniforge/bin:\$PATH" >> ~/.bashrc
-source ~/.bashrc
-conda init
-
-# conda環境の作成
-conda create -n imageflowcanvas python=3.12 -y
-conda activate imageflowcanvas
-
-# 必要なPythonパッケージのインストール
-pip install requests ultralytics
-
-# gRPC開発用パッケージのインストール
-pip install grpcio grpcio-tools
-
-# YOLO11 ONNXモデルをセットアップ（自動ダウンロード・変換）
-python scripts/setup-yolo11.py
-
-# gRPCサービス用Protocol Buffersの生成
+# Protocol Buffersとサービスをビルド
 ./scripts/generate_protos.sh
+./scripts/build_services.sh
+```
 
-# フロントエンドとバックエンドのビルドとデプロイ
-DEPLOY=true ./scripts/build_web_services.sh
+### 🐳 Docker Compose（推奨：ローカル開発）
 
-# gRPCサービスのビルドとデプロイ
-DEPLOY=true ./scripts/build_grpc_services.sh
+**最も簡単な方法 - すべてが含まれた開発環境:**
 
-# ⚠️ エラーが発生した場合
-# - `grpc_tools`モジュールエラー: pip install grpcio grpcio-tools
-# - Protocol Buffers生成エラー: ./scripts/generate_protos.sh を再実行
-# - Docker buildエラー: 生成されたファイルの確認 ls -la generated/python/
+```bash
+# サービスをビルドして起動
+./scripts/run-compose.sh build
 
-# K3sと直接gRPC実行基盤のセットアップスクリプトを実行
+# または、既にビルド済みの場合
+./scripts/run-compose.sh up
+```
+
+**アクセス:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000/docs
+- MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
+
+**管理コマンド:**
+```bash
+./scripts/run-compose.sh status    # サービス状態確認
+./scripts/run-compose.sh logs     # ログ表示
+./scripts/run-compose.sh stop     # サービス停止
+./scripts/run-compose.sh down     # サービス削除
+./scripts/run-compose.sh health   # ヘルスチェック
+```
+
+### ⚙️ K3s（本番に近い環境）
+
+**Kubernetesベースの高性能環境:**
+
+```bash
+# K3sセットアップ（Linux推奨）
 sudo ./scripts/setup-k3s.sh
 
-# 立ち上がっているか確認
-kubectl get pods -A
-
-# 別のターミナルを開いて、ポートフォワーディングを開始
+# ポートフォワーディング開始（別ターミナル）
 ./scripts/port-forward.sh
 ```
 
-### Linux環境（直接インストール）
+**アクセス:**
+- Frontend: http://localhost:3000  
+- Backend API: http://localhost:8000/docs
+- MinIO Console: http://localhost:9001
 
-Linuxでは、上記の「共通設定」をそのまま実行してください。
+### 🏗️ Nomad（混合ワークロード対応）
 
-### macOS環境（Lima使用）
+**柔軟なワークロード管理が可能なオーケストレーター:**
 
-macOSでは、Lima VMを使用してLinux環境を作成し、その中で開発を行います。
+```bash
+# Nomad + Consulセットアップ
+./scripts/setup-nomad-consul.sh
 
-**Lima固有の準備手順**:
-1. **Limaのインストール**
-   ```bash
-   # Homebrewでインストール
-   brew install lima
-   
-   # または手動インストール
-   curl -fsSL https://get.lima.sh | sh
-   ```
+# サービス状態確認
+./scripts/setup-nomad-consul.sh status
 
-2. **Ubuntu VMの作成と起動**
-   ```bash
-   # Ubuntu 24.04 VMを作成
-   limactl create --name=k3s template://ubuntu-lts
-   
-   # VMを起動
-   limactl start k3s
-   ```
+# ログ確認
+./scripts/setup-nomad-consul.sh logs
+```
 
-3. **ポートフォワーディング設定**
-   ```bash
-   # Lima VM設定ファイルを編集（ホストマシンで実行）
-   limactl stop k3s
-   limactl edit k3s
-   ```
-   
-   以下の `portForwards` 設定を追加します。これにより、ホストPCからVM内のサービスにアクセスできるようになります。
-   ```yaml
-   portForwards:
-     - guestPort: 3000 # Frontend
-       hostPort: 3000
-     - guestPort: 8000 # Backend
-       hostPort: 8000
-     - guestPort: 9001 # MinIO Console
-       hostPort: 9001
-   ```
+**アクセス:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000/docs
+- MinIO Console: http://localhost:9001
+- Nomad UI: http://localhost:4646
+- Consul UI: http://localhost:8500
 
-4. **VM再起動と共通設定の実行**
-   ```bash
-   # VM再起動
-   limactl stop k3s
-   limactl start k3s
+### 📊 環境状態確認
 
-   # VMにシェル接続
-   limactl shell k3s
-   
-   # VM内でプロジェクトをクローン
-   cd ~
-   git clone <your-repo-url>
-   cd ~/ImageFlowCanvas
-   
-   # ここで「共通設定」の手順をすべて実行
-   ```
+すべての環境の状態を一度に確認できます：
 
-   * 【参考】VSCode Remote-SSHでLima VMに接続する方法
-     1. VSCode拡張機能「Remote - SSH」をインストール
-     2. ターミナルで下記コマンドを実行し、SSH設定内容を確認
-        ```bash
-        limactl show-ssh k3s
-        ```
-     3. 出力内容を `~/.ssh/config` に追記
-     4. VSCodeで「Remote-SSH: Connect to Host...」を実行し、`lima-k3s` を選択
+```bash
+# すべての環境の状態確認
+./scripts/status.sh
 
-### Windows環境（WSL2使用）
+# 特定の環境のみ確認
+./scripts/status.sh compose    # Docker Compose
+./scripts/status.sh k3s        # K3s
+./scripts/status.sh nomad      # Nomad
+```
 
-WindowsではWSL2を使用してLinux環境を作成し、その中で開発を行います。
+### 🔄 環境の切り替え
 
-**WSL2固有の準備手順**:
-1. **WSL2のセットアップ**
-   ```bash
-   # PowerShellで実行
-   wsl --install Ubuntu-22.04
-   ```
+異なる環境間での切り替えは簡単です：
 
-2. **WSL2での共通設定の実行**
-   ```bash
-   # WSL2シェルを起動し、「共通設定」の手順をすべて実行
-   # プロジェクトを適切なディレクトリにクローンしてから実行してください
-   ```
+```bash
+# Docker Composeを停止してK3sを開始
+./scripts/run-compose.sh down
+sudo ./scripts/setup-k3s.sh
 
-### アクセスポイント
+# K3sからNomadに切り替え
+kubectl delete --all deployments --all-namespaces
+./scripts/setup-nomad-consul.sh
 
-セットアップ完了後、以下のURLにブラウザでアクセスしてください。
+# すべて停止
+./scripts/run-compose.sh down                    # Docker Compose停止
+kubectl delete --all deployments --all-namespaces # K3s停止  
+./scripts/setup-nomad-consul.sh stop            # Nomad停止
+```
 
-**ポートフォワーディング経由（推奨）**:
-- **Frontend**: http://localhost:3000
-- **Backend API (Swagger UI)**: http://localhost:8000/docs
-- **MinIO Console**: http://localhost:9001 (ID: `minioadmin`, PW: `minioadmin`)
+### 🖥️ OS別セットアップ詳細
 
-**NodePort経由（直接アクセス）**:
-- **Frontend**: http://localhost:30080 （同じノードからのアクセス時）
+上記のクイックスタートが動作しない場合や、詳細な設定が必要な場合は以下を参照してください。
 
-### 使用方法
+#### Linux環境（直接インストール）
+
+すべての環境（Docker Compose, K3s, Nomad）が利用可能です。上記のクイックスタート手順をそのまま実行してください。
+
+#### macOS環境（Lima使用）
+
+**Lima固有の準備手順:**
+```bash
+# Limaのインストール
+brew install lima
+
+# Ubuntu VMの作成と起動
+limactl create --name=k3s template://ubuntu-lts
+limactl start k3s
+
+# ポートフォワーディング設定
+limactl stop k3s
+limactl edit k3s
+```
+
+Lima VM設定ファイルに以下のポートフォワーディングを追加：
+```yaml
+portForwards:
+  - guestPort: 3000  # Frontend
+    hostPort: 3000
+  - guestPort: 8000  # Backend
+    hostPort: 8000  
+  - guestPort: 9001  # MinIO Console
+    hostPort: 9001
+```
+
+```bash
+# VM再起動と環境構築
+limactl start k3s
+limactl shell k3s
+
+# VM内でプロジェクトをクローンし、クイックスタート手順を実行
+```
+
+#### Windows環境（WSL2使用）
+
+**WSL2固有の準備手順:**
+```bash
+# PowerShellで実行
+wsl --install Ubuntu-22.04
+
+```
+
+### 📋 使用方法
 
 #### バッチ処理
 1. **ログイン**: admin/admin123 または user/user123

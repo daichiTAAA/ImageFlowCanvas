@@ -1,0 +1,237 @@
+services:
+  # Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: imageflow-postgres
+    environment:
+      POSTGRES_DB: imageflow
+      POSTGRES_USER: imageflow
+      POSTGRES_PASSWORD: imageflow123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U imageflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Message Queue
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: imageflow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: imageflow-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Object Storage
+  minio:
+    image: minio/minio:RELEASE.2023-09-04T19-57-37Z
+    container_name: imageflow-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # AI Inference Server
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    container_name: imageflow-triton
+    command: 
+      - tritonserver
+      - --model-repository=/models
+      - --strict-model-config=false
+      - --log-verbose=1
+    ports:
+      - "8001:8000"  # HTTP port (mapped to 8001 to avoid conflict with backend)
+      - "8011:8001"  # gRPC port 
+      - "8002:8002"  # Metrics port
+    volumes:
+      - ../../models:/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # gRPC Services
+  resize-grpc:
+    image: imageflow/resize-grpc:latest
+    container_name: imageflow-resize-grpc
+    build:
+      context: ../../services/resize-grpc-app
+      dockerfile: Dockerfile
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ai-detection-grpc:
+    image: imageflow/ai-detection-grpc:latest
+    container_name: imageflow-ai-detection-grpc
+    build:
+      context: ../../services/ai-detection-grpc-app
+      dockerfile: Dockerfile
+    ports:
+      - "9091:9090"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  filter-grpc:
+    image: imageflow/filter-grpc:latest
+    container_name: imageflow-filter-grpc
+    build:
+      context: ../../services/filter-grpc-app
+      dockerfile: Dockerfile
+    ports:
+      - "9092:9090"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  camera-stream-grpc:
+    image: imageflow/camera-stream-grpc:latest
+    container_name: imageflow-camera-stream-grpc
+    build:
+      context: ../../services/camera-stream-grpc-app
+      dockerfile: Dockerfile
+    ports:
+      - "9093:9090"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grpc-gateway:
+    image: imageflow/grpc-gateway:latest
+    container_name: imageflow-grpc-gateway
+    build:
+      context: ../../services/grpc-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      RESIZE_GRPC_URL: resize-grpc:9090
+      AI_DETECTION_GRPC_URL: ai-detection-grpc:9090
+      FILTER_GRPC_URL: filter-grpc:9090
+      CAMERA_STREAM_GRPC_URL: camera-stream-grpc:9090
+    depends_on:
+      - resize-grpc
+      - ai-detection-grpc
+      - filter-grpc
+      - camera-stream-grpc
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    image: imageflow/backend:latest
+    container_name: imageflow-backend
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://imageflow:imageflow123@postgres:5432/imageflow
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SECRET_KEY: your-secret-key-change-in-production
+      TRITON_URL: triton:8000
+      GRPC_GATEWAY_URL: grpc-gateway:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      grpc-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  frontend:
+    image: imageflow/frontend:latest
+    container_name: imageflow-frontend
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+      REACT_APP_WS_URL: ws://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  default:
+    name: imageflow-network
+    driver: bridge
