@@ -43,24 +43,33 @@ echo "Applying custom configurations..."
 echo "Creating core infrastructure..."
 kubectl apply -f deploy/k3s/core/minio-pv-pvc.yaml
 kubectl apply -f deploy/k3s/core/minio-deployment.yaml
+kubectl apply -f deploy/k3s/core/postgres-deployment.yaml
 kubectl apply -f deploy/k3s/core/kafka-deployment.yaml
 kubectl apply -f deploy/k3s/core/triton-deployment.yaml
 
 # Wait for core services to be ready
 echo "Waiting for core services to be ready..."
 kubectl wait --for=condition=available --timeout=300s deployment/minio -n default
+kubectl wait --for=condition=available --timeout=300s deployment/postgres -n default
 kubectl wait --for=condition=available --timeout=300s deployment/kafka -n default
 kubectl wait --for=condition=available --timeout=300s deployment/triton-inference-server -n default
 
-# Build and import backend image
-echo "Building backend image..."
-docker build -t imageflow/backend:latest ./backend
+# Check if required images exist
+echo "Checking for required Docker images..."
+if ! docker image inspect imageflow/backend:latest >/dev/null 2>&1; then
+    echo "Error: Backend image not found. Please run './scripts/build_services.sh' first."
+    exit 1
+fi
+
+if ! docker image inspect imageflow/frontend:latest >/dev/null 2>&1; then
+    echo "Error: Frontend image not found. Please run './scripts/build_services.sh' first."
+    exit 1
+fi
+
+# Import backend and frontend images to K3s
 echo "Importing backend image to K3s..."
 docker save imageflow/backend:latest | sudo k3s ctr images import -
 
-# Build and import frontend image
-echo "Building frontend image..."
-docker build -t imageflow/frontend:latest ./frontend
 echo "Importing frontend image to K3s..."
 docker save imageflow/frontend:latest | sudo k3s ctr images import -
 
@@ -75,6 +84,20 @@ kubectl wait --for=condition=available --timeout=300s deployment/backend -n defa
 # Deploy gRPC services
 echo "Deploying gRPC services..."
 kubectl apply -f deploy/k3s/grpc/namespace-config.yaml
+
+# Check if required gRPC images exist and import them
+echo "Checking and importing gRPC service images..."
+GRPC_SERVICES=("resize-grpc" "ai-detection-grpc" "filter-grpc" "grpc-gateway" "camera-stream-grpc")
+
+for service in "${GRPC_SERVICES[@]}"; do
+    if docker image inspect imageflow/$service:latest >/dev/null 2>&1; then
+        echo "Importing $service image to K3s..."
+        docker save imageflow/$service:latest | sudo k3s ctr images import -
+    else
+        echo "Warning: $service image not found. Please run './scripts/build_services.sh' first."
+    fi
+done
+
 kubectl apply -f deploy/k3s/grpc/grpc-services.yaml
 
 # Wait for gRPC services to be ready
@@ -110,11 +133,14 @@ chmod +x scripts/port-forward.sh
 echo ""
 echo "Setup completed successfully!"
 echo ""
+echo "Prerequisites (run before this script):"
+echo "1. ./scripts/generate_protos.sh   # Generate Protocol Buffers"
+echo "2. ./scripts/build_services.sh    # Build all Docker images"
+echo ""
 echo "Next steps:"
-echo "1. Run 'sudo ./scripts/setup-k3s.sh' to complete the setup"
-echo "2. Run './scripts/port-forward.sh' to access services"
-echo "3. Place YOLO model at 'models/yolo/1/model.onnx'"
-echo "4. Start frontend development server: cd frontend && npm install && npm run dev"
+echo "1. Run './scripts/port-forward.sh' to access services"
+echo "2. Place YOLO model at 'models/yolo/1/model.onnx'"
+echo "3. Start frontend development server: cd frontend && npm install && npm run dev"
 echo ""
 echo "Access points:"
 echo "- Backend API: http://localhost:8000"
