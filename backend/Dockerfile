@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
 
 # Python依存関係をインストール
 COPY backend/requirements.txt .
+RUN pip install --upgrade pip
+RUN pip install setuptools==69.5.1 wheel
 RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --no-cache-dir -r requirements.txt
 
 # アプリケーションコードをコピー

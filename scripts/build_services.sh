@@ -39,7 +39,11 @@ build_service() {
     fi
     
     # Build Docker image
-    if [ -f "$context_dir/Dockerfile" ]; then
+    # Backend and frontend use base directory context due to their relative paths in Dockerfile
+    if [[ "$service_name" == "backend" || "$service_name" == "frontend" ]]; then
+        docker build -t "$REGISTRY/$service_name:$TAG" "$BASE_DIR" -f "$context_dir/Dockerfile"
+        echo "  ✓ Built $REGISTRY/$service_name:$TAG"
+    elif [ -f "$context_dir/Dockerfile" ]; then
         docker build -t "$REGISTRY/$service_name:$TAG" "$context_dir"
         echo "  ✓ Built $REGISTRY/$service_name:$TAG"
     else
