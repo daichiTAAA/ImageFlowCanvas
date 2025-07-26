@@ -25,6 +25,40 @@
       "csp": null
     }
   },
+  "plugins": {
+    "camera": {
+      "permissions": [
+        "camera:allow-capture",
+        "camera:allow-list-devices"
+      ]
+    },
+    "barcode-scanner": {
+      "permissions": [
+        "barcode-scanner:allow-scan"
+      ]
+    },
+    "sql": {
+      "permissions": [
+        "sql:allow-load",
+        "sql:allow-execute",
+        "sql:allow-select",
+        "sql:allow-close"
+      ]
+    },
+    "fs": {
+      "permissions": [
+        "fs:allow-read-file",
+        "fs:allow-write-file",
+        "fs:allow-create-dir",
+        "fs:allow-read-dir"
+      ]
+    },
+    "http": {
+      "permissions": [
+        "http:allow-fetch"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
@@ -38,6 +72,28 @@
     "publisher": "ImageFlowCanvas",
     "category": "Productivity",
     "shortDescription": "Cross-platform inspection application for quality control",
-    "longDescription": "ImageFlowCanvas Inspection is a cross-platform application for conducting AI-powered quality inspections with offline capabilities."
+    "longDescription": "ImageFlowCanvas Inspection is a cross-platform application for conducting AI-powered quality inspections with offline capabilities.",
+    "linux": {
+      "deb": {
+        "depends": [
+          "libgtk-3-0",
+          "libwebkit2gtk-4.0-37",
+          "libayatana-appindicator3-1"
+        ]
+      }
+    },
+    "iOS": {
+      "frameworks": ["AVFoundation", "CoreImage"],
+      "minimumSystemVersion": "13.0"
+    },
+    "android": {
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+      ],
+      "minSdkVersion": 24
+    }
   }
 }

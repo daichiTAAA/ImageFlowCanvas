@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
@@ -31,4 +31,11 @@ reqwest = { version = "0.11", features = ["json"] }
 uuid = { version = "1.0", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.21"
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-native-tls", "chrono", "uuid"] }
+rqrr = "0.7"
+image = "0.25"
+anyhow = "1.0"
+thiserror = "1.0"
+jsonwebtoken = "9.0"
+bcrypt = "0.15"
 

@@ -14,13 +14,19 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@fontsource/roboto": "^5.2.6",
-    "@mui/icons-material": "^7.2.0",
+    "@mui/icons-material": "^6.5.0",
     "@mui/material": "^6.5.0",
     "@mui/x-date-pickers": "^8.9.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-fs": "^2",
+    "@tauri-apps/plugin-http": "^2",
+    "@tauri-apps/plugin-sql": "^2",
+    "@tauri-apps/plugin-store": "^2",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-webcam": "^7.2.0",
+    "jsqr": "^1.4.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
