@@ -35,11 +35,11 @@ job "imageflow-grpc-services" {
         ports = ["grpc"]
         force_pull = false
         network_mode = "host"
-        dns_servers = ["127.0.0.1", "8.8.8.8"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
       }
 
       env {
-        MINIO_ENDPOINT   = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
         GRPC_PORT        = "9090"
@@ -82,15 +82,14 @@ job "imageflow-grpc-services" {
         force_pull = false
         image_pull_timeout = "10m"
         network_mode = "host"
-        dns_servers = ["127.0.0.1", "8.8.8.8"]
-        dns_search_domains = ["service.consul"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
       }
 
       env {
-        MINIO_ENDPOINT   = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY  = "minioadmin"
         MINIO_SECRET_KEY  = "minioadmin"
-        TRITON_URL        = "triton_grpc.service.consul:8011"
+        TRITON_URL        = "192.168.5.15:8011"
         GRPC_PORT         = "9091"
         GRPC_MAX_WORKERS  = "25"
       }
@@ -130,12 +129,11 @@ job "imageflow-grpc-services" {
         ports = ["grpc"]
         force_pull = false
         network_mode = "host"
-        dns_servers = ["127.0.0.1", "8.8.8.8"]
-        dns_search_domains = ["service.consul"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
       }
 
       env {
-        MINIO_ENDPOINT   = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
         GRPC_PORT        = "9093"
@@ -177,12 +175,11 @@ job "imageflow-grpc-services" {
         ports = ["grpc"]
         force_pull = false
         network_mode = "host"
-        dns_servers = ["127.0.0.1", "8.8.8.8"]
-        dns_search_domains = ["service.consul"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
       }
 
       env {
-        MINIO_ENDPOINT   = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
         GRPC_PORT        = "9094"
@@ -224,15 +221,14 @@ job "imageflow-grpc-services" {
         ports = ["http"]
         force_pull = false
         network_mode = "host"
-        dns_servers = ["127.0.0.1", "8.8.8.8"]
-        dns_search_domains = ["service.consul"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
       }
 
       env {
-        RESIZE_GRPC_URL        = "resize-grpc.service.consul:9090"
-        AI_DETECTION_GRPC_URL  = "ai-detection-grpc.service.consul:9091"
-        FILTER_GRPC_URL        = "filter-grpc.service.consul:9093"
-        CAMERA_STREAM_GRPC_URL = "camera-stream-grpc.service.consul:9094"
+        RESIZE_GRPC_URL        = "192.168.5.15:9090"
+        AI_DETECTION_GRPC_URL  = "192.168.5.15:9091"
+        FILTER_GRPC_URL        = "192.168.5.15:9093"
+        CAMERA_STREAM_GRPC_URL = "192.168.5.15:9094"
         GATEWAY_PORT           = "8080"
       }
 

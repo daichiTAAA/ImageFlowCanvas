@@ -13,7 +13,7 @@ http {
     ${NGINX_RESOLVER}
 
     server {
-        listen       80;
+        listen       3000;
         server_name  localhost;
         root         /usr/share/nginx/html;
         index        index.html;

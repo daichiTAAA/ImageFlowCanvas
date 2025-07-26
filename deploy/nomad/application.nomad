@@ -35,19 +35,25 @@ job "imageflow-application" {
         ports = ["http"]
         force_pull = false
         network_mode = "host"
-        dns_servers = ["127.0.0.1", "8.8.8.8"]
-        dns_search_domains = ["service.consul"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
       }
 
       env {
-        DATABASE_URL            = "postgresql+asyncpg://imageflow:imageflow123@postgres.service.consul:5432/imageflow"
-        MINIO_ENDPOINT          = "minio-api.service.consul:9000"
+        DATABASE_URL            = "postgresql+asyncpg://imageflow:imageflow123@192.168.5.15:5432/imageflow"
+        # Fallback database URL in case Consul DNS fails
+        DATABASE_URL_FALLBACK   = "postgresql+asyncpg://imageflow:imageflow123@localhost:5432/imageflow"
+        MINIO_ENDPOINT          = "192.168.5.15:9000"
         MINIO_ACCESS_KEY        = "minioadmin"
         MINIO_SECRET_KEY        = "minioadmin"
-        KAFKA_BOOTSTRAP_SERVERS = "kafka.service.consul:29092"
+        KAFKA_BOOTSTRAP_SERVERS = "192.168.5.15:29092"
         SECRET_KEY              = "your-secret-key-change-in-production"
-        TRITON_URL              = "triton_grpc.service.consul:8011"
-        GRPC_GATEWAY_URL        = "grpc-gateway.service.consul:8080"
+        TRITON_URL              = "192.168.5.15:8011"
+        GRPC_GATEWAY_URL        = "192.168.5.15:8080"
+        # Environment indicator for Nomad
+        NOMAD_DEPLOYMENT        = "true"
+        # Debug settings
+        PYTHONUNBUFFERED        = "1"
+        LOG_LEVEL               = "DEBUG"
       }
 
       resources {
@@ -94,14 +100,13 @@ job "imageflow-application" {
         ports = ["http"]
         force_pull = false
         network_mode = "host"
-        dns_servers = ["127.0.0.1", "8.8.8.8"]
-        dns_search_domains = ["service.consul"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
       }
 
       env {
-        REACT_APP_API_URL = "http://backend.service.consul:8000"
-        REACT_APP_WS_URL  = "ws://backend.service.consul:8000"
-        BACKEND_HOST      = "backend.service.consul"
+        REACT_APP_API_URL = "http://192.168.5.15:8000"
+        REACT_APP_WS_URL  = "ws://192.168.5.15:8000"
+        BACKEND_HOST      = "192.168.5.15"
         BACKEND_PORT      = "8000"
         NGINX_RESOLVER    = "resolver 172.17.0.1 8.8.8.8 valid=30s;"
       }
