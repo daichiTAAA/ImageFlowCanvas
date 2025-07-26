@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    tauri_appimageflowcanvas_app_lib::run()
+    imageflowcanvas_inspection_app::run()
 }

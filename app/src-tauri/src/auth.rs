@@ -109,7 +109,7 @@ impl AuthManager {
         let password_hash = self.hash_password(&request.password)?;
         let role = request.role.as_deref().unwrap_or("inspector");
 
-        let user_id = db.create_user(
+        let _user_id = db.create_user(
             &request.username,
             request.email.as_deref(),
             &password_hash,

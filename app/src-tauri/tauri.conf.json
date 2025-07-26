@@ -22,41 +22,12 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: mediastream: blob:; media-src 'self' mediastream: blob: data:; img-src 'self' data: blob: mediastream:; connect-src 'self' ws: wss: http: https:"
     }
   },
   "plugins": {
-    "camera": {
-      "permissions": [
-        "camera:allow-capture",
-        "camera:allow-list-devices"
-      ]
-    },
-    "barcode-scanner": {
-      "permissions": [
-        "barcode-scanner:allow-scan"
-      ]
-    },
-    "sql": {
-      "permissions": [
-        "sql:allow-load",
-        "sql:allow-execute",
-        "sql:allow-select",
-        "sql:allow-close"
-      ]
-    },
     "fs": {
-      "permissions": [
-        "fs:allow-read-file",
-        "fs:allow-write-file",
-        "fs:allow-create-dir",
-        "fs:allow-read-dir"
-      ]
-    },
-    "http": {
-      "permissions": [
-        "http:allow-fetch"
-      ]
+      "requireLiteralLeadingDot": false
     }
   },
   "bundle": {
@@ -82,17 +53,24 @@
         ]
       }
     },
+    "macOS": {
+      "frameworks": ["AVFoundation"],
+      "dmg": {
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        }
+      }
+    },
     "iOS": {
       "frameworks": ["AVFoundation", "CoreImage"],
       "minimumSystemVersion": "13.0"
     },
     "android": {
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.INTERNET"
-      ],
       "minSdkVersion": 24
     }
   }
