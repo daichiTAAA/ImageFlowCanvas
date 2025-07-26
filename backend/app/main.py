@@ -83,8 +83,9 @@ async def add_cors_header(request: Request, call_next):
 
 # APIルーターの登録
 app.include_router(health.router, prefix="/v1", tags=["health"])
-app.include_router(websocket.router, prefix="/v1", tags=["websocket"])
+# Camera stream router must be registered BEFORE general websocket router to avoid path conflicts
 app.include_router(camera_stream.router, prefix="/v1", tags=["camera-stream"])
+app.include_router(websocket.router, prefix="/v1", tags=["websocket"])
 app.include_router(auth.router, prefix="/v1/auth", tags=["authentication"])
 app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["executions"])

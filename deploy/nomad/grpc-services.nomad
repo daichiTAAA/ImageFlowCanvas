@@ -39,6 +39,8 @@ job "imageflow-grpc-services" {
       }
 
       env {
+        DEPLOYMENT_ENV   = "nomad"
+        NOMAD_IP         = "192.168.5.15"
         MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
@@ -86,6 +88,8 @@ job "imageflow-grpc-services" {
       }
 
       env {
+        DEPLOYMENT_ENV   = "nomad"
+        NOMAD_IP         = "192.168.5.15"
         MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY  = "minioadmin"
         MINIO_SECRET_KEY  = "minioadmin"
@@ -133,6 +137,8 @@ job "imageflow-grpc-services" {
       }
 
       env {
+        DEPLOYMENT_ENV   = "nomad"
+        NOMAD_IP         = "192.168.5.15"
         MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
@@ -179,6 +185,8 @@ job "imageflow-grpc-services" {
       }
 
       env {
+        DEPLOYMENT_ENV   = "nomad"
+        NOMAD_IP         = "192.168.5.15"
         MINIO_ENDPOINT   = "192.168.5.15:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
@@ -225,6 +233,8 @@ job "imageflow-grpc-services" {
       }
 
       env {
+        DEPLOYMENT_ENV         = "nomad"
+        NOMAD_IP              = "192.168.5.15"
         RESIZE_GRPC_URL        = "192.168.5.15:9090"
         AI_DETECTION_GRPC_URL  = "192.168.5.15:9091"
         FILTER_GRPC_URL        = "192.168.5.15:9093"

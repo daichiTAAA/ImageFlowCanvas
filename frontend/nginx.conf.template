@@ -11,6 +11,13 @@ http {
     
     # DNS resolver - conditionally include based on environment
     ${NGINX_RESOLVER}
+    
+    # WebSocket upgrade handling - more permissive
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        'websocket' upgrade;
+        '' close;
+    }
 
     server {
         listen       3000;
@@ -57,11 +64,12 @@ http {
             }
         }
 
-        # WebSocket proxy
+        # WebSocket proxy with simplified configuration
         location /ws/ {
-            set $backend_host ${BACKEND_HOST};
-            set $backend_port ${BACKEND_PORT};
-            proxy_pass http://$backend_host:$backend_port/v1/ws/;
+            # Direct proxy without variable substitution
+            proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/v1/ws/;
+            
+            # Essential WebSocket headers
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
@@ -69,6 +77,18 @@ http {
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # WebSocket timeout settings
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+            proxy_connect_timeout 10s;
+            
+            # Disable buffering for real-time communication
+            proxy_buffering off;
+            
+            # Add logging for debugging
+            access_log /var/log/nginx/websocket.log combined;
+            error_log /var/log/nginx/websocket_error.log debug;
         }
     }
 }

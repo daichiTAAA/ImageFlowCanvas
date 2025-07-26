@@ -39,6 +39,8 @@ job "imageflow-application" {
       }
 
       env {
+        DEPLOYMENT_ENV          = "nomad"
+        NOMAD_IP               = "192.168.5.15"
         DATABASE_URL            = "postgresql+asyncpg://imageflow:imageflow123@192.168.5.15:5432/imageflow"
         # Fallback database URL in case Consul DNS fails
         DATABASE_URL_FALLBACK   = "postgresql+asyncpg://imageflow:imageflow123@localhost:5432/imageflow"
@@ -104,6 +106,8 @@ job "imageflow-application" {
       }
 
       env {
+        DEPLOYMENT_ENV    = "nomad"
+        NOMAD_IP         = "192.168.5.15"
         REACT_APP_API_URL = "http://192.168.5.15:8000"
         REACT_APP_WS_URL  = "ws://192.168.5.15:8000"
         BACKEND_HOST      = "192.168.5.15"

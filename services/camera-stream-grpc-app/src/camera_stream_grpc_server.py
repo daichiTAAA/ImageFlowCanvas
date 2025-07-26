@@ -44,38 +44,59 @@ class CameraStreamProcessorImplementation(
     camera_stream_pb2_grpc.CameraStreamProcessorServicer
 ):
     def __init__(self):
-        # gRPC service endpoints
+        # Detect deployment environment and set appropriate default endpoints
+        self.deployment_env = os.getenv("DEPLOYMENT_ENV", "nomad")  # nomad, k3s, docker
+
+        # Set default endpoints based on environment
+        if self.deployment_env == "k3s":
+            # Kubernetes service discovery
+            resize_default = (
+                "resize-grpc-service.image-processing.svc.cluster.local:9090"
+            )
+            ai_detection_default = (
+                "ai-detection-grpc-service.image-processing.svc.cluster.local:9090"
+            )
+            filter_default = (
+                "filter-grpc-service.image-processing.svc.cluster.local:9090"
+            )
+            backend_default = "http://backend-service.default.svc.cluster.local:8000"
+        elif self.deployment_env == "docker":
+            # Docker Compose service names
+            resize_default = "resize-grpc:9090"
+            ai_detection_default = "ai-detection-grpc:9090"
+            filter_default = "filter-grpc:9090"
+            backend_default = "http://backend:8000"
+        else:
+            # Nomad with direct IP addressing
+            nomad_ip = os.getenv("NOMAD_IP", "192.168.5.15")
+            resize_default = f"{nomad_ip}:9092"
+            ai_detection_default = f"{nomad_ip}:9091"
+            filter_default = f"{nomad_ip}:9093"
+            backend_default = f"http://{nomad_ip}:8000"
+
+        # gRPC service endpoints with environment-aware defaults
         self.grpc_services = {
             "resize": {
-                "endpoint": os.getenv(
-                    "RESIZE_GRPC_ENDPOINT",
-                    "resize-grpc-service.image-processing.svc.cluster.local:9090",
-                ),
+                "endpoint": os.getenv("RESIZE_GRPC_ENDPOINT", resize_default),
                 "client_class": resize_pb2_grpc.ResizeServiceStub,
                 "timeout": 30.0,
             },
             "ai_detection": {
                 "endpoint": os.getenv(
-                    "AI_DETECTION_GRPC_ENDPOINT",
-                    "ai-detection-grpc-service.image-processing.svc.cluster.local:9090",
+                    "AI_DETECTION_GRPC_ENDPOINT", ai_detection_default
                 ),
                 "client_class": ai_detection_pb2_grpc.AIDetectionServiceStub,
                 "timeout": 60.0,
             },
             "filter": {
-                "endpoint": os.getenv(
-                    "FILTER_GRPC_ENDPOINT",
-                    "filter-grpc-service.image-processing.svc.cluster.local:9090",
-                ),
+                "endpoint": os.getenv("FILTER_GRPC_ENDPOINT", filter_default),
                 "client_class": filter_pb2_grpc.FilterServiceStub,
                 "timeout": 30.0,
             },
         }
 
         # Backend API endpoint for pipeline definitions
-        self.backend_api_url = os.getenv(
-            "BACKEND_API_URL", "http://backend-service.default.svc.cluster.local:8000"
-        )
+        self.backend_api_url = os.getenv("BACKEND_API_URL", backend_default)
 
         # Service-to-service authentication bypass
         self.service_auth_token = os.getenv("SERVICE_AUTH_TOKEN", None)
@@ -98,6 +119,7 @@ class CameraStreamProcessorImplementation(
         self._cache_ttl = 300  # 5 minutes
 
         logger.info(f"CameraStreamProcessor initialized")
+        logger.info(f"Deployment environment: {self.deployment_env}")
         logger.info(f"Backend API: {self.backend_api_url}")
         logger.info(f"Max concurrent streams: {self.max_concurrent_streams}")
         for service_name, config in self.grpc_services.items():

@@ -98,11 +98,28 @@ async def get_available_pipelines(
 
 class CameraStreamManager:
     def __init__(self):
-        self.camera_stream_endpoint = os.getenv(
-            "CAMERA_STREAM_GRPC_ENDPOINT",
-            "camera-stream-grpc-service.image-processing.svc.cluster.local:9090",
-        )
+        # Environment-aware service discovery for camera stream gRPC endpoint
+        if os.getenv("NOMAD_ALLOC_ID"):
+            # Nomad environment - use IP address
+            self.camera_stream_endpoint = os.getenv(
+                "CAMERA_STREAM_GRPC_ENDPOINT", "192.168.5.15:9094"
+            )
+        elif os.getenv("COMPOSE_PROJECT_NAME") or os.getenv("DOCKER_BUILDKIT"):
+            # Docker Compose environment - use service name
+            self.camera_stream_endpoint = os.getenv(
+                "CAMERA_STREAM_GRPC_ENDPOINT", "camera-stream-grpc:9090"
+            )
+        else:
+            # Kubernetes environment (default) - use service DNS
+            self.camera_stream_endpoint = os.getenv(
+                "CAMERA_STREAM_GRPC_ENDPOINT",
+                "camera-stream-grpc-service.image-processing.svc.cluster.local:9090",
+            )
+
         self.active_streams: Dict[str, asyncio.Task] = {}
+        logger.info(
+            f"CameraStreamManager initialized with endpoint: {self.camera_stream_endpoint}"
+        )
 
     def get_camera_stream_client(self):
         """Get gRPC client for camera stream service"""

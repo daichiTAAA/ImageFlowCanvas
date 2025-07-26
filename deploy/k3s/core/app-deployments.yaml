@@ -20,6 +20,8 @@ spec:
         ports:
         - containerPort: 8000
         env:
+        - name: DEPLOYMENT_ENV
+          value: "k3s"
         - name: DATABASE_URL
           value: "postgresql+asyncpg://imageflow:imageflow123@postgres-service:5432/imageflow"
         - name: MINIO_ENDPOINT
@@ -80,6 +82,8 @@ spec:
         image: imageflow/frontend:local
         imagePullPolicy: IfNotPresent
         env:
+        - name: DEPLOYMENT_ENV
+          value: "k3s"
         - name: BACKEND_HOST
           value: "backend-service"
         - name: BACKEND_PORT

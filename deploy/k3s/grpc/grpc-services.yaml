@@ -26,6 +26,8 @@ spec:
         - containerPort: 9090
           name: grpc
         env:
+        - name: DEPLOYMENT_ENV
+          value: "k3s"
         - name: MINIO_ENDPOINT
           value: "minio-service.default.svc.cluster.local:9000"
         - name: MINIO_ACCESS_KEY
@@ -109,6 +111,8 @@ spec:
         - containerPort: 9090
           name: grpc
         env:
+        - name: DEPLOYMENT_ENV
+          value: "k3s"
         - name: MINIO_ENDPOINT
           value: "minio-service.default.svc.cluster.local:9000"
         - name: MINIO_ACCESS_KEY
@@ -194,6 +198,8 @@ spec:
         - containerPort: 9090
           name: grpc
         env:
+        - name: DEPLOYMENT_ENV
+          value: "k3s"
         - name: MINIO_ENDPOINT
           value: "minio-service.default.svc.cluster.local:9000"
         - name: MINIO_ACCESS_KEY
@@ -359,6 +365,8 @@ spec:
         - containerPort: 9090
           name: grpc
         env:
+        - name: DEPLOYMENT_ENV
+          value: "k3s"
         - name: BACKEND_API_URL
           value: "http://backend-service.default.svc.cluster.local:8000"
         - name: RESIZE_GRPC_ENDPOINT

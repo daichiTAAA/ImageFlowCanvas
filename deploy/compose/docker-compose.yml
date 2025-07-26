@@ -104,6 +104,12 @@ services:
     build:
       context: ../../services/resize-grpc-app
       dockerfile: Dockerfile
+    environment:
+      - DEPLOYMENT_ENV=docker
+      - GRPC_PORT=9090
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
     ports:
       - "9090:9090"
     healthcheck:
@@ -118,6 +124,13 @@ services:
     build:
       context: ../../services/ai-detection-grpc-app
       dockerfile: Dockerfile
+    environment:
+      - DEPLOYMENT_ENV=docker
+      - GRPC_PORT=9090
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - TRITON_URL=triton:8001
     ports:
       - "9091:9090"
     healthcheck:
@@ -132,6 +145,12 @@ services:
     build:
       context: ../../services/filter-grpc-app
       dockerfile: Dockerfile
+    environment:
+      - DEPLOYMENT_ENV=docker
+      - GRPC_PORT=9090
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
     ports:
       - "9092:9090"
     healthcheck:
@@ -146,6 +165,12 @@ services:
     build:
       context: ../../services/camera-stream-grpc-app
       dockerfile: Dockerfile
+    environment:
+      - DEPLOYMENT_ENV=docker
+      - GRPC_PORT=9090
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
     ports:
       - "9093:9090"
     healthcheck:
@@ -163,10 +188,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      RESIZE_GRPC_URL: resize-grpc:9090
-      AI_DETECTION_GRPC_URL: ai-detection-grpc:9090
-      FILTER_GRPC_URL: filter-grpc:9090
-      CAMERA_STREAM_GRPC_URL: camera-stream-grpc:9090
+      - DEPLOYMENT_ENV=docker
+      - RESIZE_GRPC_URL=resize-grpc:9090
+      - AI_DETECTION_GRPC_URL=ai-detection-grpc:9090
+      - FILTER_GRPC_URL=filter-grpc:9090
+      - CAMERA_STREAM_GRPC_URL=camera-stream-grpc:9090
     depends_on:
       - resize-grpc
       - ai-detection-grpc
@@ -188,6 +214,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      DEPLOYMENT_ENV: docker
       DATABASE_URL: postgresql+asyncpg://imageflow:imageflow123@postgres:5432/imageflow
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
@@ -221,6 +248,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      DEPLOYMENT_ENV: docker
       REACT_APP_API_URL: http://localhost:8000
       REACT_APP_WS_URL: ws://localhost:8000
       BACKEND_HOST: backend
