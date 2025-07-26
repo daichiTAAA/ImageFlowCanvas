@@ -57,11 +57,48 @@ class GRPCPipelineExecutor:
     """
 
     def __init__(self):
+        # Environment detection for gRPC service endpoints
+        is_nomad = os.getenv("NOMAD_ALLOC_ID") is not None
+        is_compose = (
+            os.getenv("COMPOSE_PROJECT_NAME") is not None
+            or os.getenv("DOCKER_COMPOSE") is not None
+        )
+
+        # Service endpoint configuration based on environment
+        if is_nomad:
+            # Nomad environment - use direct IP addresses with correct ports
+            logger.info("Detected Nomad environment - using direct IP endpoints")
+            default_resize_endpoint = "192.168.5.15:9090"
+            default_ai_detection_endpoint = (
+                "192.168.5.15:9091"  # Port 9091 for AI detection
+            )
+            default_filter_endpoint = "192.168.5.15:9093"
+        elif is_compose:
+            # Docker Compose environment - use service names
+            logger.info(
+                "Detected Docker Compose environment - using service name endpoints"
+            )
+            default_resize_endpoint = "resize-grpc:9090"
+            default_ai_detection_endpoint = "ai-detection-grpc:9090"
+            default_filter_endpoint = "filter-grpc:9090"
+        else:
+            # Kubernetes environment - use full service DNS
+            logger.info("Detected Kubernetes environment - using cluster DNS endpoints")
+            default_resize_endpoint = (
+                "resize-grpc-service.image-processing.svc.cluster.local:9090"
+            )
+            default_ai_detection_endpoint = (
+                "ai-detection-grpc-service.image-processing.svc.cluster.local:9090"
+            )
+            default_filter_endpoint = (
+                "filter-grpc-service.image-processing.svc.cluster.local:9090"
+            )
+
         self.grpc_services = {
             "resize": {
                 "endpoint": os.getenv(
                     "RESIZE_GRPC_ENDPOINT",
-                    "resize-grpc-service.image-processing.svc.cluster.local:9090",
+                    default_resize_endpoint,
                 ),
                 "client_class": resize_pb2_grpc.ResizeServiceStub,
                 "timeout": 30.0,
@@ -69,7 +106,7 @@ class GRPCPipelineExecutor:
             "ai_detection": {
                 "endpoint": os.getenv(
                     "AI_DETECTION_GRPC_ENDPOINT",
-                    "ai-detection-grpc-service.image-processing.svc.cluster.local:9090",
+                    default_ai_detection_endpoint,
                 ),
                 "client_class": ai_detection_pb2_grpc.AIDetectionServiceStub,
                 "timeout": 60.0,
@@ -77,7 +114,7 @@ class GRPCPipelineExecutor:
             "filter": {
                 "endpoint": os.getenv(
                     "FILTER_GRPC_ENDPOINT",
-                    "filter-grpc-service.image-processing.svc.cluster.local:9090",
+                    default_filter_endpoint,
                 ),
                 "client_class": filter_pb2_grpc.FilterServiceStub,
                 "timeout": 30.0,
