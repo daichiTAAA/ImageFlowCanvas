@@ -245,6 +245,8 @@ limactl edit k3s
 ```
 
 Lima VM設定ファイルに以下のポートフォワーディングを追加：
+
+**K3s環境用:**
 ```yaml
 portForwards:
   - guestPort: 3000  # Frontend
@@ -253,6 +255,21 @@ portForwards:
     hostPort: 8000  
   - guestPort: 9001  # MinIO Console
     hostPort: 9001
+```
+
+**Nomad環境用（追加）:**
+```yaml
+portForwards:
+  - guestPort: 3000  # Frontend
+    hostPort: 3000
+  - guestPort: 8000  # Backend
+    hostPort: 8000  
+  - guestPort: 9001  # MinIO Console
+    hostPort: 9001
+  - guestPort: 4646  # Nomad UI
+    hostPort: 4646
+  - guestPort: 8500  # Consul UI
+    hostPort: 8500
 ```
 
 ```bash
@@ -788,6 +805,60 @@ pip install requests ultralytics grpcio grpcio-tools
 - VM再起動後は、VM内で `./scripts/port-forward.sh` を再実行する必要があります
 - ホストPCのファイアウォール設定がポートをブロックしていないか確認してください
 - 他のアプリケーションが同じポート（3000、8000等）を使用していないか確認してください
+
+### Lima環境でのNomadサービスアクセス問題
+
+**症状**: Lima VM内でNomadサービスが正常に動作しているが、ホストマシンのブラウザからhttp://localhost:3000にアクセスできない
+
+**原因**: Lima VMのポートフォワーディング設定にNomadで使用するポートが含まれていない
+
+**対処法**:
+
+1. **ホストマシンでLima設定を更新**
+   ```bash
+   # ホストマシン（Mac）で実行
+   limactl stop k3s  # または使用中のLimaインスタンス名
+   limactl edit k3s
+   ```
+
+2. **Nomad用ポートフォワーディングを追加**
+   ```yaml
+   portForwards:
+     - guestPort: 3000  # Frontend (Nomad)
+       hostPort: 3000
+     - guestPort: 8000  # Backend (Nomad)
+       hostPort: 8000  
+     - guestPort: 9001  # MinIO Console
+       hostPort: 9001
+     - guestPort: 4646  # Nomad UI
+       hostPort: 4646
+     - guestPort: 8500  # Consul UI
+       hostPort: 8500
+   ```
+
+3. **VM再起動**
+   ```bash
+   # ホストマシンで実行
+   limactl start k3s
+   
+   # VM内でサービス状態確認
+   limactl shell k3s
+   nomad job status imageflow-application
+   ```
+
+4. **VM内でサービス確認**
+   ```bash
+   # VM内で実行
+   curl http://localhost:3000  # VM内部でのアクセステスト
+   ss -tlnp | grep -E ":(3000|8000|4646|8500)"  # ポート使用状況確認
+   ```
+
+**確認方法**:
+- ホストマシンのブラウザでhttp://localhost:3000にアクセス
+- ホストマシンのブラウザでhttp://localhost:4646（Nomad UI）にアクセス
+- ホストマシンのブラウザでhttp://localhost:8500（Consul UI）にアクセス
+
+**注意**: Nomadは`scripts/port-forward.sh`スクリプトを使用しません。Limaのポートフォワーディング設定のみで十分です。
 
 ### フロントエンドの変更が反映されない（開発時）
 
