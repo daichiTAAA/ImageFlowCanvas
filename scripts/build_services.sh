@@ -40,7 +40,7 @@ build_service() {
     
     # Build Docker image
     # Backend and web use base directory context due to their relative paths in Dockerfile
-    if [[ "$service_name" == "backend" || "$service_name" == "web" ]]; then then
+    if [[ "$service_name" == "backend" || "$service_name" == "web" ]]; then
         docker build -t "$REGISTRY/$service_name:$TAG" "$BASE_DIR" -f "$context_dir/Dockerfile"
         echo "  ✓ Built $REGISTRY/$service_name:$TAG"
     elif [ -f "$context_dir/Dockerfile" ]; then
