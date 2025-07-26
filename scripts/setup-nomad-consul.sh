@@ -9,7 +9,8 @@
 #   ./scripts/setup-nomad-consul.sh status         # Show job status
 #   ./scripts/setup-nomad-consul.sh logs           # Show service logs (interactive)
 #   ./scripts/setup-nomad-consul.sh health         # Check service health endpoints
-#   ./scripts/setup-nomad-consul.sh kill           # Kill Nomad and Consul background processes
+#   ./scripts/setup-nomad-consul.sh kill           # Kill Nomad and Consul background processes + stop containers
+#   ./scripts/setup-nomad-consul.sh cleanup        # Complete cleanup including Docker resources
 
 set -e
 
@@ -214,7 +215,18 @@ setup_host_volumes() {
 cleanup_processes() {
     echo "🧹 Cleaning up background processes..."
     
+    # First try to stop Nomad jobs gracefully if Nomad is running
+    if curl -f -s "http://localhost:4646" >/dev/null 2>&1; then
+        echo "  Stopping Nomad jobs gracefully..."
+        export NOMAD_ADDR=http://localhost:4646
+        nomad job stop imageflow-application || true
+        nomad job stop imageflow-grpc-services || true  
+        nomad job stop imageflow-infrastructure || true
+        sleep 3
+    fi
+    
     # Kill Consul and Nomad processes
+    echo "  Stopping Nomad and Consul processes..."
     pkill -f "consul agent" || true
     pkill -f "nomad agent" || true
     
@@ -225,7 +237,17 @@ cleanup_processes() {
     pkill -9 -f "consul agent" || true
     pkill -9 -f "nomad agent" || true
     
-    echo "✅ Background processes cleaned up"
+    # Stop any remaining Docker containers managed by Nomad
+    echo "  Stopping any remaining Docker containers..."
+    RUNNING_CONTAINERS=$(docker ps -q)
+    if [ ! -z "$RUNNING_CONTAINERS" ]; then
+        echo "  Found running containers, stopping them..."
+        docker stop $RUNNING_CONTAINERS || true
+    else
+        echo "  No running containers found"
+    fi
+    
+    echo "✅ Background processes and containers cleaned up"
 }
 
 case "$ACTION" in
@@ -522,8 +544,22 @@ case "$ACTION" in
         cleanup_processes
         ;;
     
+    "cleanup")
+        echo "🧽 Complete cleanup of all resources..."
+        cleanup_processes
+        
+        # Also remove stopped containers and unused images
+        echo "🗑️  Cleaning up Docker resources..."
+        docker container prune -f || true
+        docker image prune -f || true
+        docker volume prune -f || true
+        docker network prune -f || true
+        
+        echo "✅ Complete cleanup finished!"
+        ;;
+    
     *)
-        echo "❓ Usage: $0 {setup|deploy|stop|status|logs|health|kill}"
+        echo "❓ Usage: $0 {setup|deploy|stop|status|logs|health|kill|cleanup}"
         echo ""
         echo "Commands:"
         echo "  setup   - Install and setup Nomad/Consul environment"
@@ -533,6 +569,7 @@ case "$ACTION" in
         echo "  logs    - Show service logs"
         echo "  health  - Check service health"
         echo "  kill    - Kill Nomad and Consul background processes"
+        echo "  cleanup - Complete cleanup including Docker resources"
         exit 1
         ;;
 esac
