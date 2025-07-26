@@ -77,7 +77,7 @@ job "imageflow-application" {
     }
   }
 
-  group "frontend" {
+  group "web" {
     count = 1
 
     update {
@@ -94,11 +94,11 @@ job "imageflow-application" {
       }
     }
 
-    task "frontend" {
+    task "web" {
       driver = "docker"
 
       config {
-        image = "imageflow/frontend:local"
+        image = "imageflow/web:local"
         ports = ["http"]
         force_pull = false
         network_mode = "host"
@@ -121,7 +121,7 @@ job "imageflow-application" {
       }
 
       service {
-        name = "frontend"
+        name = "web"
         port = "http"
         
         check {

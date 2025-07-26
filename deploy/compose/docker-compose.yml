@@ -238,12 +238,12 @@ services:
       timeout: 10s
       retries: 3
 
-  # Frontend
-  frontend:
-    image: imageflow/frontend:local
-    container_name: imageflow-frontend
+  # Web UI
+  web:
+    image: imageflow/web:local
+    container_name: imageflow-web
     build:
-      context: ../../frontend
+      context: ../../web
       dockerfile: Dockerfile
     ports:
       - "3000:3000"

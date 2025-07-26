@@ -39,8 +39,8 @@ build_service() {
     fi
     
     # Build Docker image
-    # Backend and frontend use base directory context due to their relative paths in Dockerfile
-    if [[ "$service_name" == "backend" || "$service_name" == "frontend" ]]; then
+    # Backend and web use base directory context due to their relative paths in Dockerfile
+    if [[ "$service_name" == "backend" || "$service_name" == "web" ]]; then then
         docker build -t "$REGISTRY/$service_name:$TAG" "$BASE_DIR" -f "$context_dir/Dockerfile"
         echo "  ✓ Built $REGISTRY/$service_name:$TAG"
     elif [ -f "$context_dir/Dockerfile" ]; then
@@ -81,7 +81,7 @@ fi
 if [[ "$BUILD_TYPE" == "all" || "$BUILD_TYPE" == "web" ]]; then
     echo "🚀 Building web services..."
     build_service "backend" "$BASE_DIR/backend"
-    build_service "frontend" "$BASE_DIR/frontend"
+    build_service "web" "$BASE_DIR/web"
     echo "✅ Web services built successfully!"
 fi
 

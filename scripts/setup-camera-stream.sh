@@ -130,26 +130,26 @@ update_backend() {
     echo "✅ Backend updated with camera stream features"
 }
 
-# Function to update frontend with camera streaming UI
-update_frontend() {
-    echo "🎨 Updating frontend with camera streaming UI..."
+# Function to update web UI with camera streaming UI
+update_web_ui() {
+    echo "🎨 Updating web UI with camera streaming UI..."
     
     # Check if CameraStream.tsx exists
-    if [ ! -f "frontend/src/pages/CameraStream.tsx" ]; then
-        echo "❌ Frontend camera stream component not found."
+    if [ ! -f "web/src/pages/CameraStream.tsx" ]; then
+        echo "❌ Web UI camera stream component not found."
         exit 1
     fi
     
-    # Rebuild and redeploy frontend
-    echo "Rebuilding frontend with camera streaming UI..."
-    docker build -t imageflow/frontend:local ./frontend
-    docker save imageflow/frontend:local | sudo k3s ctr images import -
+    # Rebuild and redeploy web UI
+    echo "Rebuilding web UI with camera streaming UI..."
+    docker build -t imageflow/web:local ./web
+    docker save imageflow/web:local | sudo k3s ctr images import -
     
-    # Restart frontend deployment
-    kubectl rollout restart deployment/frontend -n default
-    kubectl wait --for=condition=available --timeout=300s deployment/frontend -n default
+    # Restart web deployment
+    kubectl rollout restart deployment/web -n default
+    kubectl wait --for=condition=available --timeout=300s deployment/web -n default
     
-    echo "✅ Frontend updated with camera streaming UI"
+    echo "✅ Web UI updated with camera streaming UI"
 }
 
 # Function to validate camera stream setup
@@ -231,8 +231,8 @@ main() {
     # Step 5: Update backend
     update_backend
     
-    # Step 6: Update frontend
-    update_frontend
+    # Step 6: Update web UI
+    update_web_ui
     
     # Step 7: Validate setup
     validate_camera_stream

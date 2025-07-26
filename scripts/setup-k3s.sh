@@ -61,20 +61,20 @@ if ! docker image inspect imageflow/backend:local >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! docker image inspect imageflow/frontend:local >/dev/null 2>&1; then
-    echo "Error: Frontend image not found. Please run './scripts/build_services.sh' first."
+if ! docker image inspect imageflow/web:local >/dev/null 2>&1; then
+    echo "Error: Web image not found. Please run './scripts/build_services.sh' first."
     exit 1
 fi
 
-# Import backend and frontend images to K3s
+# Import backend and web images to K3s
 echo "Importing backend image to K3s..."
 docker save imageflow/backend:local | sudo k3s ctr images import -
 
-echo "Importing frontend image to K3s..."
-docker save imageflow/frontend:local | sudo k3s ctr images import -
+echo "Importing web image to K3s..."
+docker save imageflow/web:local | sudo k3s ctr images import -
 
-# Deploy backend and frontend
-echo "Deploying backend and frontend..."
+# Deploy backend and web
+echo "Deploying backend and web..."
 kubectl apply -f deploy/k3s/core/app-deployments.yaml
 
 # Wait for backend to be ready
@@ -140,10 +140,10 @@ echo ""
 echo "Next steps:"
 echo "1. Run './scripts/port-forward.sh' to access services"
 echo "2. Place YOLO model at 'models/yolo/1/model.onnx'"
-echo "3. Start frontend development server: cd frontend && npm install && npm run dev"
+echo "3. Start web development server: cd web && npm install && npm run dev"
 echo ""
 echo "Access points:"
 echo "- Backend API: http://localhost:8000"
 echo "- MinIO Console: http://localhost:9001 (admin/admin123)"
 echo "- Triton Server: http://localhost:8001"
-echo "- Frontend: http://localhost:3000"
+echo "- Web UI: http://localhost:3000"

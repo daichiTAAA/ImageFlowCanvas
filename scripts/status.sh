@@ -52,7 +52,7 @@ check_compose() {
         docker compose ps --format table
         echo ""
         echo "🔍 Health checks:"
-        check_port 3000 "Frontend"
+        check_port 3000 "Web UI"
         check_port 8000 "Backend API"
         check_port 9001 "MinIO Console"
         check_port 8080 "gRPC Gateway"
@@ -92,13 +92,13 @@ check_k3s() {
     
     echo ""
     echo "🔍 Service health:"
-    if kubectl get svc | grep -q frontend; then
+    if kubectl get svc | grep -q web-service; then
         echo "✅ Services deployed"
         
         # Check if port-forward is running
         if pgrep -f "kubectl.*port-forward" >/dev/null; then
             echo "✅ Port forwarding active"
-            check_port 3000 "Frontend (port-forward)"
+            check_port 3000 "Web UI (port-forward)"
             check_port 8000 "Backend API (port-forward)"
             check_port 9001 "MinIO Console (port-forward)"
         else
@@ -147,7 +147,7 @@ check_nomad() {
     echo "🔍 Service health:"
     check_port 4646 "Nomad UI"
     check_port 8500 "Consul UI" 
-    check_port 3000 "Frontend"
+    check_port 3000 "Web UI"
     check_port 8000 "Backend API"
     check_port 9001 "MinIO Console"
     
@@ -184,7 +184,7 @@ esac
 
 echo "🎯 Quick Access Links"
 echo "==================="
-echo "Frontend:      http://localhost:3000"
+echo "Web UI:        http://localhost:3000"
 echo "Backend API:   http://localhost:8000/docs"
 echo "MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
 echo "Nomad UI:      http://localhost:4646"

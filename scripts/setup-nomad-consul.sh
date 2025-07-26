@@ -443,7 +443,7 @@ case "$ACTION" in
         echo "  nomad job status imageflow-application"
         echo ""
         echo "🌐 Access points (available once services are healthy):"
-        echo "  - Frontend: http://localhost:3000"
+        echo "  - Web UI: http://localhost:3000"
         echo "  - Backend API: http://localhost:8000/docs"
         echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
         echo "  - gRPC Gateway: http://localhost:8080/health"
@@ -535,7 +535,7 @@ case "$ACTION" in
         echo ""
         echo "🔍 Application services:"
         curl -f http://localhost:8000/v1/health && echo "✅ Backend: Running" || echo "❌ Backend: Down"
-        curl -f http://localhost:3000 && echo "✅ Frontend: Running" || echo "❌ Frontend: Down"
+        curl -f http://localhost:3000 && echo "✅ Web UI: Running" || echo "❌ Web UI: Down"
         curl -f http://localhost:8080/health && echo "✅ gRPC Gateway: Running" || echo "❌ gRPC Gateway: Down"
         ;;
     

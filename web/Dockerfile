@@ -4,13 +4,13 @@ FROM node:18-alpine AS build
 WORKDIR /app
 
 # Copy package files
-COPY frontend/package.json frontend/package-lock.json ./
+COPY web/package.json web/package-lock.json ./
 
 # Install dependencies
 RUN npm ci
 
 # Copy source code
-COPY frontend/ .
+COPY web/ .
 
 # Build the application
 RUN npm run build
@@ -22,10 +22,10 @@ FROM nginx:alpine
 RUN apk add --no-cache gettext
 
 # Copy custom nginx config template
-COPY frontend/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY web/nginx.conf.template /etc/nginx/nginx.conf.template
 
 # Copy startup script
-COPY frontend/start-nginx.sh /start-nginx.sh
+COPY web/start-nginx.sh /start-nginx.sh
 RUN chmod +x /start-nginx.sh
 
 # Copy built application

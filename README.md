@@ -44,7 +44,7 @@ ImageFlowCanvasは、Webインターフェースを通じて画像処理の各�
 
 ### 技術スタック
 
-- **Frontend**: React + TypeScript + Material-UI
+- **Web UI**: React + TypeScript + Material-UI
 - **Backend**: FastAPI + Python
 - **Message Queue**: Apache Kafka（進捗通知・監視・フォールバック用）
 - **Pipeline Execution**: 直接gRPC呼び出し（40-100ms処理）+ Kafkaフォールバック
@@ -85,7 +85,7 @@ ImageFlowCanvas/
 │   └── grpc-gateway/              # gRPCゲートウェイ
 │
 ├── backend/                        # バックエンドAPI
-├── frontend/                       # フロントエンド
+├── web/                            # Web UI
 └── proto/                          # Protocol Buffers定義
 ```
 
@@ -135,7 +135,7 @@ pip install requests ultralytics grpcio grpcio-tools
 ```
 
 **アクセス:**
-- Frontend: http://localhost:3000
+- Web UI: http://localhost:3000
 - Backend API: http://localhost:8000/docs
 - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
 
@@ -161,7 +161,7 @@ sudo ./scripts/setup-k3s.sh
 ```
 
 **アクセス:**
-- Frontend: http://localhost:3000  
+- Web UI: http://localhost:3000  
 - Backend API: http://localhost:8000/docs
 - MinIO Console: http://localhost:9001
 
@@ -181,7 +181,7 @@ sudo ./scripts/setup-k3s.sh
 ```
 
 **アクセス:**
-- Frontend: http://localhost:3000
+- Web UI: http://localhost:3000
 - Backend API: http://localhost:8000/docs
 - MinIO Console: http://localhost:9001
 - Nomad UI: http://localhost:4646/ui
@@ -249,7 +249,7 @@ Lima VM設定ファイルに以下のポートフォワーディングを追加�
 **K3s環境用:**
 ```yaml
 portForwards:
-  - guestPort: 3000  # Frontend
+  - guestPort: 3000  # Web UI
     hostPort: 3000
   - guestPort: 8000  # Backend
     hostPort: 8000  
@@ -260,7 +260,7 @@ portForwards:
 **Nomad環境用（追加）:**
 ```yaml
 portForwards:
-  - guestPort: 3000  # Frontend
+  - guestPort: 3000  # Web UI
     hostPort: 3000
   - guestPort: 8000  # Backend
     hostPort: 8000  
@@ -441,7 +441,7 @@ sudo ./scripts/setup-k3s.sh
 # ⚠️ setup-k3s.shが以下を自動で実行します：
 # - K3s + 直接gRPC実行基盤のインストール
 # - gRPCサービス群のデプロイ（namespace、services、templates）
-# - アプリケーション（Backend & Frontend）のデプロイ
+# - アプリケーション（Backend & Web UI）のデプロイ
 ```
 
 #### デプロイメントファイルの変更を反映
@@ -513,7 +513,7 @@ kubectl get pods -o wide
 kubectl get pods -n image-processing -o wide
 
 # メインアプリケーションのログ確認
-kubectl logs -f deployment/frontend
+kubectl logs -f deployment/web
 kubectl logs -f deployment/backend
 
 # gRPCサービスのログ確認
@@ -786,7 +786,7 @@ limactl start k3s
    ./scripts/port-forward.sh
    
    # 別のターミナルでサービスの動作確認
-   curl http://localhost:3000  # Frontend
+   curl http://localhost:3000  # Web UI
    curl http://localhost:8000/docs  # Backend API
    ```
 
@@ -822,7 +822,7 @@ limactl start k3s
 2. **Nomad用ポートフォワーディングを追加**
 ```yaml
 portForwards:
-   - guestPort: 3000  # Frontend (Nomad)
+   - guestPort: 3000  # Web UI (Nomad)
       hostPort: 3000
    - guestPort: 8000  # Backend (Nomad)
       hostPort: 8000  

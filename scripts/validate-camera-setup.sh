@@ -56,10 +56,10 @@ echo ""
 echo "Backend camera stream API:"
 check_file "backend/app/api/camera_stream.py"
 
-# Check frontend components
+# Check web UI components
 echo ""
-echo "Frontend camera streaming UI:"
-check_file "frontend/src/pages/CameraStream.tsx"
+echo "Web UI camera streaming UI:"
+check_file "web/src/pages/CameraStream.tsx"
 
 # Check K8s configuration
 echo ""
@@ -99,7 +99,7 @@ echo "2. Camera-only setup (existing installation): ./scripts/setup-camera-strea
 echo "3. Manual build: ./scripts/build_grpc_services.sh (includes camera stream)"
 echo ""
 echo "After setup, access camera streaming at:"
-echo "- Frontend: http://localhost:3000 → 'リアルタイム処理' tab"
+echo "- Web UI: http://localhost:3000 → 'リアルタイム処理' tab"
 echo "- API docs: http://localhost:8000/docs"
 echo ""
 echo "✅ Validation completed!"

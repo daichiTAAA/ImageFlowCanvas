@@ -1,7 +1,7 @@
 {
-  "name": "imageflow-canvas-frontend",
+  "name": "imageflow-canvas-web",
   "version": "1.0.0",
-  "description": "ImageFlowCanvas Frontend Application",
+  "description": "ImageFlowCanvas web Application",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

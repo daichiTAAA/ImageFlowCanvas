@@ -65,21 +65,21 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
+  name: web
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: frontend
+      app: web
   template:
     metadata:
       labels:
-        app: frontend
+        app: web
     spec:
       containers:
-      - name: frontend
-        image: imageflow/frontend:local
+      - name: web
+        image: imageflow/web:local
         imagePullPolicy: IfNotPresent
         env:
         - name: DEPLOYMENT_ENV
@@ -96,11 +96,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: frontend-service
+  name: web-service
   namespace: default
 spec:
   selector:
-    app: frontend
+    app: web
   ports:
     - port: 3000
       targetPort: 3000
