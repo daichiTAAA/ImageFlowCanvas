@@ -734,8 +734,6 @@ pip install requests ultralytics grpcio grpcio-tools
    curl http://localhost:8080/health
    ```
 
-**注意**: 2025年7月20日のアップデートにより、直接gRPC呼び出し方式に移行しました。パイプラインの実行時間が60-94秒から40-100msに短縮され（99%以上の改善）、リアルタイム処理とバッチ処理の両方が可能になっています。Kafkaは進捗通知、監視メトリクス、フォールバック処理に特化して使用されています。
-
 ### Macでのポートフォワーディングの問題
 
 **症状**: MacでLimaを使用している際に、ポートフォワーディングが正常に動作せず、ホストPCからVM内のサービス（http://localhost:3000、http://localhost:8000等）にアクセスできない
@@ -758,27 +756,27 @@ pip install requests ultralytics grpcio grpcio-tools
    ```
 
 2. **ポートフォワーディング設定の確認**
-   ```bash
-   # ホストマシン（Mac）で実行
-   limactl stop k3s
-   limactl edit k3s
-   
-   # 以下の設定が正しく記載されているか確認
-   # portForwards:
-   #   - guestPort: 3000
-   #     hostPort: 3000
-   #   - guestPort: 8000
-   #     hostPort: 8000
-   #   - guestPort: 9001
-   #     hostPort: 9001
-   #   - guestPort: 2746
-   #     hostPort: 2746
-   
-   # 設定を保存後、VM再起動
-   limactl start k3s
-   ```
+```bash
+# ホストマシン（Mac）で実行
+limactl stop k3s
+limactl edit k3s
 
-3. **VM内のサービス起動確認**
+# 以下の設定が正しく記載されているか確認
+portForwards:
+   - guestPort: 3000
+     hostPort: 3000
+   - guestPort: 8000
+     hostPort: 8000
+   - guestPort: 9001
+     hostPort: 9001
+   - guestPort: 2746
+     hostPort: 2746
+   
+# 設定を保存後、VM再起動
+limactl start k3s
+```
+
+1. **VM内のサービス起動確認**
    ```bash
    # VMにシェル接続
    limactl shell k3s
@@ -792,7 +790,7 @@ pip install requests ultralytics grpcio grpcio-tools
    curl http://localhost:8000/docs  # Backend API
    ```
 
-4. **Lima VM設定の確認**
+2. **Lima VM設定の確認**
    ```bash
    # VM設定の詳細表示
    limactl show-ssh k3s
@@ -822,19 +820,19 @@ pip install requests ultralytics grpcio grpcio-tools
    ```
 
 2. **Nomad用ポートフォワーディングを追加**
-   ```yaml
-   portForwards:
-     - guestPort: 3000  # Frontend (Nomad)
-       hostPort: 3000
-     - guestPort: 8000  # Backend (Nomad)
-       hostPort: 8000  
-     - guestPort: 9001  # MinIO Console
-       hostPort: 9001
-     - guestPort: 4646  # Nomad UI
-       hostPort: 4646
-     - guestPort: 8500  # Consul UI
-       hostPort: 8500
-   ```
+```yaml
+portForwards:
+   - guestPort: 3000  # Frontend (Nomad)
+      hostPort: 3000
+   - guestPort: 8000  # Backend (Nomad)
+      hostPort: 8000  
+   - guestPort: 9001  # MinIO Console
+      hostPort: 9001
+   - guestPort: 4646  # Nomad UI
+      hostPort: 4646
+   - guestPort: 8500  # Consul UI
+      hostPort: 8500
+```
 
 3. **VM再起動**
    ```bash
