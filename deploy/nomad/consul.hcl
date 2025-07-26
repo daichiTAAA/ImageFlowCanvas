@@ -29,8 +29,15 @@ connect {
   enabled = true
 }
 
+# DNS configuration
+dns_config {
+  enable_truncate = true
+  only_passing = true
+}
+
 # Ports configuration
 ports {
   grpc = 8502
   grpc_tls = 8503
+  dns = 8600
 }

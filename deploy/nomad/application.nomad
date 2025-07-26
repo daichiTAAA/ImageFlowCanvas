@@ -34,7 +34,7 @@ job "imageflow-application" {
         image = "imageflow/backend:local"
         ports = ["http"]
         force_pull = false
-        dns_servers = ["172.17.0.1", "8.8.8.8"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
         dns_search_domains = ["service.consul"]
       }
 
@@ -92,7 +92,7 @@ job "imageflow-application" {
         image = "imageflow/frontend:local"
         ports = ["http"]
         force_pull = false
-        dns_servers = ["172.17.0.1", "8.8.8.8"]
+        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
         dns_search_domains = ["service.consul"]
       }
 
