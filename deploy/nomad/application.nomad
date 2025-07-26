@@ -34,7 +34,8 @@ job "imageflow-application" {
         image = "imageflow/backend:local"
         ports = ["http"]
         force_pull = false
-        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
+        network_mode = "host"
+        dns_servers = ["127.0.0.1", "8.8.8.8"]
         dns_search_domains = ["service.consul"]
       }
 
@@ -45,7 +46,7 @@ job "imageflow-application" {
         MINIO_SECRET_KEY        = "minioadmin"
         KAFKA_BOOTSTRAP_SERVERS = "kafka.service.consul:29092"
         SECRET_KEY              = "your-secret-key-change-in-production"
-        TRITON_URL              = "triton.service.consul:8001"
+        TRITON_URL              = "triton_grpc.service.consul:8011"
         GRPC_GATEWAY_URL        = "grpc-gateway.service.consul:8080"
       }
 
@@ -92,7 +93,8 @@ job "imageflow-application" {
         image = "imageflow/frontend:local"
         ports = ["http"]
         force_pull = false
-        dns_servers = ["127.0.0.1:8600", "8.8.8.8"]
+        network_mode = "host"
+        dns_servers = ["127.0.0.1", "8.8.8.8"]
         dns_search_domains = ["service.consul"]
       }
 

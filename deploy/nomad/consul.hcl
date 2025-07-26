@@ -7,8 +7,12 @@ server = true
 bootstrap_expect = 1
 
 # Network configuration
-bind_addr = "127.0.0.1"
+bind_addr = "192.168.5.15"
+advertise_addr = "192.168.5.15"
 client_addr = "0.0.0.0"
+
+# Recursors for external DNS queries
+recursors = ["8.8.8.8", "1.1.1.1"]
 
 # UI configuration
 ui_config {
@@ -33,6 +37,13 @@ connect {
 dns_config {
   enable_truncate = true
   only_passing = true
+  allow_stale = true
+  max_stale = "87600h"
+  node_ttl = "30s"
+  service_ttl = {
+    "*" = "30s"
+  }
+  enable_additional_node_meta_txt = false
 }
 
 # Ports configuration
@@ -40,4 +51,12 @@ ports {
   grpc = 8502
   grpc_tls = 8503
   dns = 8600
+}
+
+# Additional DNS bind addresses for better accessibility
+addresses {
+  dns = "0.0.0.0"
+  http = "0.0.0.0"
+  https = "0.0.0.0"
+  grpc = "0.0.0.0"
 }

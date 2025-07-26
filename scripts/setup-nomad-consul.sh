@@ -211,6 +211,126 @@ setup_host_volumes() {
     echo "✅ Host volumes setup completed"
 }
 
+# Function to setup Consul DNS forwarding
+setup_consul_dns() {
+    echo "🔧 Setting up Consul DNS forwarding..."
+    
+    # Check if Consul DNS is already configured
+    local consul_config="/etc/systemd/resolved.conf.d/consul.conf"
+    local needs_config=false
+    
+    if [ ! -f "$consul_config" ]; then
+        echo "  Consul DNS configuration not found, creating..."
+        needs_config=true
+    else
+        # Check if existing configuration is correct
+        if ! grep -q "DNS=127.0.0.1:8600" "$consul_config" || ! grep -q "Domains=~consul" "$consul_config"; then
+            echo "  Existing Consul DNS configuration is incomplete, updating..."
+            needs_config=true
+        else
+            echo "  ✅ Consul DNS configuration already exists and is correct"
+            
+            # Verify if systemd-resolved is actually using the configuration
+            if resolvectl status | grep -q "DNS Domain: ~consul" && resolvectl status | grep -q "DNS Servers: 127.0.0.1:8600"; then
+                echo "  ✅ systemd-resolved is already configured for Consul DNS"
+                return 0
+            else
+                echo "  Configuration file exists but systemd-resolved needs restart"
+                needs_config=true
+            fi
+        fi
+    fi
+    
+    if [ "$needs_config" = true ]; then
+        echo "  Configuring systemd-resolved to forward .consul queries..."
+        
+        # Configure systemd-resolved to forward .consul queries to Consul
+        sudo mkdir -p /etc/systemd/resolved.conf.d
+        sudo tee "$consul_config" > /dev/null << EOF
+[Resolve]
+DNS=127.0.0.1:8600
+Domains=~consul
+FallbackDNS=8.8.8.8 1.1.1.1
+EOF
+        
+        echo "  Restarting systemd-resolved..."
+        sudo systemctl restart systemd-resolved
+        
+        # Wait for service to be ready
+        sleep 3
+        
+        echo "✅ Consul DNS configured via systemd-resolved"
+    fi
+}
+
+# Function to test Consul DNS resolution
+test_consul_dns() {
+    echo "🧪 Testing Consul DNS resolution..."
+    
+    # Wait for Consul to be ready
+    local max_attempts=10
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        if curl -f -s "http://localhost:8500" >/dev/null 2>&1; then
+            break
+        fi
+        echo "  Waiting for Consul to be ready... (attempt $attempt/$max_attempts)"
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+    
+    if [ $attempt -gt $max_attempts ]; then
+        echo "  ⚠️ Consul is not ready, skipping DNS tests"
+        return 1
+    fi
+    
+    # Test DNS resolution
+    echo "  Testing direct Consul DNS query..."
+    if dig @127.0.0.1 -p 8600 consul.service.consul +short >/dev/null 2>&1; then
+        echo "  ✅ Direct Consul DNS query successful"
+    else
+        echo "  ❌ Direct Consul DNS query failed"
+    fi
+    
+    # Test systemd-resolved configuration
+    echo "  Testing systemd-resolved configuration..."
+    local resolved_status=$(resolvectl status 2>/dev/null)
+    if echo "$resolved_status" | grep -q "DNS Domain: ~consul"; then
+        echo "  ✅ systemd-resolved is configured for Consul DNS"
+        
+        # Check if DNS servers include Consul
+        if echo "$resolved_status" | grep -q "DNS Servers: 127.0.0.1:8600"; then
+            echo "  ✅ systemd-resolved is using Consul DNS server"
+        else
+            echo "  ⚠️ systemd-resolved configured but not using Consul DNS server"
+        fi
+    else
+        echo "  ❌ systemd-resolved configuration issue"
+        echo "  Current DNS configuration:"
+        echo "$resolved_status" | head -10 | sed 's/^/    /'
+        return 1
+    fi
+    
+    # Test .consul domain resolution
+    echo "  Testing .consul domain resolution..."
+    if resolvectl query consul.service.consul >/dev/null 2>&1; then
+        echo "  ✅ Consul DNS resolution via systemd-resolved successful"
+    else
+        echo "  ❌ Consul DNS resolution via systemd-resolved failed"
+    fi
+    
+    # Test external DNS resolution
+    echo "  Testing external DNS resolution..."
+    if nslookup google.com >/dev/null 2>&1; then
+        echo "  ✅ External DNS resolution working"
+    else
+        echo "  ⚠️ External DNS resolution failed"
+    fi
+    
+    return 0
+}
+
 # Function to cleanup background processes
 cleanup_processes() {
     echo "🧹 Cleaning up background processes..."
@@ -283,6 +403,9 @@ case "$ACTION" in
         # Setup host volumes for Nomad
         setup_host_volumes
         
+        # Setup Consul DNS forwarding (only if needed)
+        setup_consul_dns
+        
         # Start Consul in development mode
         echo "🏃 Starting Consul with configuration..."
         CONSUL_CONFIG="$NOMAD_DIR/consul.hcl"
@@ -316,6 +439,9 @@ case "$ACTION" in
         # Wait for Nomad to be ready  
         wait_for_service "Nomad" "4646"
         
+        # Test Consul DNS resolution
+        test_consul_dns
+        
         # Set environment variables
         export NOMAD_ADDR=http://localhost:4646
         export CONSUL_HTTP_ADDR=http://localhost:8500
@@ -341,6 +467,9 @@ case "$ACTION" in
             
             # Setup host volumes for Nomad
             setup_host_volumes
+            
+            # Setup Consul DNS forwarding (only if needed)
+            setup_consul_dns
             
             # Start Consul in development mode
             echo "🏃 Starting Consul with configuration..."
