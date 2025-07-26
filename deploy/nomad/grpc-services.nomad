@@ -2,8 +2,24 @@ job "imageflow-grpc-services" {
   datacenters = ["dc1"]
   type        = "service"
 
+  update {
+    max_parallel     = 1
+    min_healthy_time = "10s"
+    healthy_deadline = "5m"
+    auto_revert      = false
+    canary           = 0
+  }
+
   group "resize-service" {
     count = 1
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "10s"
+      healthy_deadline = "5m"
+      auto_revert      = false
+      canary           = 0
+    }
 
     network {
       port "grpc" {
@@ -15,12 +31,13 @@ job "imageflow-grpc-services" {
       driver = "docker"
 
       config {
-        image = "imageflow/resize-grpc:latest"
+        image = "imageflow/resize-grpc:local"
         ports = ["grpc"]
+        force_pull = false
       }
 
       env {
-        MINIO_ENDPOINT   = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT   = "localhost:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
         GRPC_PORT        = "9090"
@@ -28,8 +45,8 @@ job "imageflow-grpc-services" {
       }
 
       resources {
-        cpu    = 300
-        memory = 768
+        cpu    = 150
+        memory = 384
       }
 
       service {
@@ -58,22 +75,23 @@ job "imageflow-grpc-services" {
       driver = "docker"
 
       config {
-        image = "imageflow/ai-detection-grpc:latest"
+        image = "imageflow/ai-detection-grpc:local"
         ports = ["grpc"]
+        force_pull = false
       }
 
       env {
-        MINIO_ENDPOINT    = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT    = "localhost:9000"
         MINIO_ACCESS_KEY  = "minioadmin"
         MINIO_SECRET_KEY  = "minioadmin"
-        TRITON_URL        = "triton.service.consul:8001"
+        TRITON_URL        = "localhost:8001"
         GRPC_PORT         = "9090"
         GRPC_MAX_WORKERS  = "25"
       }
 
       resources {
-        cpu    = 500
-        memory = 1024
+        cpu    = 250
+        memory = 512
       }
 
       service {
@@ -94,7 +112,7 @@ job "imageflow-grpc-services" {
 
     network {
       port "grpc" {
-        static = 9092
+        static = 9093
       }
     }
 
@@ -102,12 +120,13 @@ job "imageflow-grpc-services" {
       driver = "docker"
 
       config {
-        image = "imageflow/filter-grpc:latest"
+        image = "imageflow/filter-grpc:local"
         ports = ["grpc"]
+        force_pull = false
       }
 
       env {
-        MINIO_ENDPOINT   = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT   = "localhost:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
         GRPC_PORT        = "9090"
@@ -115,8 +134,8 @@ job "imageflow-grpc-services" {
       }
 
       resources {
-        cpu    = 300
-        memory = 768
+        cpu    = 150
+        memory = 384
       }
 
       service {
@@ -137,7 +156,7 @@ job "imageflow-grpc-services" {
 
     network {
       port "grpc" {
-        static = 9093
+        static = 9094
       }
     }
 
@@ -145,12 +164,13 @@ job "imageflow-grpc-services" {
       driver = "docker"
 
       config {
-        image = "imageflow/camera-stream-grpc:latest"
+        image = "imageflow/camera-stream-grpc:local"
         ports = ["grpc"]
+        force_pull = false
       }
 
       env {
-        MINIO_ENDPOINT   = "minio-api.service.consul:9000"
+        MINIO_ENDPOINT   = "localhost:9000"
         MINIO_ACCESS_KEY = "minioadmin"
         MINIO_SECRET_KEY = "minioadmin"
         GRPC_PORT        = "9090"
@@ -158,8 +178,8 @@ job "imageflow-grpc-services" {
       }
 
       resources {
-        cpu    = 400
-        memory = 1024
+        cpu    = 200
+        memory = 512
       }
 
       service {
@@ -188,21 +208,22 @@ job "imageflow-grpc-services" {
       driver = "docker"
 
       config {
-        image = "imageflow/grpc-gateway:latest"
+        image = "imageflow/grpc-gateway:local"
         ports = ["http"]
+        force_pull = false
       }
 
       env {
-        RESIZE_GRPC_URL        = "resize-grpc.service.consul:9090"
-        AI_DETECTION_GRPC_URL  = "ai-detection-grpc.service.consul:9091"
-        FILTER_GRPC_URL        = "filter-grpc.service.consul:9092"
-        CAMERA_STREAM_GRPC_URL = "camera-stream-grpc.service.consul:9093"
+        RESIZE_GRPC_URL        = "localhost:9090"
+        AI_DETECTION_GRPC_URL  = "localhost:9091"
+        FILTER_GRPC_URL        = "localhost:9093"
+        CAMERA_STREAM_GRPC_URL = "localhost:9094"
         GATEWAY_PORT           = "8080"
       }
 
       resources {
-        cpu    = 200
-        memory = 512
+        cpu    = 100
+        memory = 256
       }
 
       service {

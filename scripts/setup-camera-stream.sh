@@ -70,7 +70,7 @@ build_camera_stream_service() {
     
     BASE_DIR="$(pwd)"
     REGISTRY="imageflow"
-    TAG="latest"
+    TAG="local"
     
     # Copy generated protobuf files to service directory
     if [ -d "$BASE_DIR/generated/python" ]; then
@@ -120,8 +120,8 @@ update_backend() {
     
     # Rebuild and redeploy backend
     echo "Rebuilding backend with camera stream support..."
-    docker build -t imageflow/backend:latest ./backend
-    docker save imageflow/backend:latest | sudo k3s ctr images import -
+    docker build -t imageflow/backend:local ./backend
+    docker save imageflow/backend:local | sudo k3s ctr images import -
     
     # Restart backend deployment
     kubectl rollout restart deployment/backend -n default
@@ -142,8 +142,8 @@ update_frontend() {
     
     # Rebuild and redeploy frontend
     echo "Rebuilding frontend with camera streaming UI..."
-    docker build -t imageflow/frontend:latest ./frontend
-    docker save imageflow/frontend:latest | sudo k3s ctr images import -
+    docker build -t imageflow/frontend:local ./frontend
+    docker save imageflow/frontend:local | sudo k3s ctr images import -
     
     # Restart frontend deployment
     kubectl rollout restart deployment/frontend -n default

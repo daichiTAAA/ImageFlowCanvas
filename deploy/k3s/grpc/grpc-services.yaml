@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: resize-grpc
-        image: docker.io/imageflow/resize-grpc:latest
+        image: docker.io/imageflow/resize-grpc:local
         imagePullPolicy: Never
         ports:
         - containerPort: 9090
@@ -103,7 +103,7 @@ spec:
     spec:
       containers:
       - name: ai-detection-grpc
-        image: docker.io/imageflow/ai-detection-grpc:latest
+        image: docker.io/imageflow/ai-detection-grpc:local
         imagePullPolicy: Never
         ports:
         - containerPort: 9090
@@ -188,7 +188,7 @@ spec:
     spec:
       containers:
       - name: filter-grpc
-        image: docker.io/imageflow/filter-grpc:latest
+        image: docker.io/imageflow/filter-grpc:local
         imagePullPolicy: Never
         ports:
         - containerPort: 9090
@@ -271,7 +271,7 @@ spec:
     spec:
       containers:
       - name: grpc-gateway
-        image: docker.io/imageflow/grpc-gateway:latest
+        image: docker.io/imageflow/grpc-gateway:local
         imagePullPolicy: Never
         ports:
         - containerPort: 8080
@@ -353,7 +353,7 @@ spec:
     spec:
       containers:
       - name: camera-stream-grpc
-        image: docker.io/imageflow/camera-stream-grpc:latest
+        image: docker.io/imageflow/camera-stream-grpc:local
         imagePullPolicy: Never
         ports:
         - containerPort: 9090

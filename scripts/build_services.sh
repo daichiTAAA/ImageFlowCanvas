@@ -9,12 +9,12 @@
 #
 # Environment variables:
 #   REGISTRY   - Docker registry prefix (default: imageflow)
-#   TAG        - Docker image tag (default: latest)
+#   TAG        - Docker image tag (default: local)
 
 set -e
 
 REGISTRY=${REGISTRY:-"imageflow"}
-TAG=${TAG:-"latest"}
+TAG=${TAG:-"local"}
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_TYPE=${1:-"all"}
 

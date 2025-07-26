@@ -8,6 +8,9 @@ http {
 
     sendfile        on;
     keepalive_timeout  65;
+    
+    # DNS resolver - conditionally include based on environment
+    ${NGINX_RESOLVER}
 
     server {
         listen       80;
@@ -22,7 +25,9 @@ http {
 
         # Proxy API requests to backend
         location ~ ^/api/(.*)$ {
-            proxy_pass http://backend-service:8000/v1/$1$is_args$args;
+            set $backend_host ${BACKEND_HOST};
+            set $backend_port ${BACKEND_PORT};
+            proxy_pass http://$backend_host:$backend_port/v1/$1$is_args$args;
             proxy_set_header Host $host:$server_port;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -54,7 +59,9 @@ http {
 
         # WebSocket proxy
         location /ws/ {
-            proxy_pass http://backend-service:8000/v1/ws/;
+            set $backend_host ${BACKEND_HOST};
+            set $backend_port ${BACKEND_PORT};
+            proxy_pass http://$backend_host:$backend_port/v1/ws/;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";

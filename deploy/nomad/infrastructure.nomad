@@ -2,8 +2,24 @@ job "imageflow-infrastructure" {
   datacenters = ["dc1"]
   type        = "service"
 
+  update {
+    max_parallel     = 1
+    min_healthy_time = "10s"
+    healthy_deadline = "3m"
+    auto_revert      = false
+    canary           = 0
+  }
+
   group "database" {
     count = 1
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "10s" 
+      healthy_deadline = "3m"
+      auto_revert      = false
+      canary           = 0
+    }
 
     network {
       port "postgres" {
@@ -39,8 +55,8 @@ job "imageflow-infrastructure" {
       }
 
       resources {
-        cpu    = 500
-        memory = 512
+        cpu    = 100
+        memory = 256
       }
 
       service {
@@ -62,68 +78,71 @@ job "imageflow-infrastructure" {
   group "message-queue" {
     count = 1
 
+    update {
+      max_parallel     = 1
+      min_healthy_time = "10s"
+      healthy_deadline = "3m"
+      auto_revert      = false
+      canary           = 0
+    }
+
     network {
-      port "zookeeper" {
-        static = 2181
-      }
       port "kafka" {
         static = 9092
       }
       port "kafka_internal" {
         static = 29092
       }
+      port "kafka_controller" {
+        static = 29093
+      }
     }
 
-    task "zookeeper" {
-      driver = "docker"
-
-      config {
-        image = "confluentinc/cp-zookeeper:7.4.0"
-        ports = ["zookeeper"]
-      }
-
-      env {
-        ZOOKEEPER_CLIENT_PORT = "2181"
-        ZOOKEEPER_TICK_TIME   = "2000"
-      }
-
-      resources {
-        cpu    = 200
-        memory = 256
-      }
-
-      service {
-        name = "zookeeper"
-        port = "zookeeper"
-        
-        check {
-          type     = "tcp"
-          interval = "10s"
-          timeout  = "3s"
-        }
-      }
+    volume "kafka_data" {
+      type      = "host"
+      read_only = false
+      source    = "kafka_data"
     }
 
     task "kafka" {
       driver = "docker"
 
       config {
-        image = "confluentinc/cp-kafka:7.4.0"
-        ports = ["kafka", "kafka_internal"]
+        image = "confluentinc/cp-kafka:7.6.0"
+        ports = ["kafka", "kafka_internal", "kafka_controller"]
+        force_pull = false
+        command = "bash"
+        args = [
+          "-c",
+          "if [ ! -f /var/lib/kafka/data/meta.properties ]; then /bin/kafka-storage format -t $CLUSTER_ID -c /etc/kafka/kraft/server.properties; fi && /etc/confluent/docker/run"
+        ]
+      }
+
+      volume_mount {
+        volume      = "kafka_data"
+        destination = "/var/lib/kafka"
+        read_only   = false
       }
 
       env {
-        KAFKA_BROKER_ID                         = "1"
-        KAFKA_ZOOKEEPER_CONNECT                 = "zookeeper.service.consul:2181"
-        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP    = "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
-        KAFKA_ADVERTISED_LISTENERS              = "PLAINTEXT://kafka.service.consul:29092,PLAINTEXT_HOST://localhost:9092"
+        CLUSTER_ID                              = "4L6g3nShT-eMCtK--X86sw"
+        KAFKA_NODE_ID                           = "1"
+        KAFKA_PROCESS_ROLES                     = "broker,controller"
+        KAFKA_CONTROLLER_QUORUM_VOTERS          = "1@localhost:29093"
+        KAFKA_LISTENERS                         = "PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,PLAINTEXT_HOST://0.0.0.0:9092"
+        KAFKA_INTER_BROKER_LISTENER_NAME        = "PLAINTEXT"
+        KAFKA_CONTROLLER_LISTENER_NAMES         = "CONTROLLER"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP    = "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+        KAFKA_ADVERTISED_LISTENERS              = "PLAINTEXT://localhost:29092,PLAINTEXT_HOST://localhost:9092"
         KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR  = "1"
+        KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS  = "0"
         KAFKA_TRANSACTION_STATE_LOG_MIN_ISR     = "1"
         KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR = "1"
+        KAFKA_LOG_DIRS                          = "/var/lib/kafka/data"
       }
 
       resources {
-        cpu    = 500
+        cpu    = 300
         memory = 1024
       }
 
@@ -142,6 +161,14 @@ job "imageflow-infrastructure" {
 
   group "object-storage" {
     count = 1
+
+    update {
+      max_parallel     = 1
+      min_healthy_time = "10s"
+      healthy_deadline = "3m"
+      auto_revert      = false
+      canary           = 0
+    }
 
     network {
       port "minio_api" {
@@ -162,7 +189,7 @@ job "imageflow-infrastructure" {
       driver = "docker"
 
       config {
-        image = "minio/minio:RELEASE.2023-09-04T19-57-37Z"
+        image = "minio/minio:RELEASE.2025-07-23T15-54-02Z"
         ports = ["minio_api", "minio_console"]
         command = "minio"
         args = ["server", "/data", "--console-address", ":9001"]
@@ -180,7 +207,7 @@ job "imageflow-infrastructure" {
       }
 
       resources {
-        cpu    = 300
+        cpu    = 150
         memory = 512
       }
 
@@ -212,6 +239,14 @@ job "imageflow-infrastructure" {
   group "ai-inference" {
     count = 1
 
+    update {
+      max_parallel     = 1
+      min_healthy_time = "10s"
+      healthy_deadline = "3m"
+      auto_revert      = false
+      canary           = 0
+    }
+
     network {
       port "triton_http" {
         static = 8001
@@ -224,11 +259,17 @@ job "imageflow-infrastructure" {
       }
     }
 
+    volume "models_data" {
+      type      = "host"
+      read_only = true
+      source    = "models_data"
+    }
+
     task "triton" {
       driver = "docker"
 
       config {
-        image = "nvcr.io/nvidia/tritonserver:23.10-py3"
+        image = "nvcr.io/nvidia/tritonserver:24.07-py3"
         ports = ["triton_http", "triton_grpc", "triton_metrics"]
         command = "tritonserver"
         args = [
@@ -236,10 +277,18 @@ job "imageflow-infrastructure" {
           "--strict-model-config=false",
           "--log-verbose=1"
         ]
+        # Increase pull timeout for large images
+        image_pull_timeout = "20m"
+      }
+
+      volume_mount {
+        volume      = "models_data"
+        destination = "/models"
+        read_only   = true
       }
 
       resources {
-        cpu    = 1000
+        cpu    = 400
         memory = 2048
       }
 

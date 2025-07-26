@@ -184,8 +184,8 @@ sudo ./scripts/setup-k3s.sh
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000/docs
 - MinIO Console: http://localhost:9001
-- Nomad UI: http://localhost:4646
-- Consul UI: http://localhost:8500
+- Nomad UI: http://localhost:4646/ui
+- Consul UI: http://localhost:8500/ui
 
 ### 📊 環境状態確認
 

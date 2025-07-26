@@ -56,22 +56,22 @@ kubectl wait --for=condition=available --timeout=300s deployment/triton-inferenc
 
 # Check if required images exist
 echo "Checking for required Docker images..."
-if ! docker image inspect imageflow/backend:latest >/dev/null 2>&1; then
+if ! docker image inspect imageflow/backend:local >/dev/null 2>&1; then
     echo "Error: Backend image not found. Please run './scripts/build_services.sh' first."
     exit 1
 fi
 
-if ! docker image inspect imageflow/frontend:latest >/dev/null 2>&1; then
+if ! docker image inspect imageflow/frontend:local >/dev/null 2>&1; then
     echo "Error: Frontend image not found. Please run './scripts/build_services.sh' first."
     exit 1
 fi
 
 # Import backend and frontend images to K3s
 echo "Importing backend image to K3s..."
-docker save imageflow/backend:latest | sudo k3s ctr images import -
+docker save imageflow/backend:local | sudo k3s ctr images import -
 
 echo "Importing frontend image to K3s..."
-docker save imageflow/frontend:latest | sudo k3s ctr images import -
+docker save imageflow/frontend:local | sudo k3s ctr images import -
 
 # Deploy backend and frontend
 echo "Deploying backend and frontend..."
@@ -90,9 +90,9 @@ echo "Checking and importing gRPC service images..."
 GRPC_SERVICES=("resize-grpc" "ai-detection-grpc" "filter-grpc" "grpc-gateway" "camera-stream-grpc")
 
 for service in "${GRPC_SERVICES[@]}"; do
-    if docker image inspect imageflow/$service:latest >/dev/null 2>&1; then
+    if docker image inspect imageflow/$service:local >/dev/null 2>&1; then
         echo "Importing $service image to K3s..."
-        docker save imageflow/$service:latest | sudo k3s ctr images import -
+        docker save imageflow/$service:local | sudo k3s ctr images import -
     else
         echo "Warning: $service image not found. Please run './scripts/build_services.sh' first."
     fi

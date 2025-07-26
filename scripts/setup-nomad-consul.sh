@@ -3,10 +3,13 @@
 # Setup script for Nomad and Consul development environment
 #
 # Usage:
-#   ./scripts/setup-nomad-consul.sh                # Full setup
+#   ./scripts/setup-nomad-consul.sh                # Full setup (install & start Nomad/Consul + deploy services)
 #   ./scripts/setup-nomad-consul.sh deploy         # Deploy jobs only (requires running cluster)
 #   ./scripts/setup-nomad-consul.sh stop           # Stop all jobs
 #   ./scripts/setup-nomad-consul.sh status         # Show job status
+#   ./scripts/setup-nomad-consul.sh logs           # Show service logs (interactive)
+#   ./scripts/setup-nomad-consul.sh health         # Check service health endpoints
+#   ./scripts/setup-nomad-consul.sh kill           # Kill Nomad and Consul background processes
 
 set -e
 
@@ -24,11 +27,48 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to optimize Docker for large image pulls
+optimize_docker() {
+    echo "🐳 Optimizing Docker configuration for large image pulls..."
+    
+    # Create or update Docker daemon configuration
+    local docker_config_dir="/etc/docker"
+    local docker_config_file="$docker_config_dir/daemon.json"
+    
+    if [ ! -d "$docker_config_dir" ]; then
+        sudo mkdir -p "$docker_config_dir"
+    fi
+    
+    # Backup existing config if it exists
+    if [ -f "$docker_config_file" ]; then
+        sudo cp "$docker_config_file" "$docker_config_file.backup.$(date +%Y%m%d_%H%M%S)"
+    fi
+    
+    # Create optimized Docker daemon configuration
+    sudo tee "$docker_config_file" > /dev/null << EOF
+{
+  "max-concurrent-downloads": 3,
+  "max-concurrent-uploads": 5,
+  "max-download-attempts": 5,
+  "registry-mirrors": [],
+  "insecure-registries": [],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+EOF
+    
+    echo "✅ Docker configuration optimized"
+    echo "ℹ️  Note: Docker daemon restart may be required for changes to take effect"
+}
+
 # Function to wait for service to be ready
 wait_for_service() {
     local service_name=$1
     local port=$2
-    local max_attempts=30
+    local max_attempts=5
     local attempt=1
     
     echo "⏳ Waiting for $service_name to be ready on port $port..."
@@ -48,6 +88,146 @@ wait_for_service() {
     return 1
 }
 
+# Function to setup Nomad configuration
+setup_nomad_config() {
+    local config_file="$NOMAD_DIR/nomad.hcl"
+    local base_dir="$BASE_DIR"
+    
+    # Create the configuration file with dynamic paths
+    cat > "$config_file" << EOF
+# Nomad development configuration for ImageFlowCanvas
+datacenter = "dc1"
+data_dir = "/tmp/nomad"
+
+# Bind configuration
+bind_addr = "0.0.0.0"
+
+# Server configuration
+server {
+  enabled = true
+  bootstrap_expect = 1
+  
+  # ACL and encryption disabled for development
+  encrypt = ""
+}
+
+# Client configuration  
+client {
+  enabled = true
+  node_class = "compute"
+  
+  # Force specific CPU total for virtual environments
+  cpu_total_compute = 4000
+  
+  # Reserved resources
+  reserved {
+    cpu    = 200
+    memory = 512
+  }
+  
+  # Host volumes configuration for data persistence
+  host_volume "postgres_data" {
+    path      = "/opt/nomad/volumes/postgres_data"
+    read_only = false
+  }
+  
+  host_volume "minio_data" {
+    path      = "/opt/nomad/volumes/minio_data"
+    read_only = false
+  }
+  
+  host_volume "redis_data" {
+    path      = "/opt/nomad/volumes/redis_data"
+    read_only = false
+  }
+  
+  host_volume "kafka_data" {
+    path      = "/opt/nomad/volumes/kafka_data"
+    read_only = false
+  }
+  
+  host_volume "models_data" {
+    path      = "${base_dir}/models"
+    read_only = true
+  }
+}
+
+# Consul integration
+consul {
+  address = "127.0.0.1:8500"
+}
+
+# Plugins
+plugin "docker" {
+  config {
+    allow_privileged = false
+    allow_caps = ["audit_write", "chown", "dac_override", "fowner", "fsetid", "kill", "mknod", "net_bind_service", "setfcap", "setgid", "setpcap", "setuid", "sys_chroot"]
+  }
+}
+
+# Telemetry
+telemetry {
+  collection_interval = "1s"
+  disable_hostname = true
+  prometheus_metrics = true
+  publish_allocation_metrics = true
+  publish_node_metrics = true
+}
+
+# Ports
+ports {
+  http = 4646
+  rpc  = 4647
+  serf = 4648
+}
+EOF
+    
+    echo "$config_file"
+}
+
+# Function to setup host volumes for Nomad
+setup_host_volumes() {
+    echo "📁 Setting up host volumes for Nomad..."
+    
+    local volumes=(
+        "/opt/nomad/volumes/postgres_data"
+        "/opt/nomad/volumes/minio_data"
+        "/opt/nomad/volumes/redis_data"
+        "/opt/nomad/volumes/kafka_data"
+    )
+    
+    for volume in "${volumes[@]}"; do
+        if [ ! -d "$volume" ]; then
+            echo "  Creating volume: $volume"
+            sudo mkdir -p "$volume"
+            sudo chown -R $(whoami):$(whoami) "$volume"
+            sudo chmod 755 "$volume"
+        else
+            echo "  Volume already exists: $volume"
+        fi
+    done
+    
+    echo "✅ Host volumes setup completed"
+}
+
+# Function to cleanup background processes
+cleanup_processes() {
+    echo "🧹 Cleaning up background processes..."
+    
+    # Kill Consul and Nomad processes
+    pkill -f "consul agent" || true
+    pkill -f "nomad agent" || true
+    
+    # Wait a bit for graceful shutdown
+    sleep 2
+    
+    # Force kill if still running
+    pkill -9 -f "consul agent" || true
+    pkill -9 -f "nomad agent" || true
+    
+    echo "✅ Background processes cleaned up"
+}
+
 case "$ACTION" in
     "setup")
         echo "🚀 Setting up Nomad and Consul environment..."
@@ -56,6 +236,9 @@ case "$ACTION" in
         if [[ "$OSTYPE" != "linux-gnu"* ]]; then
             echo "Warning: This script is designed for Linux. For other platforms, please install Nomad and Consul manually."
         fi
+        
+        # Optimize Docker configuration for large image pulls
+        optimize_docker
         
         # Install Consul if not already installed
         if ! command_exists consul; then
@@ -75,9 +258,18 @@ case "$ACTION" in
             echo "✅ Nomad is already installed"
         fi
         
+        # Setup host volumes for Nomad
+        setup_host_volumes
+        
         # Start Consul in development mode
-        echo "🏃 Starting Consul in development mode..."
-        consul agent -dev -client=0.0.0.0 -bind=127.0.0.1 &
+        echo "🏃 Starting Consul with configuration..."
+        CONSUL_CONFIG="$NOMAD_DIR/consul.hcl"
+        if [ -f "$CONSUL_CONFIG" ]; then
+            consul agent -config-file="$CONSUL_CONFIG" &
+        else
+            echo "⚠️ Consul config not found, using dev mode"
+            consul agent -dev -client=0.0.0.0 -bind=127.0.0.1 &
+        fi
         CONSUL_PID=$!
         
         # Wait for Consul to be ready
@@ -85,7 +277,18 @@ case "$ACTION" in
         
         # Start Nomad in development mode
         echo "🏃 Starting Nomad in development mode..."
-        sudo nomad agent -dev -bind=0.0.0.0 -consul-address=127.0.0.1:8500 &
+        CPU_CORES=$(nproc)
+        echo "  Detected ${CPU_CORES} CPU cores"
+        
+        # Create Nomad configuration and start with it
+        echo "📝 Setting up Nomad configuration..."
+        NOMAD_CONFIG=$(setup_nomad_config)
+        if [ $? -ne 0 ]; then
+            echo "❌ Failed to setup Nomad configuration"
+            exit 1
+        fi
+        echo "✅ Nomad configuration generated at: $NOMAD_CONFIG"
+        sudo nomad agent -config="$NOMAD_CONFIG" -bind=0.0.0.0 &
         NOMAD_PID=$!
         
         # Wait for Nomad to be ready  
@@ -98,8 +301,8 @@ case "$ACTION" in
         echo "✅ Nomad and Consul are running!"
         echo ""
         echo "🌐 Access points:"
-        echo "  - Nomad UI: http://localhost:4646"
-        echo "  - Consul UI: http://localhost:8500"
+        echo "  - Nomad UI: http://localhost:4646/ui"
+        echo "  - Consul UI: http://localhost:8500/ui"
         echo ""
         
         # Deploy ImageFlowCanvas services
@@ -109,6 +312,51 @@ case "$ACTION" in
     
     "deploy")
         echo "📦 Deploying ImageFlowCanvas to Nomad..."
+        
+        # Check if Nomad and Consul are running
+        if ! curl -f -s "http://localhost:4646" >/dev/null 2>&1; then
+            echo "⚠️ Nomad is not running. Starting Nomad and Consul..."
+            
+            # Setup host volumes for Nomad
+            setup_host_volumes
+            
+            # Start Consul in development mode
+            echo "🏃 Starting Consul with configuration..."
+            CONSUL_CONFIG="$NOMAD_DIR/consul.hcl"
+            if [ -f "$CONSUL_CONFIG" ]; then
+                consul agent -config-file="$CONSUL_CONFIG" &
+            else
+                echo "⚠️ Consul config not found, using dev mode"
+                consul agent -dev -client=0.0.0.0 -bind=127.0.0.1 &
+            fi
+            CONSUL_PID=$!
+            
+            # Wait for Consul to be ready
+            wait_for_service "Consul" "8500"
+            
+            # Start Nomad in development mode
+            echo "🏃 Starting Nomad in development mode..."
+            CPU_CORES=$(nproc)
+            echo "  Detected ${CPU_CORES} CPU cores"
+            
+            # Create Nomad configuration and start with it
+            echo "📝 Setting up Nomad configuration..."
+            NOMAD_CONFIG=$(setup_nomad_config)
+            if [ $? -ne 0 ]; then
+                echo "❌ Failed to setup Nomad configuration"
+                exit 1
+            fi
+            echo "✅ Nomad configuration generated at: $NOMAD_CONFIG"
+            sudo nomad agent -config="$NOMAD_CONFIG" -bind=0.0.0.0 &
+            NOMAD_PID=$!
+            
+            # Wait for Nomad to be ready  
+            wait_for_service "Nomad" "4646"
+            
+            echo "✅ Nomad and Consul are now running!"
+        else
+            echo "✅ Nomad and Consul are already running!"
+        fi
         
         # Set environment variables
         export NOMAD_ADDR=http://localhost:4646
@@ -121,37 +369,77 @@ case "$ACTION" in
         
         # Deploy infrastructure services
         echo "🏗️ Deploying infrastructure services..."
-        nomad job run "$NOMAD_DIR/infrastructure.nomad"
+        nomad job run -detach "$NOMAD_DIR/infrastructure.nomad"
         
         # Wait for infrastructure to be ready
         echo "⏳ Waiting for infrastructure services to be ready..."
-        sleep 30
+        echo "  This may take several minutes as database and message queue services start up..."
+        
+        # Check deployment status periodically
+        for i in {1..20}; do
+            echo "  Checking deployment status... (attempt $i/20)"
+            if nomad job status imageflow-infrastructure | grep -q "Status.*running"; then
+                echo "✅ Infrastructure deployment completed!"
+                break
+            elif [ $i -eq 20 ]; then
+                echo "⚠️ Infrastructure deployment is taking longer than expected."
+                echo "   You can check the status with: nomad job status imageflow-infrastructure"
+                echo "   Proceeding with next deployments..."
+                break
+            fi
+            sleep 15
+        done
         
         # Deploy gRPC services
         echo "🔧 Deploying gRPC services..."
-        nomad job run "$NOMAD_DIR/grpc-services.nomad"
+        nomad job run -detach "$NOMAD_DIR/grpc-services.nomad"
         
         # Wait for gRPC services to be ready
         echo "⏳ Waiting for gRPC services to be ready..."
-        sleep 20
+        for i in {1..12}; do
+            echo "  Checking gRPC services status... (attempt $i/12)"
+            if nomad job status imageflow-grpc-services | grep -q "Status.*running"; then
+                echo "✅ gRPC services deployment completed!"
+                break
+            elif [ $i -eq 12 ]; then
+                echo "⚠️ gRPC services deployment is taking longer than expected."
+                echo "   Proceeding with application deployment..."
+                break
+            fi
+            sleep 10
+        done
         
         # Deploy application services
         echo "🌐 Deploying application services..."
-        nomad job run "$NOMAD_DIR/application.nomad"
+        nomad job run -detach "$NOMAD_DIR/application.nomad"
         
-        echo "✅ All services deployed successfully!"
+        echo "✅ All services deployment initiated!"
         echo ""
-        echo "🌐 Access points:"
+        echo "🔍 To check deployment status:"
+        echo "  nomad job status imageflow-infrastructure"
+        echo "  nomad job status imageflow-grpc-services"
+        echo "  nomad job status imageflow-application"
+        echo ""
+        echo "🌐 Access points (available once services are healthy):"
         echo "  - Frontend: http://localhost:3000"
         echo "  - Backend API: http://localhost:8000/docs"
         echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
         echo "  - gRPC Gateway: http://localhost:8080/health"
-        echo "  - Nomad UI: http://localhost:4646"
-        echo "  - Consul UI: http://localhost:8500"
+        echo "  - Nomad UI: http://localhost:4646/ui"
+        echo "  - Consul UI: http://localhost:8500/ui"
+        echo ""
+        echo "💡 Use './scripts/setup-nomad-consul.sh status' to check current status"
+        echo "💡 Use './scripts/setup-nomad-consul.sh health' to check service health"
         ;;
     
     "stop")
         echo "⏹️ Stopping ImageFlowCanvas services..."
+        
+        # Check if Nomad is running
+        if ! curl -f -s "http://localhost:4646" >/dev/null 2>&1; then
+            echo "❌ Nomad is not running. No services to stop."
+            exit 1
+        fi
         
         export NOMAD_ADDR=http://localhost:4646
         
@@ -165,6 +453,13 @@ case "$ACTION" in
     
     "status")
         echo "📊 ImageFlowCanvas service status:"
+        
+        # Check if Nomad is running
+        if ! curl -f -s "http://localhost:4646" >/dev/null 2>&1; then
+            echo "❌ Nomad is not running."
+            echo "   Use './scripts/setup-nomad-consul.sh setup' to start Nomad and Consul"
+            exit 1
+        fi
         
         export NOMAD_ADDR=http://localhost:4646
         
@@ -203,6 +498,13 @@ case "$ACTION" in
     "health")
         echo "🏥 Checking service health..."
         
+        # Check if Nomad is running first
+        if ! curl -f -s "http://localhost:4646" >/dev/null 2>&1; then
+            echo "❌ Nomad cluster is not running."
+            echo "   Use './scripts/setup-nomad-consul.sh setup' to start the cluster"
+            exit 1
+        fi
+        
         echo ""
         echo "🔍 Infrastructure services:"
         curl -f http://localhost:5432 && echo "✅ PostgreSQL: Running" || echo "❌ PostgreSQL: Down"
@@ -215,8 +517,13 @@ case "$ACTION" in
         curl -f http://localhost:8080/health && echo "✅ gRPC Gateway: Running" || echo "❌ gRPC Gateway: Down"
         ;;
     
+    "kill")
+        echo "🔪 Killing Nomad and Consul processes..."
+        cleanup_processes
+        ;;
+    
     *)
-        echo "❓ Usage: $0 {setup|deploy|stop|status|logs|health}"
+        echo "❓ Usage: $0 {setup|deploy|stop|status|logs|health|kill}"
         echo ""
         echo "Commands:"
         echo "  setup   - Install and setup Nomad/Consul environment"
@@ -225,6 +532,7 @@ case "$ACTION" in
         echo "  status  - Show job status"
         echo "  logs    - Show service logs"
         echo "  health  - Check service health"
+        echo "  kill    - Kill Nomad and Consul background processes"
         exit 1
         ;;
 esac

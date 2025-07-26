@@ -18,32 +18,39 @@ services:
       timeout: 5s
       retries: 5
 
-  # Message Queue
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    container_name: imageflow-zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
+  # Message Queue (KRaft mode)
   kafka:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-kafka:7.6.0
     container_name: imageflow-kafka
-    depends_on:
-      - zookeeper
     ports:
       - "9092:9092"
       - "29092:29092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    command: >
+      bash -c "
+      # Generate cluster ID if not exists
+      if [ ! -f /tmp/kraft-combined-logs/meta.properties ]; then
+        /bin/kafka-storage format -t $CLUSTER_ID -c /etc/kafka/kafka.properties
+      fi
+      # Start Kafka
+      /etc/confluent/docker/run
+      "
     healthcheck:
       test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
       interval: 30s
@@ -52,7 +59,7 @@ services:
 
   # Object Storage
   minio:
-    image: minio/minio:RELEASE.2023-09-04T19-57-37Z
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     container_name: imageflow-minio
     command: server /data --console-address ":9001"
     environment:
@@ -71,7 +78,7 @@ services:
 
   # AI Inference Server
   triton:
-    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    image: nvcr.io/nvidia/tritonserver:24.07-py3
     container_name: imageflow-triton
     command: 
       - tritonserver
@@ -92,7 +99,7 @@ services:
 
   # gRPC Services
   resize-grpc:
-    image: imageflow/resize-grpc:latest
+    image: imageflow/resize-grpc:local
     container_name: imageflow-resize-grpc
     build:
       context: ../../services/resize-grpc-app
@@ -106,7 +113,7 @@ services:
       retries: 3
 
   ai-detection-grpc:
-    image: imageflow/ai-detection-grpc:latest
+    image: imageflow/ai-detection-grpc:local
     container_name: imageflow-ai-detection-grpc
     build:
       context: ../../services/ai-detection-grpc-app
@@ -120,7 +127,7 @@ services:
       retries: 3
 
   filter-grpc:
-    image: imageflow/filter-grpc:latest
+    image: imageflow/filter-grpc:local
     container_name: imageflow-filter-grpc
     build:
       context: ../../services/filter-grpc-app
@@ -134,7 +141,7 @@ services:
       retries: 3
 
   camera-stream-grpc:
-    image: imageflow/camera-stream-grpc:latest
+    image: imageflow/camera-stream-grpc:local
     container_name: imageflow-camera-stream-grpc
     build:
       context: ../../services/camera-stream-grpc-app
@@ -148,7 +155,7 @@ services:
       retries: 3
 
   grpc-gateway:
-    image: imageflow/grpc-gateway:latest
+    image: imageflow/grpc-gateway:local
     container_name: imageflow-grpc-gateway
     build:
       context: ../../services/grpc-gateway
@@ -173,7 +180,7 @@ services:
 
   # Backend API
   backend:
-    image: imageflow/backend:latest
+    image: imageflow/backend:local
     container_name: imageflow-backend
     build:
       context: ../../backend
@@ -206,7 +213,7 @@ services:
 
   # Frontend
   frontend:
-    image: imageflow/frontend:latest
+    image: imageflow/frontend:local
     container_name: imageflow-frontend
     build:
       context: ../../frontend
@@ -216,6 +223,9 @@ services:
     environment:
       REACT_APP_API_URL: http://localhost:8000
       REACT_APP_WS_URL: ws://localhost:8000
+      BACKEND_HOST: backend
+      BACKEND_PORT: "8000"
+      NGINX_RESOLVER: ""
     depends_on:
       backend:
         condition: service_healthy
@@ -229,6 +239,8 @@ volumes:
   postgres_data:
     driver: local
   minio_data:
+    driver: local
+  kafka_data:
     driver: local
 
 networks:
