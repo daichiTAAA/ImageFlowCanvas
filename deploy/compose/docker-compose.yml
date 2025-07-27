@@ -104,6 +104,8 @@ services:
       - MINIO_SECRET_KEY=minioadmin
     ports:
       - "9090:9090"
+    volumes:
+      - ../../services/resize-grpc-app/src:/app/src
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
       interval: 30s
@@ -125,6 +127,8 @@ services:
       - TRITON_URL=triton:8001
     ports:
       - "9091:9090"
+    volumes:
+      - ../../services/ai-detection-grpc-app/src:/app/src
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
       interval: 30s
@@ -145,6 +149,8 @@ services:
       - MINIO_SECRET_KEY=minioadmin
     ports:
       - "9092:9090"
+    volumes:
+      - ../../services/filter-grpc-app/src:/app/src
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
       interval: 30s
@@ -165,6 +171,8 @@ services:
       - MINIO_SECRET_KEY=minioadmin
     ports:
       - "9093:9090"
+    volumes:
+      - ../../services/camera-stream-grpc-app/src:/app/src
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
       interval: 30s
@@ -185,6 +193,8 @@ services:
       - AI_DETECTION_GRPC_URL=ai-detection-grpc:9090
       - FILTER_GRPC_URL=filter-grpc:9090
       - CAMERA_STREAM_GRPC_URL=camera-stream-grpc:9090
+    volumes:
+      - ../../services/grpc-gateway/src:/app/src
     depends_on:
       - resize-grpc
       - ai-detection-grpc
@@ -216,6 +226,8 @@ services:
       SECRET_KEY: your-secret-key-change-in-production
       TRITON_URL: triton:8000
       GRPC_GATEWAY_URL: grpc-gateway:8080
+    volumes:
+      - ../../backend/app:/app/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -247,6 +259,9 @@ services:
       BACKEND_HOST: backend
       BACKEND_PORT: "8000"
       NGINX_RESOLVER: ""
+    volumes:
+      - ../../web/src:/app/src
+      - ../../web/public:/app/public
     depends_on:
       backend:
         condition: service_healthy
