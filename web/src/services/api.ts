@@ -318,43 +318,43 @@ class ApiService {
 
   // Inspection APIs
   // Inspection Targets
-  async createTarget(data: any): Promise<any> {
+  async createInspectionTarget(data: any): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.post('/inspection/targets', data)
     return response.data
   }
 
-  async getTarget(targetId: string): Promise<any> {
+  async getInspectionTarget(targetId: string): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get(`/inspection/targets/${targetId}`)
     return response.data
   }
 
-  async listTargets(params: any = {}): Promise<any> {
+  async listInspectionTargets(params: any = {}): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get('/inspection/targets', { params })
     return response.data
   }
 
-  async updateTarget(targetId: string, data: any): Promise<any> {
+  async updateInspectionTarget(targetId: string, data: any): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.put(`/inspection/targets/${targetId}`, data)
     return response.data
   }
 
-  async deleteTarget(targetId: string): Promise<void> {
+  async deleteInspectionTarget(targetId: string): Promise<void> {
     const api = this.ensureApiInitialized()
     await api.delete(`/inspection/targets/${targetId}`)
   }
 
   // Inspection Items
-  async createItem(data: any): Promise<any> {
+  async createInspectionItem(data: any): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.post('/inspection/items', data)
     return response.data
   }
 
-  async getItem(itemId: string): Promise<any> {
+  async getInspectionItem(itemId: string): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get(`/inspection/items/${itemId}`)
     return response.data
@@ -367,7 +367,7 @@ class ApiService {
   }
 
   // Inspection Criteria
-  async createCriteria(data: any): Promise<any> {
+  async createInspectionCriteria(data: any): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.post('/inspection/criterias', data)
     return response.data
@@ -380,25 +380,25 @@ class ApiService {
   }
 
   // Inspection Executions
-  async createExecution(data: any): Promise<any> {
+  async createInspectionExecution(data: any): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.post('/inspection/executions', data)
     return response.data
   }
 
-  async getExecution(executionId: string): Promise<any> {
+  async getInspectionExecution(executionId: string): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get(`/inspection/executions/${executionId}`)
     return response.data
   }
 
-  async listExecutions(params: any = {}): Promise<any> {
+  async listInspectionExecutions(params: any = {}): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get('/inspection/executions', { params })
     return response.data
   }
 
-  async getExecutionItems(executionId: string): Promise<any> {
+  async getInspectionExecutionItems(executionId: string): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get(`/inspection/executions/${executionId}/items`)
     return response.data
@@ -422,13 +422,13 @@ class ApiService {
   }
 
   // Inspection Results
-  async saveResult(data: any): Promise<any> {
+  async saveInspectionResult(data: any): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.post('/inspection/results', data)
     return response.data
   }
 
-  async listResults(params: any = {}): Promise<any> {
+  async listInspectionResults(params: any = {}): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get('/inspection/results', { params })
     return response.data

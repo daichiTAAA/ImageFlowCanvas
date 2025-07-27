@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Card,
@@ -30,7 +30,7 @@ import {
   Tab,
   LinearProgress,
   Avatar,
-} from '@mui/material';
+} from "@mui/material";
 import {
   Visibility as ViewIcon,
   GetApp as DownloadIcon,
@@ -39,11 +39,11 @@ import {
   Cancel as CancelIcon,
   Warning as WarningIcon,
   Schedule as ScheduleIcon,
-} from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { inspectionApi } from '../services/api';
+} from "@mui/icons-material";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import { inspectionApi } from "../services/api";
 
 interface InspectionExecution {
   id: string;
@@ -94,16 +94,32 @@ interface InspectionItemExecution {
 const StatusChip = ({ status }: { status: string }) => {
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case 'COMPLETED':
-        return { color: 'success' as const, icon: <CheckIcon />, label: '完了' };
-      case 'FAILED':
-        return { color: 'error' as const, icon: <CancelIcon />, label: '失敗' };
-      case 'IN_PROGRESS':
-        return { color: 'info' as const, icon: <ScheduleIcon />, label: '実行中' };
-      case 'PENDING':
-        return { color: 'default' as const, icon: <ScheduleIcon />, label: '待機中' };
+      case "COMPLETED":
+        return {
+          color: "success" as const,
+          icon: <CheckIcon />,
+          label: "完了",
+        };
+      case "FAILED":
+        return { color: "error" as const, icon: <CancelIcon />, label: "失敗" };
+      case "IN_PROGRESS":
+        return {
+          color: "info" as const,
+          icon: <ScheduleIcon />,
+          label: "実行中",
+        };
+      case "PENDING":
+        return {
+          color: "default" as const,
+          icon: <ScheduleIcon />,
+          label: "待機中",
+        };
       default:
-        return { color: 'default' as const, icon: <WarningIcon />, label: status };
+        return {
+          color: "default" as const,
+          icon: <WarningIcon />,
+          label: status,
+        };
     }
   };
 
@@ -121,46 +137,43 @@ const StatusChip = ({ status }: { status: string }) => {
 const JudgmentChip = ({ judgment }: { judgment: string }) => {
   const getJudgmentConfig = (judgment: string) => {
     switch (judgment) {
-      case 'OK':
-        return { color: 'success' as const, label: 'OK' };
-      case 'NG':
-        return { color: 'error' as const, label: 'NG' };
-      case 'PENDING_REVIEW':
-        return { color: 'warning' as const, label: '確認待ち' };
-      case 'INCONCLUSIVE':
-        return { color: 'default' as const, label: '判定不能' };
+      case "OK":
+        return { color: "success" as const, label: "OK" };
+      case "NG":
+        return { color: "error" as const, label: "NG" };
+      case "PENDING_REVIEW":
+        return { color: "warning" as const, label: "確認待ち" };
+      case "INCONCLUSIVE":
+        return { color: "default" as const, label: "判定不能" };
       default:
-        return { color: 'default' as const, label: judgment };
+        return { color: "default" as const, label: judgment };
     }
   };
 
   const config = getJudgmentConfig(judgment);
-  return (
-    <Chip
-      label={config.label}
-      color={config.color}
-      size="small"
-    />
-  );
+  return <Chip label={config.label} color={config.color} size="small" />;
 };
 
 export function InspectionResults() {
   const [activeTab, setActiveTab] = useState(0);
   const [executions, setExecutions] = useState<InspectionExecution[]>([]);
   const [results, setResults] = useState<InspectionResult[]>([]);
-  const [selectedExecution, setSelectedExecution] = useState<InspectionExecution | null>(null);
-  const [itemExecutions, setItemExecutions] = useState<InspectionItemExecution[]>([]);
+  const [selectedExecution, setSelectedExecution] =
+    useState<InspectionExecution | null>(null);
+  const [itemExecutions, setItemExecutions] = useState<
+    InspectionItemExecution[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailDialog, setDetailDialog] = useState(false);
-  
+
   // フィルタ状態
   const [filters, setFilters] = useState({
-    status: '',
-    judgment: '',
+    status: "",
+    judgment: "",
     fromDate: null as Date | null,
     toDate: null as Date | null,
-    targetId: '',
+    targetId: "",
   });
 
   // ページネーション
@@ -179,7 +192,7 @@ export function InspectionResults() {
   const loadExecutions = async () => {
     try {
       setLoading(true);
-      const response = await inspectionApi.listExecutions({
+      const response = await inspectionApi.listInspectionExecutions({
         page,
         page_size: pageSize,
         status: filters.status || undefined,
@@ -190,8 +203,8 @@ export function InspectionResults() {
       setExecutions(response.items);
       setTotalPages(response.total_pages);
     } catch (error) {
-      setError('検査実行履歴の読み込みに失敗しました');
-      console.error('Failed to load executions:', error);
+      setError("検査実行履歴の読み込みに失敗しました");
+      console.error("Failed to load executions:", error);
     } finally {
       setLoading(false);
     }
@@ -200,7 +213,7 @@ export function InspectionResults() {
   const loadResults = async () => {
     try {
       setLoading(true);
-      const response = await inspectionApi.listResults({
+      const response = await inspectionApi.listInspectionResults({
         page,
         page_size: pageSize,
         judgment: filters.judgment || undefined,
@@ -211,8 +224,8 @@ export function InspectionResults() {
       setResults(response.items);
       setTotalPages(response.total_pages);
     } catch (error) {
-      setError('検査結果の読み込みに失敗しました');
-      console.error('Failed to load results:', error);
+      setError("検査結果の読み込みに失敗しました");
+      console.error("Failed to load results:", error);
     } finally {
       setLoading(false);
     }
@@ -221,13 +234,15 @@ export function InspectionResults() {
   const loadExecutionDetails = async (execution: InspectionExecution) => {
     try {
       setLoading(true);
-      const response = await inspectionApi.getExecutionItems(execution.id);
+      const response = await inspectionApi.getInspectionExecutionItems(
+        execution.id
+      );
       setItemExecutions(response);
       setSelectedExecution(execution);
       setDetailDialog(true);
     } catch (error) {
-      setError('検査詳細の読み込みに失敗しました');
-      console.error('Failed to load execution details:', error);
+      setError("検査詳細の読み込みに失敗しました");
+      console.error("Failed to load execution details:", error);
     } finally {
       setLoading(false);
     }
@@ -239,16 +254,16 @@ export function InspectionResults() {
   };
 
   const handleFilterChange = (field: string, value: any) => {
-    setFilters(prev => ({ ...prev, [field]: value }));
+    setFilters((prev) => ({ ...prev, [field]: value }));
     setPage(1);
   };
 
   const exportResults = async () => {
     try {
       // TODO: 実装
-      console.log('Exporting results...');
+      console.log("Exporting results...");
     } catch (error) {
-      setError('エクスポートに失敗しました');
+      setError("エクスポートに失敗しました");
     }
   };
 
@@ -277,7 +292,9 @@ export function InspectionResults() {
                   <InputLabel>ステータス</InputLabel>
                   <Select
                     value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("status", e.target.value)
+                    }
                     label="ステータス"
                   >
                     <MenuItem value="">すべて</MenuItem>
@@ -293,7 +310,9 @@ export function InspectionResults() {
                   <InputLabel>判定結果</InputLabel>
                   <Select
                     value={filters.judgment}
-                    onChange={(e) => handleFilterChange('judgment', e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("judgment", e.target.value)
+                    }
                     label="判定結果"
                   >
                     <MenuItem value="">すべて</MenuItem>
@@ -308,7 +327,7 @@ export function InspectionResults() {
                 <DatePicker
                   label="開始日"
                   value={filters.fromDate}
-                  onChange={(date) => handleFilterChange('fromDate', date)}
+                  onChange={(date) => handleFilterChange("fromDate", date)}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
               </Grid>
@@ -316,7 +335,7 @@ export function InspectionResults() {
                 <DatePicker
                   label="終了日"
                   value={filters.toDate}
-                  onChange={(date) => handleFilterChange('toDate', date)}
+                  onChange={(date) => handleFilterChange("toDate", date)}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
               </Grid>
@@ -324,7 +343,9 @@ export function InspectionResults() {
                 <TextField
                   label="製品コード"
                   value={filters.targetId}
-                  onChange={(e) => handleFilterChange('targetId', e.target.value)}
+                  onChange={(e) =>
+                    handleFilterChange("targetId", e.target.value)
+                  }
                   fullWidth
                 />
               </Grid>
@@ -371,8 +392,10 @@ export function InspectionResults() {
                     {executions.map((execution) => (
                       <TableRow key={execution.id} hover>
                         <TableCell>{execution.id.slice(0, 8)}...</TableCell>
-                        <TableCell>{execution.target?.name || '-'}</TableCell>
-                        <TableCell>{execution.target?.product_code || '-'}</TableCell>
+                        <TableCell>{execution.target?.name || "-"}</TableCell>
+                        <TableCell>
+                          {execution.target?.product_code || "-"}
+                        </TableCell>
                         <TableCell>
                           <StatusChip status={execution.status} />
                         </TableCell>
@@ -382,7 +405,7 @@ export function InspectionResults() {
                         <TableCell>
                           {execution.completed_at
                             ? new Date(execution.completed_at).toLocaleString()
-                            : '-'}
+                            : "-"}
                         </TableCell>
                         <TableCell>
                           <IconButton
@@ -418,19 +441,21 @@ export function InspectionResults() {
                     {results.map((result) => (
                       <TableRow key={result.id} hover>
                         <TableCell>{result.id.slice(0, 8)}...</TableCell>
-                        <TableCell>{result.execution_id.slice(0, 8)}...</TableCell>
+                        <TableCell>
+                          {result.execution_id.slice(0, 8)}...
+                        </TableCell>
                         <TableCell>
                           <JudgmentChip judgment={result.judgment} />
                         </TableCell>
                         <TableCell>
                           {result.confidence_score
                             ? `${(result.confidence_score * 100).toFixed(1)}%`
-                            : '-'}
+                            : "-"}
                         </TableCell>
                         <TableCell>
                           {result.processing_time_ms
                             ? `${result.processing_time_ms}ms`
-                            : '-'}
+                            : "-"}
                         </TableCell>
                         <TableCell>
                           {new Date(result.created_at).toLocaleString()}
@@ -460,7 +485,12 @@ export function InspectionResults() {
         </Card>
 
         {/* 検査詳細ダイアログ */}
-        <Dialog open={detailDialog} onClose={() => setDetailDialog(false)} maxWidth="lg" fullWidth>
+        <Dialog
+          open={detailDialog}
+          onClose={() => setDetailDialog(false)}
+          maxWidth="lg"
+          fullWidth
+        >
           <DialogTitle>
             検査詳細 - {selectedExecution?.target?.name}
           </DialogTitle>
@@ -474,13 +504,34 @@ export function InspectionResults() {
                       <Typography variant="h6" gutterBottom>
                         基本情報
                       </Typography>
-                      <Typography><strong>実行ID:</strong> {selectedExecution.id}</Typography>
-                      <Typography><strong>検査対象:</strong> {selectedExecution.target?.name}</Typography>
-                      <Typography><strong>製品コード:</strong> {selectedExecution.target?.product_code}</Typography>
-                      <Typography><strong>ステータス:</strong> <StatusChip status={selectedExecution.status} /></Typography>
-                      <Typography><strong>開始時刻:</strong> {new Date(selectedExecution.started_at).toLocaleString()}</Typography>
+                      <Typography>
+                        <strong>実行ID:</strong> {selectedExecution.id}
+                      </Typography>
+                      <Typography>
+                        <strong>検査対象:</strong>{" "}
+                        {selectedExecution.target?.name}
+                      </Typography>
+                      <Typography>
+                        <strong>製品コード:</strong>{" "}
+                        {selectedExecution.target?.product_code}
+                      </Typography>
+                      <Typography>
+                        <strong>ステータス:</strong>{" "}
+                        <StatusChip status={selectedExecution.status} />
+                      </Typography>
+                      <Typography>
+                        <strong>開始時刻:</strong>{" "}
+                        {new Date(
+                          selectedExecution.started_at
+                        ).toLocaleString()}
+                      </Typography>
                       {selectedExecution.completed_at && (
-                        <Typography><strong>完了時刻:</strong> {new Date(selectedExecution.completed_at).toLocaleString()}</Typography>
+                        <Typography>
+                          <strong>完了時刻:</strong>{" "}
+                          {new Date(
+                            selectedExecution.completed_at
+                          ).toLocaleString()}
+                        </Typography>
                       )}
                     </CardContent>
                   </Card>
@@ -493,10 +544,31 @@ export function InspectionResults() {
                       <Typography variant="h6" gutterBottom>
                         統計情報
                       </Typography>
-                      <Typography><strong>総項目数:</strong> {itemExecutions.length}</Typography>
-                      <Typography><strong>完了項目:</strong> {itemExecutions.filter(i => i.status === 'ITEM_COMPLETED').length}</Typography>
-                      <Typography><strong>OK判定:</strong> {itemExecutions.filter(i => i.final_result === 'OK').length}</Typography>
-                      <Typography><strong>NG判定:</strong> {itemExecutions.filter(i => i.final_result === 'NG').length}</Typography>
+                      <Typography>
+                        <strong>総項目数:</strong> {itemExecutions.length}
+                      </Typography>
+                      <Typography>
+                        <strong>完了項目:</strong>{" "}
+                        {
+                          itemExecutions.filter(
+                            (i) => i.status === "ITEM_COMPLETED"
+                          ).length
+                        }
+                      </Typography>
+                      <Typography>
+                        <strong>OK判定:</strong>{" "}
+                        {
+                          itemExecutions.filter((i) => i.final_result === "OK")
+                            .length
+                        }
+                      </Typography>
+                      <Typography>
+                        <strong>NG判定:</strong>{" "}
+                        {
+                          itemExecutions.filter((i) => i.final_result === "NG")
+                            .length
+                        }
+                      </Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -524,26 +596,42 @@ export function InspectionResults() {
                           <TableBody>
                             {itemExecutions.map((itemExecution) => (
                               <TableRow key={itemExecution.id}>
-                                <TableCell>{itemExecution.item?.execution_order}</TableCell>
-                                <TableCell>{itemExecution.item?.name}</TableCell>
-                                <TableCell>{itemExecution.item?.type}</TableCell>
+                                <TableCell>
+                                  {itemExecution.item?.execution_order}
+                                </TableCell>
+                                <TableCell>
+                                  {itemExecution.item?.name}
+                                </TableCell>
+                                <TableCell>
+                                  {itemExecution.item?.type}
+                                </TableCell>
                                 <TableCell>
                                   <StatusChip status={itemExecution.status} />
                                 </TableCell>
                                 <TableCell>
                                   {itemExecution.ai_result?.judgment ? (
-                                    <JudgmentChip judgment={itemExecution.ai_result.judgment} />
-                                  ) : '-'}
+                                    <JudgmentChip
+                                      judgment={
+                                        itemExecution.ai_result.judgment
+                                      }
+                                    />
+                                  ) : (
+                                    "-"
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   {itemExecution.final_result ? (
-                                    <JudgmentChip judgment={itemExecution.final_result} />
-                                  ) : '-'}
+                                    <JudgmentChip
+                                      judgment={itemExecution.final_result}
+                                    />
+                                  ) : (
+                                    "-"
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   {itemExecution.ai_result?.processing_time_ms
                                     ? `${itemExecution.ai_result.processing_time_ms}ms`
-                                    : '-'}
+                                    : "-"}
                                 </TableCell>
                               </TableRow>
                             ))}
