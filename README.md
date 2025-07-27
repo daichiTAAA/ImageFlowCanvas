@@ -130,10 +130,13 @@ pip install requests ultralytics grpcio grpcio-tools
 **最も簡単な方法 - すべてが含まれた開発環境:**
 
 ```bash
-# サービスをビルドして起動
+# 開発用にWebアプリがホッとリロードされるようにして起動
+./scripts/run-compose.sh dev
+
+# サービスをビルドして起動（Webアプリのホットリロードなし）
 ./scripts/run-compose.sh build
 
-# または、既にビルド済みの場合
+# または、既にビルド済みの場合（Webアプリのホットリロードなし）
 ./scripts/run-compose.sh up
 ```
 
