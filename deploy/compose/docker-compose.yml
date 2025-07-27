@@ -23,36 +23,28 @@ services:
     image: confluentinc/cp-kafka:7.6.0
     container_name: imageflow-kafka
     ports:
-      - "9092:9092"
+      - "9094:9092"
       - "29092:29092"
     environment:
-      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9094'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9094'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
     volumes:
       - kafka_data:/tmp/kraft-combined-logs
-    command: >
-      bash -c "
-      # Generate cluster ID if not exists
-      if [ ! -f /tmp/kraft-combined-logs/meta.properties ]; then
-        /bin/kafka-storage format -t $CLUSTER_ID -c /etc/kafka/kafka.properties
-      fi
-      # Start Kafka
-      /etc/confluent/docker/run
-      "
     healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:29092", "--list"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -199,7 +191,7 @@ services:
       - filter-grpc
       - camera-stream-grpc
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -214,6 +206,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      COMPOSE_PROJECT_NAME: imageflow
       DEPLOYMENT_ENV: docker
       DATABASE_URL: postgresql+asyncpg://imageflow:imageflow123@postgres:5432/imageflow
       MINIO_ENDPOINT: minio:9000
@@ -233,7 +226,7 @@ services:
       grpc-gateway:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -243,8 +236,8 @@ services:
     image: imageflow/web:local
     container_name: imageflow-web
     build:
-      context: ../../web
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: web/Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -258,7 +251,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000"]
       interval: 30s
       timeout: 10s
       retries: 3

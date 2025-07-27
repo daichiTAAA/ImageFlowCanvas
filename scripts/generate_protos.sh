@@ -11,7 +11,6 @@ OUT_DIR="$BASE_DIR/generated"
 # Create output directories
 mkdir -p "$OUT_DIR/python"
 mkdir -p "$OUT_DIR/go"
-mkdir -p "$BASE_DIR/backend/generated/python"
 
 echo "Generating Python gRPC code..."
 
@@ -31,7 +30,6 @@ python -m grpc_tools.protoc \
 python -m grpc_tools.protoc \
     --proto_path="$PROTO_DIR" \
     --python_out="$BASE_DIR/backend/generated/python" \
-    --grpc_python_out="$BASE_DIR/backend/generated/python" \
     imageflow/v1/common.proto \
     imageflow/v1/resize.proto \
     imageflow/v1/ai_detection.proto \
@@ -43,8 +41,6 @@ echo "Python gRPC code generation completed."
 
 # Create __init__.py files for Python package structure
 find "$OUT_DIR/python" -type d -exec touch {}/__init__.py \;
-find "$BASE_DIR/backend/generated/python" -type d -exec touch {}/__init__.py \;
 
 echo "Protocol Buffers code generation completed successfully!"
 echo "Python files: $OUT_DIR/python"
-echo "Backend Python files: $BASE_DIR/backend/generated/python"

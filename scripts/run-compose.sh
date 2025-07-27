@@ -34,6 +34,7 @@ case "$ACTION" in
         echo "  - Backend API: http://localhost:8000/docs"
         echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
         echo "  - gRPC Gateway: http://localhost:8080/health"
+        echo "  - Kafka: localhost:9094"
         echo ""
         echo "📊 Service status:"
         docker compose ps
@@ -49,7 +50,7 @@ case "$ACTION" in
         
         # Start services
         cd "$COMPOSE_DIR"
-        docker compose up -d --build
+        docker compose up -d
         echo "✅ Services built and started successfully!"
         
         echo ""
@@ -58,6 +59,7 @@ case "$ACTION" in
         echo "  - Backend API: http://localhost:8000/docs"
         echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
         echo "  - gRPC Gateway: http://localhost:8080/health"
+        echo "  - Kafka: localhost:9094"
         ;;
     
     "stop")
