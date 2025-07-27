@@ -1,0 +1,457 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "imageflow/v1/common.proto";
+import "imageflow/v1/ai_detection.proto";
+import "google/protobuf/empty.proto";
+
+// 検査マスタサービス
+service InspectionMasterService {
+  // 検査対象の管理
+  rpc CreateInspectionTarget(CreateInspectionTargetRequest) returns (InspectionTarget);
+  rpc GetInspectionTarget(GetInspectionTargetRequest) returns (InspectionTarget);
+  rpc ListInspectionTargets(ListInspectionTargetsRequest) returns (ListInspectionTargetsResponse);
+  rpc UpdateInspectionTarget(UpdateInspectionTargetRequest) returns (InspectionTarget);
+  rpc DeleteInspectionTarget(DeleteInspectionTargetRequest) returns (google.protobuf.Empty);
+
+  // 検査項目の管理
+  rpc CreateInspectionItem(CreateInspectionItemRequest) returns (InspectionItem);
+  rpc GetInspectionItem(GetInspectionItemRequest) returns (InspectionItem);
+  rpc ListInspectionItems(ListInspectionItemsRequest) returns (ListInspectionItemsResponse);
+  rpc UpdateInspectionItem(UpdateInspectionItemRequest) returns (InspectionItem);
+  rpc DeleteInspectionItem(DeleteInspectionItemRequest) returns (google.protobuf.Empty);
+
+  // 検査基準の管理
+  rpc CreateInspectionCriteria(CreateInspectionCriteriaRequest) returns (InspectionCriteria);
+  rpc GetInspectionCriteria(GetInspectionCriteriaRequest) returns (InspectionCriteria);
+  rpc ListInspectionCriterias(ListInspectionCriteriasRequest) returns (ListInspectionCriteriasResponse);
+  rpc UpdateInspectionCriteria(UpdateInspectionCriteriaRequest) returns (InspectionCriteria);
+  rpc DeleteInspectionCriteria(DeleteInspectionCriteriaRequest) returns (google.protobuf.Empty);
+}
+
+// 検査実行サービス  
+service InspectionExecutionService {
+  // 検査実行
+  rpc ExecuteInspection(ExecuteInspectionRequest) returns (ExecuteInspectionResponse);
+  rpc GetInspectionExecution(GetInspectionExecutionRequest) returns (InspectionExecution);
+  rpc ListInspectionExecutions(ListInspectionExecutionsRequest) returns (ListInspectionExecutionsResponse);
+  
+  // 検査結果の管理
+  rpc SaveInspectionResult(SaveInspectionResultRequest) returns (InspectionResult);
+  rpc GetInspectionResult(GetInspectionResultRequest) returns (InspectionResult);
+  rpc ListInspectionResults(ListInspectionResultsRequest) returns (ListInspectionResultsResponse);
+  rpc UpdateInspectionResult(UpdateInspectionResultRequest) returns (InspectionResult);
+}
+
+// データ構造定義
+
+// 検査対象（製品・部品情報）
+message InspectionTarget {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string product_code = 4;
+  string version = 5;
+  map<string, string> metadata = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+  string created_by = 9;
+}
+
+// 検査項目
+message InspectionItem {
+  string id = 1;
+  string target_id = 2;  // 検査対象ID
+  string name = 3;
+  string description = 4;
+  InspectionType type = 5;
+  string pipeline_id = 6;  // WebUIで定義されたパイプラインID
+  map<string, string> pipeline_params = 7;  // パイプライン実行パラメータ
+  int32 execution_order = 8;
+  bool is_required = 9;
+  string criteria_id = 10;  // 検査基準ID
+  int64 created_at = 11;
+  int64 updated_at = 12;
+  string created_by = 13;
+}
+
+// 検査基準
+message InspectionCriteria {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  JudgmentType judgment_type = 4;
+  CriteriaSpec spec = 5;
+  int64 created_at = 6;
+  int64 updated_at = 7;
+  string created_by = 8;
+}
+
+// 検査実行
+message InspectionExecution {
+  string id = 1;
+  string target_id = 2;  // 検査対象ID
+  string operator_id = 3;  // 検査実施者ID
+  InspectionStatus status = 4;
+  string qr_code = 5;  // QRコード情報
+  repeated InspectionItemExecution item_executions = 6;
+  int64 started_at = 7;
+  int64 completed_at = 8;
+  string error_message = 9;
+  map<string, string> metadata = 10;
+}
+
+// 検査項目実行
+message InspectionItemExecution {
+  string id = 1;
+  string execution_id = 2;
+  string item_id = 3;
+  InspectionItemStatus status = 4;
+  string image_file_id = 5;  // 撮影画像のファイルID
+  string pipeline_execution_id = 6;  // パイプライン実行ID
+  AIResult ai_result = 7;
+  HumanResult human_result = 8;
+  JudgmentResult final_result = 9;
+  int64 started_at = 10;
+  int64 completed_at = 11;
+  string error_message = 12;
+}
+
+// 検査結果
+message InspectionResult {
+  string id = 1;
+  string execution_id = 2;
+  string item_execution_id = 3;
+  JudgmentResult judgment = 4;
+  string comment = 5;
+  repeated string evidence_file_ids = 6;  // 根拠画像等のファイルID
+  map<string, string> metrics = 7;  // 測定値等
+  int64 created_at = 8;
+  string created_by = 9;
+}
+
+// AI検査結果
+message AIResult {
+  JudgmentResult judgment = 1;
+  double confidence_score = 2;  // 信頼度スコア
+  repeated Detection detections = 3;
+  map<string, double> measurements = 4;  // 測定値
+  string explanation = 5;  // 判定根拠の説明
+  int32 processing_time_ms = 6;
+}
+
+// 人による検査結果
+message HumanResult {
+  JudgmentResult judgment = 1;
+  string comment = 2;
+  repeated string defect_types = 3;  // 不良タイプ
+  DefectSeverity severity = 4;
+  string operator_id = 5;
+  int64 judged_at = 6;
+}
+
+// 基準仕様
+message CriteriaSpec {
+  oneof spec {
+    BinarySpec binary = 1;          // OK/NG二値判定
+    NumericalSpec numerical = 2;    // 数値範囲判定
+    CategoricalSpec categorical = 3; // カテゴリ分類
+    ThresholdSpec threshold = 4;    // 閾値判定
+  }
+}
+
+// 二値判定基準
+message BinarySpec {
+  bool expected_value = 1;
+}
+
+// 数値範囲判定基準
+message NumericalSpec {
+  double min_value = 1;
+  double max_value = 2;
+  string unit = 3;
+  double tolerance = 4;
+}
+
+// カテゴリ分類基準
+message CategoricalSpec {
+  repeated string allowed_categories = 1;
+}
+
+// 閾値判定基準
+message ThresholdSpec {
+  double threshold = 1;
+  ComparisonOperator operator = 2;
+}
+
+// リクエスト・レスポンス定義
+
+// 検査対象のリクエスト
+message CreateInspectionTargetRequest {
+  string name = 1;
+  string description = 2;
+  string product_code = 3;
+  string version = 4;
+  map<string, string> metadata = 5;
+}
+
+message GetInspectionTargetRequest {
+  string id = 1;
+}
+
+message ListInspectionTargetsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string search_query = 3;
+}
+
+message ListInspectionTargetsResponse {
+  repeated InspectionTarget targets = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateInspectionTargetRequest {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string product_code = 4;
+  string version = 5;
+  map<string, string> metadata = 6;
+}
+
+message DeleteInspectionTargetRequest {
+  string id = 1;
+}
+
+// 検査項目のリクエスト
+message CreateInspectionItemRequest {
+  string target_id = 1;
+  string name = 2;
+  string description = 3;
+  InspectionType type = 4;
+  string pipeline_id = 5;
+  map<string, string> pipeline_params = 6;
+  int32 execution_order = 7;
+  bool is_required = 8;
+  string criteria_id = 9;
+}
+
+message GetInspectionItemRequest {
+  string id = 1;
+}
+
+message ListInspectionItemsRequest {
+  string target_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message ListInspectionItemsResponse {
+  repeated InspectionItem items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateInspectionItemRequest {
+  string id = 1;
+  string target_id = 2;
+  string name = 3;
+  string description = 4;
+  InspectionType type = 5;
+  string pipeline_id = 6;
+  map<string, string> pipeline_params = 7;
+  int32 execution_order = 8;
+  bool is_required = 9;
+  string criteria_id = 10;
+}
+
+message DeleteInspectionItemRequest {
+  string id = 1;
+}
+
+// 検査基準のリクエスト
+message CreateInspectionCriteriaRequest {
+  string name = 1;
+  string description = 2;
+  JudgmentType judgment_type = 3;
+  CriteriaSpec spec = 4;
+}
+
+message GetInspectionCriteriaRequest {
+  string id = 1;
+}
+
+message ListInspectionCriteriasRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string search_query = 3;
+}
+
+message ListInspectionCriteriasResponse {
+  repeated InspectionCriteria criterias = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateInspectionCriteriaRequest {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  JudgmentType judgment_type = 4;
+  CriteriaSpec spec = 5;
+}
+
+message DeleteInspectionCriteriaRequest {
+  string id = 1;
+}
+
+// 検査実行のリクエスト
+message ExecuteInspectionRequest {
+  string target_id = 1;
+  string operator_id = 2;
+  string qr_code = 3;
+  map<string, string> metadata = 4;
+}
+
+message ExecuteInspectionResponse {
+  string execution_id = 1;
+  InspectionExecution execution = 2;
+}
+
+message GetInspectionExecutionRequest {
+  string id = 1;
+}
+
+message ListInspectionExecutionsRequest {
+  string target_id = 1;
+  string operator_id = 2;
+  InspectionStatus status = 3;
+  int64 from_date = 4;
+  int64 to_date = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+message ListInspectionExecutionsResponse {
+  repeated InspectionExecution executions = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// 検査結果のリクエスト
+message SaveInspectionResultRequest {
+  string execution_id = 1;
+  string item_execution_id = 2;
+  JudgmentResult judgment = 3;
+  string comment = 4;
+  repeated string evidence_file_ids = 5;
+  map<string, string> metrics = 6;
+}
+
+message GetInspectionResultRequest {
+  string id = 1;
+}
+
+message ListInspectionResultsRequest {
+  string execution_id = 1;
+  string target_id = 2;
+  JudgmentResult judgment = 3;
+  int64 from_date = 4;
+  int64 to_date = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+message ListInspectionResultsResponse {
+  repeated InspectionResult results = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateInspectionResultRequest {
+  string id = 1;
+  JudgmentResult judgment = 2;
+  string comment = 3;
+  repeated string evidence_file_ids = 4;
+  map<string, string> metrics = 5;
+}
+
+// 列挙型定義
+
+// 検査タイプ
+enum InspectionType {
+  INSPECTION_TYPE_UNSPECIFIED = 0;
+  VISUAL_INSPECTION = 1;       // 外観検査
+  DIMENSIONAL_INSPECTION = 2;  // 寸法検査
+  FUNCTIONAL_INSPECTION = 3;   // 機能検査
+  SURFACE_INSPECTION = 4;      // 表面検査
+  COLOR_INSPECTION = 5;        // 色彩検査
+}
+
+// 判定タイプ
+enum JudgmentType {
+  JUDGMENT_TYPE_UNSPECIFIED = 0;
+  BINARY = 1;        // OK/NG二値判定
+  NUMERICAL = 2;     // 数値範囲判定
+  CATEGORICAL = 3;   // カテゴリ分類
+  THRESHOLD = 4;     // 閾値判定
+}
+
+// 検査ステータス
+enum InspectionStatus {
+  INSPECTION_STATUS_UNSPECIFIED = 0;
+  PENDING = 1;          // 検査待ち
+  IN_PROGRESS = 2;      // 検査中
+  AI_COMPLETED = 3;     // AI検査完了
+  HUMAN_REVIEW = 4;     // 人による確認中
+  COMPLETED = 5;        // 検査完了
+  FAILED = 6;           // 検査失敗
+  CANCELLED = 7;        // 検査キャンセル
+}
+
+// 検査項目ステータス
+enum InspectionItemStatus {
+  INSPECTION_ITEM_STATUS_UNSPECIFIED = 0;
+  ITEM_PENDING = 1;         // 項目待ち
+  ITEM_IN_PROGRESS = 2;     // 項目実行中
+  ITEM_AI_COMPLETED = 3;    // AI処理完了
+  ITEM_HUMAN_REVIEW = 4;    // 人による確認中
+  ITEM_COMPLETED = 5;       // 項目完了
+  ITEM_FAILED = 6;          // 項目失敗
+  ITEM_SKIPPED = 7;         // 項目スキップ
+}
+
+// 判定結果
+enum JudgmentResult {
+  JUDGMENT_RESULT_UNSPECIFIED = 0;
+  OK = 1;           // 合格
+  NG = 2;           // 不合格
+  PENDING_REVIEW = 3; // 確認待ち
+  INCONCLUSIVE = 4; // 判定不能
+}
+
+// 不良重要度
+enum DefectSeverity {
+  DEFECT_SEVERITY_UNSPECIFIED = 0;
+  MINOR = 1;      // 軽微
+  MAJOR = 2;      // 重要
+  CRITICAL = 3;   // 致命的
+}
+
+// 比較演算子
+enum ComparisonOperator {
+  COMPARISON_OPERATOR_UNSPECIFIED = 0;
+  GREATER_THAN = 1;          // >
+  GREATER_THAN_OR_EQUAL = 2; // >=
+  LESS_THAN = 3;             // <
+  LESS_THAN_OR_EQUAL = 4;    // <=
+  EQUAL = 5;                 // ==
+  NOT_EQUAL = 6;             // !=
+}

@@ -1,0 +1,566 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  IconButton,
+  Alert,
+  Pagination,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tabs,
+  Tab,
+  LinearProgress,
+  Avatar,
+} from '@mui/material';
+import {
+  Visibility as ViewIcon,
+  GetApp as DownloadIcon,
+  Assessment as AssessmentIcon,
+  CheckCircle as CheckIcon,
+  Cancel as CancelIcon,
+  Warning as WarningIcon,
+  Schedule as ScheduleIcon,
+} from '@mui/icons-material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { inspectionApi } from '../services/api';
+
+interface InspectionExecution {
+  id: string;
+  target_id: string;
+  operator_id?: string;
+  status: string;
+  qr_code?: string;
+  started_at: string;
+  completed_at?: string;
+  error_message?: string;
+  target?: {
+    id: string;
+    name: string;
+    product_code: string;
+  };
+}
+
+interface InspectionResult {
+  id: string;
+  execution_id: string;
+  item_execution_id: string;
+  judgment: string;
+  comment?: string;
+  confidence_score?: number;
+  processing_time_ms?: number;
+  created_at: string;
+  evidence_file_ids?: string[];
+  metrics?: Record<string, any>;
+}
+
+interface InspectionItemExecution {
+  id: string;
+  execution_id: string;
+  item_id: string;
+  status: string;
+  ai_result?: Record<string, any>;
+  human_result?: Record<string, any>;
+  final_result?: string;
+  started_at: string;
+  completed_at?: string;
+  item?: {
+    name: string;
+    type: string;
+    execution_order: number;
+  };
+}
+
+const StatusChip = ({ status }: { status: string }) => {
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':
+        return { color: 'success' as const, icon: <CheckIcon />, label: '完了' };
+      case 'FAILED':
+        return { color: 'error' as const, icon: <CancelIcon />, label: '失敗' };
+      case 'IN_PROGRESS':
+        return { color: 'info' as const, icon: <ScheduleIcon />, label: '実行中' };
+      case 'PENDING':
+        return { color: 'default' as const, icon: <ScheduleIcon />, label: '待機中' };
+      default:
+        return { color: 'default' as const, icon: <WarningIcon />, label: status };
+    }
+  };
+
+  const config = getStatusConfig(status);
+  return (
+    <Chip
+      icon={config.icon}
+      label={config.label}
+      color={config.color}
+      size="small"
+    />
+  );
+};
+
+const JudgmentChip = ({ judgment }: { judgment: string }) => {
+  const getJudgmentConfig = (judgment: string) => {
+    switch (judgment) {
+      case 'OK':
+        return { color: 'success' as const, label: 'OK' };
+      case 'NG':
+        return { color: 'error' as const, label: 'NG' };
+      case 'PENDING_REVIEW':
+        return { color: 'warning' as const, label: '確認待ち' };
+      case 'INCONCLUSIVE':
+        return { color: 'default' as const, label: '判定不能' };
+      default:
+        return { color: 'default' as const, label: judgment };
+    }
+  };
+
+  const config = getJudgmentConfig(judgment);
+  return (
+    <Chip
+      label={config.label}
+      color={config.color}
+      size="small"
+    />
+  );
+};
+
+export function InspectionResults() {
+  const [activeTab, setActiveTab] = useState(0);
+  const [executions, setExecutions] = useState<InspectionExecution[]>([]);
+  const [results, setResults] = useState<InspectionResult[]>([]);
+  const [selectedExecution, setSelectedExecution] = useState<InspectionExecution | null>(null);
+  const [itemExecutions, setItemExecutions] = useState<InspectionItemExecution[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [detailDialog, setDetailDialog] = useState(false);
+  
+  // フィルタ状態
+  const [filters, setFilters] = useState({
+    status: '',
+    judgment: '',
+    fromDate: null as Date | null,
+    toDate: null as Date | null,
+    targetId: '',
+  });
+
+  // ページネーション
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => {
+    if (activeTab === 0) {
+      loadExecutions();
+    } else {
+      loadResults();
+    }
+  }, [activeTab, page, filters]);
+
+  const loadExecutions = async () => {
+    try {
+      setLoading(true);
+      const response = await inspectionApi.listExecutions({
+        page,
+        page_size: pageSize,
+        status: filters.status || undefined,
+        target_id: filters.targetId || undefined,
+        from_date: filters.fromDate?.toISOString(),
+        to_date: filters.toDate?.toISOString(),
+      });
+      setExecutions(response.items);
+      setTotalPages(response.total_pages);
+    } catch (error) {
+      setError('検査実行履歴の読み込みに失敗しました');
+      console.error('Failed to load executions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadResults = async () => {
+    try {
+      setLoading(true);
+      const response = await inspectionApi.listResults({
+        page,
+        page_size: pageSize,
+        judgment: filters.judgment || undefined,
+        target_id: filters.targetId || undefined,
+        from_date: filters.fromDate?.toISOString(),
+        to_date: filters.toDate?.toISOString(),
+      });
+      setResults(response.items);
+      setTotalPages(response.total_pages);
+    } catch (error) {
+      setError('検査結果の読み込みに失敗しました');
+      console.error('Failed to load results:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadExecutionDetails = async (execution: InspectionExecution) => {
+    try {
+      setLoading(true);
+      const response = await inspectionApi.getExecutionItems(execution.id);
+      setItemExecutions(response);
+      setSelectedExecution(execution);
+      setDetailDialog(true);
+    } catch (error) {
+      setError('検査詳細の読み込みに失敗しました');
+      console.error('Failed to load execution details:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+    setPage(1);
+  };
+
+  const handleFilterChange = (field: string, value: any) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+    setPage(1);
+  };
+
+  const exportResults = async () => {
+    try {
+      // TODO: 実装
+      console.log('Exporting results...');
+    } catch (error) {
+      setError('エクスポートに失敗しました');
+    }
+  };
+
+  return (
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <Box>
+        <Typography variant="h4" gutterBottom>
+          検査結果管理
+        </Typography>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        {/* フィルタセクション */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              フィルタ
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>ステータス</InputLabel>
+                  <Select
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    label="ステータス"
+                  >
+                    <MenuItem value="">すべて</MenuItem>
+                    <MenuItem value="PENDING">待機中</MenuItem>
+                    <MenuItem value="IN_PROGRESS">実行中</MenuItem>
+                    <MenuItem value="COMPLETED">完了</MenuItem>
+                    <MenuItem value="FAILED">失敗</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>判定結果</InputLabel>
+                  <Select
+                    value={filters.judgment}
+                    onChange={(e) => handleFilterChange('judgment', e.target.value)}
+                    label="判定結果"
+                  >
+                    <MenuItem value="">すべて</MenuItem>
+                    <MenuItem value="OK">OK</MenuItem>
+                    <MenuItem value="NG">NG</MenuItem>
+                    <MenuItem value="PENDING_REVIEW">確認待ち</MenuItem>
+                    <MenuItem value="INCONCLUSIVE">判定不能</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <DatePicker
+                  label="開始日"
+                  value={filters.fromDate}
+                  onChange={(date) => handleFilterChange('fromDate', date)}
+                  slotProps={{ textField: { fullWidth: true } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <DatePicker
+                  label="終了日"
+                  value={filters.toDate}
+                  onChange={(date) => handleFilterChange('toDate', date)}
+                  slotProps={{ textField: { fullWidth: true } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <TextField
+                  label="製品コード"
+                  value={filters.targetId}
+                  onChange={(e) => handleFilterChange('targetId', e.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={exportResults}
+                  fullWidth
+                >
+                  エクスポート
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        {/* メインコンテンツ */}
+        <Card>
+          <CardContent>
+            <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2 }}>
+              <Tab label="検査実行履歴" />
+              <Tab label="検査結果一覧" />
+            </Tabs>
+
+            {loading && <LinearProgress sx={{ mb: 2 }} />}
+
+            {/* 検査実行履歴タブ */}
+            {activeTab === 0 && (
+              <TableContainer component={Paper} variant="outlined">
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>実行ID</TableCell>
+                      <TableCell>検査対象</TableCell>
+                      <TableCell>製品コード</TableCell>
+                      <TableCell>ステータス</TableCell>
+                      <TableCell>開始時刻</TableCell>
+                      <TableCell>完了時刻</TableCell>
+                      <TableCell>操作</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {executions.map((execution) => (
+                      <TableRow key={execution.id} hover>
+                        <TableCell>{execution.id.slice(0, 8)}...</TableCell>
+                        <TableCell>{execution.target?.name || '-'}</TableCell>
+                        <TableCell>{execution.target?.product_code || '-'}</TableCell>
+                        <TableCell>
+                          <StatusChip status={execution.status} />
+                        </TableCell>
+                        <TableCell>
+                          {new Date(execution.started_at).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {execution.completed_at
+                            ? new Date(execution.completed_at).toLocaleString()
+                            : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <IconButton
+                            size="small"
+                            onClick={() => loadExecutionDetails(execution)}
+                          >
+                            <ViewIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+
+            {/* 検査結果一覧タブ */}
+            {activeTab === 1 && (
+              <TableContainer component={Paper} variant="outlined">
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>結果ID</TableCell>
+                      <TableCell>実行ID</TableCell>
+                      <TableCell>判定結果</TableCell>
+                      <TableCell>信頼度</TableCell>
+                      <TableCell>処理時間</TableCell>
+                      <TableCell>作成日時</TableCell>
+                      <TableCell>操作</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {results.map((result) => (
+                      <TableRow key={result.id} hover>
+                        <TableCell>{result.id.slice(0, 8)}...</TableCell>
+                        <TableCell>{result.execution_id.slice(0, 8)}...</TableCell>
+                        <TableCell>
+                          <JudgmentChip judgment={result.judgment} />
+                        </TableCell>
+                        <TableCell>
+                          {result.confidence_score
+                            ? `${(result.confidence_score * 100).toFixed(1)}%`
+                            : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {result.processing_time_ms
+                            ? `${result.processing_time_ms}ms`
+                            : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(result.created_at).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <IconButton size="small">
+                            <ViewIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+
+            {/* ページネーション */}
+            <Box display="flex" justifyContent="center" mt={3}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(event, value) => setPage(value)}
+                color="primary"
+              />
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* 検査詳細ダイアログ */}
+        <Dialog open={detailDialog} onClose={() => setDetailDialog(false)} maxWidth="lg" fullWidth>
+          <DialogTitle>
+            検査詳細 - {selectedExecution?.target?.name}
+          </DialogTitle>
+          <DialogContent>
+            {selectedExecution && (
+              <Grid container spacing={3}>
+                {/* 基本情報 */}
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        基本情報
+                      </Typography>
+                      <Typography><strong>実行ID:</strong> {selectedExecution.id}</Typography>
+                      <Typography><strong>検査対象:</strong> {selectedExecution.target?.name}</Typography>
+                      <Typography><strong>製品コード:</strong> {selectedExecution.target?.product_code}</Typography>
+                      <Typography><strong>ステータス:</strong> <StatusChip status={selectedExecution.status} /></Typography>
+                      <Typography><strong>開始時刻:</strong> {new Date(selectedExecution.started_at).toLocaleString()}</Typography>
+                      {selectedExecution.completed_at && (
+                        <Typography><strong>完了時刻:</strong> {new Date(selectedExecution.completed_at).toLocaleString()}</Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* 統計情報 */}
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        統計情報
+                      </Typography>
+                      <Typography><strong>総項目数:</strong> {itemExecutions.length}</Typography>
+                      <Typography><strong>完了項目:</strong> {itemExecutions.filter(i => i.status === 'ITEM_COMPLETED').length}</Typography>
+                      <Typography><strong>OK判定:</strong> {itemExecutions.filter(i => i.final_result === 'OK').length}</Typography>
+                      <Typography><strong>NG判定:</strong> {itemExecutions.filter(i => i.final_result === 'NG').length}</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* 検査項目詳細 */}
+                <Grid item xs={12}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        検査項目詳細
+                      </Typography>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>順序</TableCell>
+                              <TableCell>項目名</TableCell>
+                              <TableCell>タイプ</TableCell>
+                              <TableCell>ステータス</TableCell>
+                              <TableCell>AI判定</TableCell>
+                              <TableCell>最終判定</TableCell>
+                              <TableCell>処理時間</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {itemExecutions.map((itemExecution) => (
+                              <TableRow key={itemExecution.id}>
+                                <TableCell>{itemExecution.item?.execution_order}</TableCell>
+                                <TableCell>{itemExecution.item?.name}</TableCell>
+                                <TableCell>{itemExecution.item?.type}</TableCell>
+                                <TableCell>
+                                  <StatusChip status={itemExecution.status} />
+                                </TableCell>
+                                <TableCell>
+                                  {itemExecution.ai_result?.judgment ? (
+                                    <JudgmentChip judgment={itemExecution.ai_result.judgment} />
+                                  ) : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  {itemExecution.final_result ? (
+                                    <JudgmentChip judgment={itemExecution.final_result} />
+                                  ) : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  {itemExecution.ai_result?.processing_time_ms
+                                    ? `${itemExecution.ai_result.processing_time_ms}ms`
+                                    : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDetailDialog(false)}>閉じる</Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </LocalizationProvider>
+  );
+}

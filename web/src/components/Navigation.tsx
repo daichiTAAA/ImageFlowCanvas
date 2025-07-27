@@ -7,6 +7,8 @@ import {
   Timeline as TimelineIcon,
   Settings as StorageIcon,
   Camera as VideocamIcon,
+  Assignment as InspectionIcon,
+  Assessment as ResultsIcon,
 } from "@mui/icons-material";
 
 export const Navigation: React.FC = () => {
@@ -22,7 +24,9 @@ export const Navigation: React.FC = () => {
     )
       return 2;
     if (location.pathname === "/camera-stream") return 3;
-    if (location.pathname === "/grpc-services") return 4;
+    if (location.pathname === "/inspection-masters") return 4;
+    if (location.pathname === "/inspection-results") return 5;
+    if (location.pathname === "/grpc-services") return 6;
     return 0;
   };
 
@@ -41,6 +45,12 @@ export const Navigation: React.FC = () => {
         navigate("/camera-stream");
         break;
       case 4:
+        navigate("/inspection-masters");
+        break;
+      case 5:
+        navigate("/inspection-results");
+        break;
+      case 6:
         navigate("/grpc-services");
         break;
     }
@@ -75,6 +85,8 @@ export const Navigation: React.FC = () => {
       />
       <Tab icon={<TimelineIcon />} label="実行監視" iconPosition="start" />
       <Tab icon={<VideocamIcon />} label="リアルタイム処理" iconPosition="start" />
+      <Tab icon={<InspectionIcon />} label="検査マスタ" iconPosition="start" />
+      <Tab icon={<ResultsIcon />} label="検査結果" iconPosition="start" />
       <Tab icon={<StorageIcon />} label="gRPCサービス" iconPosition="start" />
     </Tabs>
   );

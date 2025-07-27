@@ -7,6 +7,8 @@ import { ExecutionList } from "./pages/ExecutionList";
 import { Login } from "./pages/Login";
 import { GrpcServicesStatus } from "./pages/GrpcServicesStatus";
 import { CameraStream } from "./pages/CameraStream";
+import { InspectionMasters } from "./pages/InspectionMasters";
+import { InspectionResults } from "./pages/InspectionResults";
 import { AuthProvider, useAuth } from "./services/AuthContext";
 import { Navigation } from "./components/Navigation";
 
@@ -35,6 +37,8 @@ function AppContent() {
           <Route path="/execution/:id" element={<ExecutionMonitor />} />
           <Route path="/grpc-services" element={<GrpcServicesStatus />} />
           <Route path="/camera-stream" element={<CameraStream />} />
+          <Route path="/inspection-masters" element={<InspectionMasters />} />
+          <Route path="/inspection-results" element={<InspectionResults />} />
         </Routes>
       </Container>
     </Box>
