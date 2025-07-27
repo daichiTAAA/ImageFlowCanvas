@@ -1,6 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Tabs, Tab } from "@mui/material";
+import {
+  Tabs,
+  Tab,
+  IconButton,
+  Drawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Box,
+  useMediaQuery,
+  useTheme,
+} from "@mui/material";
 import {
   Dashboard as DashboardIcon,
   Build as BuildIcon,
@@ -9,85 +21,161 @@ import {
   Camera as VideocamIcon,
   Assignment as InspectionIcon,
   Assessment as ResultsIcon,
+  Menu as MenuIcon,
 } from "@mui/icons-material";
 
 export const Navigation: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // 画面幅によってレスポンシブ対応を判定
+  const isMobile = useMediaQuery(theme.breakpoints.down("md")); // 768px以下
+  const isTablet = useMediaQuery(theme.breakpoints.down("lg")); // 1024px以下
+
+  const navigationItems = [
+    { icon: <DashboardIcon />, label: "ダッシュボード", path: "/" },
+    {
+      icon: <BuildIcon />,
+      label: "パイプラインビルダー",
+      path: "/pipeline-builder",
+    },
+    { icon: <TimelineIcon />, label: "実行監視", path: "/executions" },
+    {
+      icon: <VideocamIcon />,
+      label: "リアルタイム処理",
+      path: "/camera-stream",
+    },
+    {
+      icon: <InspectionIcon />,
+      label: "検査マスタ",
+      path: "/inspection-masters",
+    },
+    { icon: <ResultsIcon />, label: "検査結果", path: "/inspection-results" },
+    { icon: <StorageIcon />, label: "gRPCサービス", path: "/grpc-services" },
+  ];
 
   const getTabValue = () => {
-    if (location.pathname === "/") return 0;
-    if (location.pathname === "/pipeline-builder") return 1;
-    if (
-      location.pathname === "/executions" ||
-      location.pathname.startsWith("/execution")
-    )
-      return 2;
-    if (location.pathname === "/camera-stream") return 3;
-    if (location.pathname === "/inspection-masters") return 4;
-    if (location.pathname === "/inspection-results") return 5;
-    if (location.pathname === "/grpc-services") return 6;
-    return 0;
+    const pathMap: { [key: string]: number } = {
+      "/": 0,
+      "/pipeline-builder": 1,
+      "/executions": 2,
+      "/camera-stream": 3,
+      "/inspection-masters": 4,
+      "/inspection-results": 5,
+      "/grpc-services": 6,
+    };
+
+    if (location.pathname.startsWith("/execution")) return 2;
+    return pathMap[location.pathname] || 0;
   };
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    switch (newValue) {
-      case 0:
-        navigate("/");
-        break;
-      case 1:
-        navigate("/pipeline-builder");
-        break;
-      case 2:
-        navigate("/executions");
-        break;
-      case 3:
-        navigate("/camera-stream");
-        break;
-      case 4:
-        navigate("/inspection-masters");
-        break;
-      case 5:
-        navigate("/inspection-results");
-        break;
-      case 6:
-        navigate("/grpc-services");
-        break;
+    if (newValue < navigationItems.length) {
+      navigate(navigationItems[newValue].path);
     }
   };
 
+  const handleDrawerToggle = () => {
+    setDrawerOpen(!drawerOpen);
+  };
+
+  const handleDrawerItemClick = (path: string) => {
+    navigate(path);
+    setDrawerOpen(false);
+  };
+
+  // モバイル表示（ハンバーガーメニュー）
+  if (isMobile) {
+    return (
+      <>
+        <IconButton
+          color="inherit"
+          aria-label="open drawer"
+          onClick={handleDrawerToggle}
+          sx={{ mr: 2 }}
+        >
+          <MenuIcon />
+        </IconButton>
+        <Drawer
+          anchor="left"
+          open={drawerOpen}
+          onClose={handleDrawerToggle}
+          sx={{
+            "& .MuiDrawer-paper": {
+              width: 280,
+              backgroundColor: "primary.main",
+              color: "white",
+            },
+          }}
+        >
+          <List>
+            {navigationItems.map((item, index) => (
+              <ListItem
+                key={index}
+                onClick={() => handleDrawerItemClick(item.path)}
+                sx={{
+                  cursor: "pointer",
+                  backgroundColor:
+                    getTabValue() === index
+                      ? "rgba(255, 255, 255, 0.1)"
+                      : "transparent",
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.05)",
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.label} />
+              </ListItem>
+            ))}
+          </List>
+        </Drawer>
+      </>
+    );
+  }
+
+  // タブレット・デスクトップ表示（スクロール可能なタブ）
   return (
-    <Tabs
-      value={getTabValue()}
-      onChange={handleTabChange}
-      sx={{
-        flexGrow: 1,
-        "& .MuiTab-root": {
-          color: "rgba(255, 255, 255, 0.7)",
-          "&.Mui-selected": {
-            color: "white",
+    <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
+      <Tabs
+        value={getTabValue()}
+        onChange={handleTabChange}
+        variant={isTablet ? "scrollable" : "standard"}
+        scrollButtons={isTablet ? "auto" : false}
+        allowScrollButtonsMobile={isTablet}
+        sx={{
+          flexGrow: 1,
+          "& .MuiTab-root": {
+            color: "rgba(255, 255, 255, 0.7)",
+            minWidth: isTablet ? 120 : "auto",
+            "&.Mui-selected": {
+              color: "white",
+            },
           },
-        },
-        "& .MuiTabs-indicator": {
-          backgroundColor: "white",
-        },
-      }}
-    >
-      <Tab
-        icon={<DashboardIcon />}
-        label="ダッシュボード"
-        iconPosition="start"
-      />
-      <Tab
-        icon={<BuildIcon />}
-        label="パイプラインビルダー"
-        iconPosition="start"
-      />
-      <Tab icon={<TimelineIcon />} label="実行監視" iconPosition="start" />
-      <Tab icon={<VideocamIcon />} label="リアルタイム処理" iconPosition="start" />
-      <Tab icon={<InspectionIcon />} label="検査マスタ" iconPosition="start" />
-      <Tab icon={<ResultsIcon />} label="検査結果" iconPosition="start" />
-      <Tab icon={<StorageIcon />} label="gRPCサービス" iconPosition="start" />
-    </Tabs>
+          "& .MuiTabs-indicator": {
+            backgroundColor: "white",
+          },
+          "& .MuiTabs-scrollButtons": {
+            color: "rgba(255, 255, 255, 0.7)",
+            "&.Mui-disabled": {
+              opacity: 0.3,
+            },
+          },
+        }}
+      >
+        {navigationItems.map((item, index) => (
+          <Tab
+            key={index}
+            icon={item.icon}
+            label={item.label}
+            iconPosition="start"
+          />
+        ))}
+      </Tabs>
+    </Box>
   );
 };

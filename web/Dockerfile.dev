@@ -1,0 +1,39 @@
+# Development stage with nginx proxy
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install nginx and other required packages
+RUN apk add --no-cache nginx gettext
+
+# Copy package files
+COPY web/package.json web/package-lock.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy configuration files
+COPY web/vite.dev.config.ts ./vite.dev.config.ts
+COPY web/tsconfig.json ./
+COPY web/tsconfig.node.json ./
+COPY web/index.html ./
+
+# Copy nginx configuration
+COPY web/nginx.dev.conf.template /etc/nginx/nginx.dev.conf.template
+
+# Copy startup script
+COPY web/start-nginx-dev.sh /start-nginx-dev.sh
+RUN chmod +x /start-nginx-dev.sh
+
+# Copy source code (this will be overridden by volume mount)
+COPY web/src ./src
+COPY web/public ./public
+
+# Create nginx directories
+RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run
+
+# Expose port 3000 for nginx (which proxies to Vite on 3001)
+EXPOSE 3000
+
+# Start development environment (nginx + Vite)
+CMD ["/bin/sh", "/start-nginx-dev.sh"]

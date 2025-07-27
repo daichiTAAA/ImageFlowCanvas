@@ -52,11 +52,11 @@ build_service() {
         echo "  ✓ Built $REGISTRY/$service_name:$TAG"
     fi
     
-    # Clean up copied files
-    if [ -d "$context_dir/generated" ]; then
-        rm -rf "$context_dir/generated"
-        echo "  ✓ Cleaned up temporary files"
-    fi
+    # # Clean up copied files
+    # if [ -d "$context_dir/generated" ]; then
+    #     rm -rf "$context_dir/generated"
+    #     echo "  ✓ Cleaned up temporary files"
+    # fi
 }
 
 # Generate Protocol Buffers if not already done

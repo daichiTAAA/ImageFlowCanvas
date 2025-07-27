@@ -28,6 +28,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:nginx": "vite --config vite.dev.config.ts",
     "build": "vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit"

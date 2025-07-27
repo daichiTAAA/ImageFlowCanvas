@@ -1,0 +1,45 @@
+# Development override for docker-compose
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # Web UI (Development Server Override)
+  web:
+    image: imageflow/web:dev
+    build:
+      dockerfile: web/Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      DEPLOYMENT_ENV: docker
+      NODE_ENV: development
+      # nginx configuration for backend proxy
+      BACKEND_HOST: backend
+      BACKEND_PORT: "8000"
+      NGINX_RESOLVER: ""
+      # Vite environment variables
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+      # React environment variables (fallback)
+      REACT_APP_API_URL: http://localhost:8000
+      REACT_APP_WS_URL: ws://localhost:8000
+    volumes:
+      - ../../web/src:/app/src
+      - ../../web/public:/app/public
+      - ../../web/package.json:/app/package.json
+      - ../../web/package-lock.json:/app/package-lock.json
+      - ../../web/vite.dev.config.ts:/app/vite.config.ts
+      - ../../web/tsconfig.json:/app/tsconfig.json
+      - ../../web/tsconfig.node.json:/app/tsconfig.node.json
+      - ../../web/index.html:/app/index.html
+      # development nginx configuration
+      - ../../web/nginx.dev.conf.template:/etc/nginx/nginx.dev.conf.template
+      - ../../web/start-nginx-dev.sh:/start-nginx-dev.sh
+      # node_modules is not mounted to preserve container's dependencies
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -24,7 +24,7 @@ RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted
 COPY backend/app/ ./app/
 
 # 生成されたprotoファイルをコピー
-COPY ../generated/python/ ./
+COPY backend/generated/python/ ./
 
 # ポート8000を公開
 EXPOSE 8000
