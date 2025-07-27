@@ -95,6 +95,7 @@ The SQLite database will be automatically initialized on first run. Migration fi
 
 ```bash
 # Start both frontend and backend in development mode
+cd app
 npm run tauri dev
 
 # Or start frontend only (for web development)
