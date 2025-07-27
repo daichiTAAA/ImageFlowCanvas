@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Box,
   Card,
@@ -8,44 +8,44 @@ import {
   Step,
   StepLabel,
   StepContent,
-} from '@mui/material';
+} from "@mui/material";
 import {
   QrCodeScanner,
   PhotoCamera,
   SmartToy,
   Person,
   CheckCircle,
-} from '@mui/icons-material';
-import { QRCodeScanner } from './QRCodeScanner';
-import { CameraCapture } from './CameraCapture';
-import { AIInspectionResults } from './AIInspectionResults';
-import { HumanVerification } from './HumanVerification';
-import { InspectionComplete } from './InspectionComplete';
+} from "@mui/icons-material";
+import { QRCodeScanner } from "./QRCodeScanner";
+import { CameraCapture } from "./CameraCapture";
+import { AIInspectionResults } from "./AIInspectionResults";
+import { HumanVerification } from "./HumanVerification";
+import { InspectionComplete } from "./InspectionComplete";
 
 const steps = [
   {
-    label: 'QRコードスキャン',
-    description: '検査対象のQRコードをスキャンしてください',
+    label: "QRコードスキャン",
+    description: "検査対象のQRコードをスキャンしてください",
     icon: <QrCodeScanner />,
   },
   {
-    label: '画像撮影',
-    description: '検査対象の画像を高品質で撮影してください',
+    label: "画像撮影",
+    description: "検査対象を撮影してください",
     icon: <PhotoCamera />,
   },
   {
-    label: 'AI検査実行',
-    description: 'AIパイプラインによる自動検査を実行中...',
+    label: "AI検査実行",
+    description: "AIパイプラインによる自動検査を実行中...",
     icon: <SmartToy />,
   },
   {
-    label: '人による確認',
-    description: 'AI結果を確認し、最終判定を行ってください',
+    label: "人による確認",
+    description: "AI結果を確認し、最終判定を行ってください",
     icon: <Person />,
   },
   {
-    label: '検査完了',
-    description: '検査が完了しました',
+    label: "検査完了",
+    description: "検査が完了しました",
     icon: <CheckCircle />,
   },
 ];
@@ -56,7 +56,7 @@ export const InspectionWorkflow: React.FC = () => {
 
   const handleNext = (stepData?: Record<string, any>) => {
     if (stepData) {
-      setInspectionData(prev => ({ ...prev, ...stepData }));
+      setInspectionData((prev) => ({ ...prev, ...stepData }));
     }
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
   };
@@ -77,18 +77,35 @@ export const InspectionWorkflow: React.FC = () => {
       case 1:
         return <CameraCapture onNext={handleNext} onBack={handleBack} />;
       case 2:
-        return <AIInspectionResults onNext={handleNext} onBack={handleBack} inspectionData={inspectionData} />;
+        return (
+          <AIInspectionResults
+            onNext={handleNext}
+            onBack={handleBack}
+            inspectionData={inspectionData}
+          />
+        );
       case 3:
-        return <HumanVerification onNext={handleNext} onBack={handleBack} inspectionData={inspectionData} />;
+        return (
+          <HumanVerification
+            onNext={handleNext}
+            onBack={handleBack}
+            inspectionData={inspectionData}
+          />
+        );
       case 4:
-        return <InspectionComplete onReset={handleReset} inspectionData={inspectionData} />;
+        return (
+          <InspectionComplete
+            onReset={handleReset}
+            inspectionData={inspectionData}
+          />
+        );
       default:
         return null;
     }
   };
 
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ width: "100%" }}>
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Typography variant="h5" component="h1" gutterBottom>
@@ -112,10 +129,10 @@ export const InspectionWorkflow: React.FC = () => {
               StepIconComponent={() => (
                 <Box
                   sx={{
-                    color: index <= activeStep ? 'primary.main' : 'grey.400',
-                    display: 'flex',
-                    alignItems: 'center',
-                    '& svg': { fontSize: 20 }
+                    color: index <= activeStep ? "primary.main" : "grey.400",
+                    display: "flex",
+                    alignItems: "center",
+                    "& svg": { fontSize: 20 },
                   }}
                 >
                   {step.icon}
