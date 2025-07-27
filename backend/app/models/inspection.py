@@ -20,7 +20,7 @@ class InspectionTarget(Base):
     description = Column(Text)
     product_code = Column(String(100), nullable=False, unique=True)
     version = Column(String(50), nullable=False, default="1.0")
-    metadata = Column(JSON, default=dict)
+    metadata_ = Column("metadata", JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(UUID(as_uuid=True))
@@ -99,7 +99,7 @@ class InspectionExecution(Base):
     operator_id = Column(UUID(as_uuid=True))  # 検査実施者ID
     status = Column(String(50), nullable=False, default="PENDING")
     qr_code = Column(String(255))
-    metadata = Column(JSON, default=dict)
+    metadata_ = Column("metadata", JSON, default=dict)
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
     error_message = Column(Text)
