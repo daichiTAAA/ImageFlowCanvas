@@ -61,6 +61,13 @@ async def init_db():
     global engine, AsyncSessionLocal
 
     try:
+        # Import all models to ensure they are registered with Base
+        from app.models import pipeline, execution, pipeline_db
+        from app.models.inspection import (
+            InspectionTarget, InspectionItem, InspectionCriteria,
+            InspectionExecution, InspectionItemExecution, InspectionResult
+        )
+        
         # Try primary database URL first
         logger.info("Attempting to connect to primary database...")
         async with engine.begin() as conn:

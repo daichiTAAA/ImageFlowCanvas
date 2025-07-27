@@ -16,6 +16,8 @@ from app.api import (
     health,
     grpc_services,
     camera_stream,
+    inspection_masters,
+    inspection_execution,
 )
 from app.services.execution_worker import execution_worker
 from app.database import init_db
@@ -94,6 +96,9 @@ app.include_router(files.router, prefix="/v1/files", tags=["files"])
 app.include_router(
     grpc_services.router, prefix="/v1/grpc-services", tags=["grpc-services"]
 )
+# Inspection APIs
+app.include_router(inspection_masters.router, prefix="/v1/inspection", tags=["inspection"])
+app.include_router(inspection_execution.router, prefix="/v1/inspection", tags=["inspection"])
 # Health monitoring endpoints (no auth required)
 app.include_router(grpc_services.router, prefix="/v1/monitoring", tags=["monitoring"])
 
