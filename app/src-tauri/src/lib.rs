@@ -15,16 +15,19 @@ use uuid::Uuid;
 mod database;
 mod auth;
 mod pipeline;
+mod inspection_api;
 
 use database::{DatabaseManager, InspectionTarget, InspectionSession, InspectionImage, AIInspectionResult, HumanVerificationResult};
 use auth::{AuthManager, LoginCredentials, RegisterRequest, AuthResponse};
 use pipeline::{PipelineClient, PipelineRequest, parse_qr_code};
+use inspection_api::{InspectionApiClient, CreateExecutionRequest, SaveResultRequest};
 
 // Application state
 pub struct AppState {
     pub db: Arc<DatabaseManager>,
     pub auth: Arc<AuthManager>,
     pub pipeline: Arc<PipelineClient>,
+    pub inspection_api: Arc<Mutex<InspectionApiClient>>,
 }
 
 // Enhanced data structures
@@ -668,6 +671,166 @@ async fn set_app_config(
         .map_err(|e| e.to_string())
 }
 
+// New inspection API integration commands
+
+#[tauri::command]
+async fn get_inspection_targets(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    page: Option<i32>,
+    search: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let inspection_api = app_state.inspection_api.lock().await;
+    let targets = inspection_api.get_targets(page, search)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_value(targets).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+async fn get_target_items(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    target_id: String,
+) -> Result<serde_json::Value, String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let inspection_api = app_state.inspection_api.lock().await;
+    let items = inspection_api.get_target_items(&target_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_value(items).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+async fn create_inspection_execution(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    target_id: String,
+    operator_id: Option<String>,
+    qr_code: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let request = CreateExecutionRequest {
+        target_id,
+        operator_id,
+        qr_code,
+        metadata: None,
+    };
+    
+    let inspection_api = app_state.inspection_api.lock().await;
+    let execution = inspection_api.create_execution(request)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_value(execution).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+async fn get_execution_items(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    execution_id: String,
+) -> Result<serde_json::Value, String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let inspection_api = app_state.inspection_api.lock().await;
+    let items = inspection_api.get_execution_items(&execution_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_value(items).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+async fn execute_inspection_item_with_image(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    execution_id: String,
+    item_id: String,
+    image_data: Vec<u8>,
+    image_filename: String,
+) -> Result<serde_json::Value, String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let inspection_api = app_state.inspection_api.lock().await;
+    let result = inspection_api.execute_inspection_item(
+        &execution_id,
+        &item_id,
+        image_data,
+        &image_filename,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_value(result).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+async fn save_inspection_result_api(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    execution_id: String,
+    item_execution_id: String,
+    judgment: String,
+    comment: Option<String>,
+    evidence_file_ids: Option<Vec<String>>,
+    metrics: Option<HashMap<String, serde_json::Value>>,
+) -> Result<serde_json::Value, String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let request = SaveResultRequest {
+        execution_id,
+        item_execution_id,
+        judgment,
+        comment,
+        evidence_file_ids,
+        metrics,
+    };
+    
+    let inspection_api = app_state.inspection_api.lock().await;
+    let result = inspection_api.save_inspection_result(request)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_value(result).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+async fn get_inspection_results_api(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    execution_id: String,
+) -> Result<serde_json::Value, String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let inspection_api = app_state.inspection_api.lock().await;
+    let results = inspection_api.get_inspection_results(&execution_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_value(results).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+async fn set_inspection_api_auth_token(
+    state: tauri::State<'_, Arc<Mutex<Option<AppState>>>>,
+    token: String,
+) -> Result<(), String> {
+    let app_state = state.lock().await;
+    let app_state = app_state.as_ref().ok_or("Application not initialized")?;
+    
+    let mut inspection_api = app_state.inspection_api.lock().await;
+    inspection_api.set_auth_token(token);
+    
+    Ok(())
+}
+
 // Application initialization
 async fn initialize_app() -> Result<AppState> {
     // Get application data directory - use system temp dir to avoid file watcher issues
@@ -687,12 +850,16 @@ async fn initialize_app() -> Result<AppState> {
     // Initialize pipeline client
     let api_endpoint = db.get_config_value("api_endpoint").await?
         .unwrap_or_else(|| "https://api.imageflowcanvas.com".to_string());
-    let pipeline = PipelineClient::new(api_endpoint, None);
+    let pipeline = PipelineClient::new(api_endpoint.clone(), None);
+    
+    // Initialize inspection API client
+    let inspection_api = InspectionApiClient::new(api_endpoint);
     
     Ok(AppState {
         db: Arc::new(db),
         auth: Arc::new(auth),
         pipeline: Arc::new(pipeline),
+        inspection_api: Arc::new(Mutex::new(inspection_api)),
     })
 }
 
@@ -740,7 +907,15 @@ pub fn run() {
             save_inspection_result,
             get_inspection_history,
             get_app_config,
-            set_app_config
+            set_app_config,
+            get_inspection_targets,
+            get_target_items,
+            create_inspection_execution,
+            get_execution_items,
+            execute_inspection_item_with_image,
+            save_inspection_result_api,
+            get_inspection_results_api,
+            set_inspection_api_auth_token
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

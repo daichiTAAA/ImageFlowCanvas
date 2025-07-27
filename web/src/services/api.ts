@@ -315,6 +315,126 @@ class ApiService {
     })
     return response.data
   }
+
+  // Inspection APIs
+  // Inspection Targets
+  async createTarget(data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/targets', data)
+    return response.data
+  }
+
+  async getTarget(targetId: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/targets/${targetId}`)
+    return response.data
+  }
+
+  async listTargets(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/targets', { params })
+    return response.data
+  }
+
+  async updateTarget(targetId: string, data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.put(`/inspection/targets/${targetId}`, data)
+    return response.data
+  }
+
+  async deleteTarget(targetId: string): Promise<void> {
+    const api = this.ensureApiInitialized()
+    await api.delete(`/inspection/targets/${targetId}`)
+  }
+
+  // Inspection Items
+  async createItem(data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/items', data)
+    return response.data
+  }
+
+  async getItem(itemId: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/items/${itemId}`)
+    return response.data
+  }
+
+  async listItems(targetId: string, params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/targets/${targetId}/items`, { params })
+    return response.data
+  }
+
+  // Inspection Criteria
+  async createCriteria(data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/criterias', data)
+    return response.data
+  }
+
+  async listCriterias(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/criterias', { params })
+    return response.data
+  }
+
+  // Inspection Executions
+  async createExecution(data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/executions', data)
+    return response.data
+  }
+
+  async getExecution(executionId: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/executions/${executionId}`)
+    return response.data
+  }
+
+  async listExecutions(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/executions', { params })
+    return response.data
+  }
+
+  async getExecutionItems(executionId: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/executions/${executionId}/items`)
+    return response.data
+  }
+
+  async executeInspectionItem(executionId: string, itemId: string, imageFile: File): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const formData = new FormData()
+    formData.append('image', imageFile)
+
+    const response = await api.post(
+      `/inspection/executions/${executionId}/items/${itemId}/execute`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    )
+    return response.data
+  }
+
+  // Inspection Results
+  async saveResult(data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/results', data)
+    return response.data
+  }
+
+  async listResults(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/results', { params })
+    return response.data
+  }
 }
 
 export const apiService = new ApiService()
+export const inspectionApi = apiService // For inspection specific calls
+export default apiService
