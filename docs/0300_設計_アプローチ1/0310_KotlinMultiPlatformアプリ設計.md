@@ -98,6 +98,8 @@ graph TB
 | 通知システム       | ✅        | ✅       | ✅       | ✅   | expect/actual   |
 | 一人称映像処理     | ✅        | ❌       | 🔶       | 🔶   | thinkletMain    |
 | ウェアラブル最適化 | ✅        | ❌       | ❌       | ❌   | thinkletMain    |
+| リアルタイム監視表示 | ❌      | ✅       | 🔶       | 🔶   | desktopMain     |
+| 複数デバイス管理   | ❌        | ✅       | ❌       | ❌   | desktopMain     |
 
 **凡例**: ✅ フル対応、🔶 限定対応、❌ 対応外
 
@@ -109,115 +111,44 @@ graph TB
 
 #### 3.1.1. 検査ワークフロー管理
 
-```kotlin
-// commonMain/src/commonMain/kotlin/workflow/InspectionWorkflow.kt
-class InspectionWorkflow {
-    /**
-     * 検査プロセス全体を管理
-     * プラットフォームに依存しない共通ロジック
-     */
-    suspend fun executeInspection(
-        inspectionRequest: InspectionRequest
-    ): InspectionResult {
-        return when (inspectionRequest.type) {
-            InspectionType.STILL_IMAGE -> executeStillImageInspection(inspectionRequest)
-            InspectionType.VIDEO_STREAM -> executeVideoStreamInspection(inspectionRequest)
-            InspectionType.REALTIME_FIRST_PERSON -> executeRealtimeFirstPersonInspection(inspectionRequest)
-        }
-    }
-    
-    private suspend fun executeRealtimeFirstPersonInspection(
-        request: InspectionRequest
-    ): InspectionResult {
-        // THINKLETでの一人称映像リアルタイム検査
-        // 1. 映像ストリーム開始
-        // 2. AIパイプライン適用
-        // 3. リアルタイム結果通知
-        // 4. 不良検出時のアラート
-    }
-}
-```
+検査プロセス全体を管理するワークフロー層では、プラットフォームに依存しない共通ロジックを実装します。
+
+**主要機能:**
+- 静止画検査の実行制御
+- 動画ストリーム検査の管理
+- リアルタイム一人称映像検査の処理
+- 検査タイプに応じた適切な処理フローの選択
+- THINKLETでの一人称映像リアルタイム検査では、映像ストリーム開始、AIパイプライン適用、リアルタイム結果通知、不良検出時のアラートを順次実行します
 
 #### 3.1.2. パイプライン実行制御
 
-```kotlin
-// commonMain/src/commonMain/kotlin/pipeline/PipelineExecutor.kt
-class PipelineExecutor(
-    private val networkService: NetworkService,
-    private val deviceService: DeviceService // expect/actual
-) {
-    /**
-     * デバイス特性に応じたパイプライン実行
-     */
-    suspend fun executePipeline(
-        pipelineDefinition: PipelineDefinition,
-        inputData: InputData
-    ): PipelineResult {
-        
-        // デバイス能力の確認
-        val deviceCapabilities = deviceService.getDeviceCapabilities()
-        
-        // パイプライン最適化
-        val optimizedPipeline = optimizePipelineForDevice(
-            pipelineDefinition, 
-            deviceCapabilities
-        )
-        
-        // 実行
-        return when (deviceCapabilities.platform) {
-            Platform.THINKLET -> executeThinkletOptimizedPipeline(optimizedPipeline, inputData)
-            Platform.MOBILE -> executeMobileOptimizedPipeline(optimizedPipeline, inputData)
-            Platform.DESKTOP -> executeDesktopOptimizedPipeline(optimizedPipeline, inputData)
-        }
-    }
-}
-```
+デバイス特性に応じたパイプライン実行制御では、各デバイスの能力を考慮した最適化処理を実装します。
+
+**主要機能:**
+- デバイス能力の確認と評価
+- パイプライン最適化処理
+- プラットフォーム別の実行戦略選択:
+  - THINKLET: ウェアラブル特化最適化パイプライン
+  - MOBILE: モバイル端末向け最適化パイプライン  
+  - DESKTOP: デスクトップ向け高性能パイプライン
+- リソース効率を考慮した処理配分
 
 ### 3.2. ネットワーク通信層
 
 #### 3.2.1. 統合通信クライアント
 
-```kotlin
-// commonMain/src/commonMain/kotlin/network/ImageFlowCanvasClient.kt
-class ImageFlowCanvasClient {
-    private val grpcClient = GrpcClient()
-    private val webSocketClient = WebSocketClient()
-    private val restClient = RestClient()
-    
-    /**
-     * 適材適所の通信プロトコル選択
-     */
-    suspend fun executePipeline(
-        imageData: ByteArray,
-        pipelineConfig: PipelineConfig
-    ): PipelineResult {
-        return grpcClient.executePipeline(imageData, pipelineConfig)
-    }
-    
-    /**
-     * リアルタイム進捗監視
-     */
-    fun observeProgress(executionId: String): Flow<ProgressUpdate> {
-        return webSocketClient.observeProgress(executionId)
-    }
-    
-    /**
-     * 検査マスタデータ取得
-     */
-    suspend fun getInspectionMaster(): InspectionMaster {
-        return restClient.getInspectionMaster()
-    }
-    
-    /**
-     * 映像ストリーミング（THINKLET専用）
-     */
-    suspend fun startVideoStream(
-        streamConfig: VideoStreamConfig
-    ): Flow<VideoStreamResult> {
-        return grpcClient.startVideoStream(streamConfig)
-    }
-}
-```
+統合通信クライアントでは、適材適所の通信プロトコル選択により効率的な処理を実現します。
+
+**主要機能:**
+- **gRPCクライアント**: 高性能AI処理向けのバイナリ通信
+- **WebSocketクライアント**: リアルタイム進捗監視
+- **RESTクライアント**: 検査マスタデータの取得・更新
+
+**通信用途の最適化:**
+- パイプライン実行: gRPCによる高性能バイナリ転送
+- リアルタイム進捗監視: WebSocketによる双方向通信
+- 検査マスタデータ取得: RESTful APIによる標準的なデータ交換
+- 映像ストリーミング（THINKLET専用）: gRPCストリームによる高効率転送
 
 ---
 
@@ -227,179 +158,95 @@ class ImageFlowCanvasClient {
 
 #### 4.1.1. 一人称映像処理
 
-```kotlin
-// thinkletMain/src/thinkletMain/kotlin/camera/ThinkletCameraController.kt
-actual class CameraController {
-    private val thinkletSDK = ThinkletSDK()
-    
-    /**
-     * THINKLET固有のカメラ制御
-     * 8MP、120度視野角の一人称映像
-     */
-    actual suspend fun startVideoStream(
-        config: VideoStreamConfig
-    ): Flow<VideoFrame> = flow {
-        val camera = thinkletSDK.getCamera()
-        
-        // THINKLETの広角カメラ設定
-        camera.configure {
-            resolution = Resolution.EIGHT_MP
-            viewAngle = ViewAngle.WIDE_120_90  // 横120度×縦90度
-            frameRate = 30
-            quality = VideoQuality.HIGH
-        }
-        
-        camera.startStream { frame ->
-            emit(VideoFrame(
-                data = frame.data,
-                timestamp = frame.timestamp,
-                metadata = VideoMetadata(
-                    width = frame.width,
-                    height = frame.height,
-                    viewAngle = frame.viewAngle,
-                    deviceOrientation = getDeviceOrientation()
-                )
-            ))
-        }
-    }
-    
-    /**
-     * 一人称映像の録画
-     */
-    actual suspend fun startRecording(
-        outputPath: String,
-        config: RecordingConfig
-    ): RecordingSession {
-        return thinkletSDK.startRecording(outputPath) {
-            resolution = config.resolution
-            compressionQuality = config.quality
-            includeAudio = config.includeAudio
-            batteryOptimization = true // THINKLET特有の最適化
-        }
-    }
-}
-```
+THINKLET固有のカメラ制御システムでは、8MP・120度視野角の一人称映像を最適化して処理します。
+
+**主要機能:**
+- **高品質映像設定**: 8MP解像度、120度視野角、30fps
+- **広角カメラ最適化**: 横120度×縦90度の広視野角設定
+- **安定化技術**: 肩掛け固定による映像安定化
+- **自動調整機能**: オートフォーカス、自動露出制御
+- **低照度対応**: 工場内照明環境への最適化
+
+**録画機能の特徴:**
+- バッテリー効率を考慮した録画設定
+- 高品質圧縮による容量最適化
+- 音声付き録画対応
+- 8時間連続録画対応（バッテリー最適化）
+
+### 4.2. Desktop実装 (desktopMain)
+
+#### 4.2.1. リアルタイム監視ダッシュボード
+
+Desktop特化の監視機能では、複数のウェアラブルデバイスからのリアルタイムデータを統合表示します。
+
+**リアルタイム映像監視機能:**
+- **マルチストリーム表示**: 複数THINKLETデバイスからの同時映像表示
+- **グリッドレイアウト**: 4×4、3×3、2×2の可変レイアウト対応
+- **映像品質自動調整**: ネットワーク状況に応じた解像度・フレームレート最適化
+- **フルスクリーン切替**: 個別映像の拡大表示機能
+
+**AI不良判定結果表示:**
+- **リアルタイム判定結果**: OK/NG判定の即座表示（<100ms遅延）
+- **信頼度スコア**: AI判定の確信度を0-100%で表示
+- **不良箇所ハイライト**: 検出された不良部分の枠線・色分け表示
+- **ヒートマップ表示**: 不良確率の濃淡マップ重畳表示
+- **判定履歴**: 直近100件の判定結果履歴表示
+
+**アラート・通知システム:**
+- **重要度別色分け**: Critical（赤）、High（橙）、Medium（黄）、Low（緑）
+- **音声アラート**: システム音による重要度別通知
+- **ポップアップ通知**: デスクトップ通知との連携
+- **エスカレーション**: 一定時間未対応の場合の上位者通知
+
+**統計・分析機能:**
+- **リアルタイム統計**: 検査数、合格率、不良率のリアルタイム更新
+- **時間別傾向**: 1時間、1日、1週間単位での傾向グラフ
+- **デバイス別パフォーマンス**: 各THINKLETの検査効率・精度分析
+- **不良種別分析**: 検出された不良タイプの分類・集計
+
+**デバイス管理機能:**
+- **接続状態監視**: 各THINKLETの接続状況・電池残量表示
+- **パフォーマンス監視**: CPU使用率、温度、ネットワーク品質
+- **設定管理**: リモートでの検査パラメーター調整
+- **ファームウェア管理**: デバイスソフトウェアの更新状況管理
 
 #### 4.1.2. 音声処理 (XFE技術統合)
 
-```kotlin
-// thinkletMain/src/thinkletMain/kotlin/audio/ThinkletAudioController.kt
-actual class AudioController {
-    private val thinkletSDK = ThinkletSDK()
-    private val xfeProcessor = XFEProcessor() // XFEライブラリ
-    
-    /**
-     * 5chマイクアレイを使用した高品質音声収集
-     */
-    actual suspend fun startVoiceRecording(
-        config: VoiceConfig
-    ): Flow<AudioFrame> = flow {
-        val micArray = thinkletSDK.getMicrophoneArray()
-        
-        micArray.configure {
-            channels = 5  // 5chマイクアレイ
-            sampleRate = 48000  // 48kHz
-            bitDepth = 24       // 24bit
-            enableXFE = config.enableNoiseReduction
-        }
-        
-        micArray.startRecording { rawAudio ->
-            val processedAudio = if (config.enableNoiseReduction) {
-                // XFE技術による騒音抑制と装着者音声抽出
-                xfeProcessor.processAudio(rawAudio) {
-                    suppressEnvironmentalNoise = true
-                    focusOnWearer = true
-                    adaptiveVolumeControl = true
-                }
-            } else {
-                rawAudio
-            }
-            
-            emit(AudioFrame(
-                data = processedAudio.data,
-                timestamp = processedAudio.timestamp,
-                metadata = AudioMetadata(
-                    sampleRate = 48000,
-                    channels = if (config.enableXFE) 1 else 5, // XFE後は1ch
-                    noiseLevel = processedAudio.noiseLevel,
-                    confidenceScore = processedAudio.wearerVoiceConfidence
-                )
-            ))
-        }
-    }
-    
-    /**
-     * 音声フィードバック (スピーカー制御)
-     */
-    actual suspend fun playAudioFeedback(
-        audioData: ByteArray,
-        config: PlaybackConfig
-    ) {
-        val speaker = thinkletSDK.getSpeaker()
-        
-        speaker.configure {
-            volume = calculateOptimalVolume(config.baseVolume)
-            clarity = PlaybackClarity.VOICE_OPTIMIZED
-            adaptToEnvironment = true  // 環境騒音に応じた音量調整
-        }
-        
-        speaker.play(audioData)
-    }
-    
-    /**
-     * 環境騒音レベルに応じた最適音量計算
-     */
-    private fun calculateOptimalVolume(baseVolume: Float): Float {
-        val environmentNoise = thinkletSDK.getAmbientNoiseLevel()
-        return when {
-            environmentNoise > 80 -> baseVolume * 1.5f  // 高騒音環境
-            environmentNoise > 60 -> baseVolume * 1.2f  // 中騒音環境  
-            else -> baseVolume                          // 通常環境
-        }
-    }
-}
-```
+THINKLET音声制御システムでは、5chマイクアレイとXFE技術を活用した高品質音声処理を実現します。
+
+**高品質音声収集機能:**
+- **5chマイクアレイ**: 48kHz/24bit高品質音声収集
+- **XFE技術対応**: 環境騒音抑制と装着者音声抽出
+- **適応制御**: 騒音環境での自動音量調整
+- **多チャンネル処理**: 5ch入力からXFE後1ch出力への最適化
+
+**音声フィードバック機能:**
+- **スピーカー制御**: 内蔵スピーカーによる音声出力
+- **環境適応**: 環境騒音レベルに応じた最適音量計算
+- **音声品質最適化**: 声認識向け高明度設定
+- **音量レベル調整**: 
+  - 高騒音環境（80dB超）: 基準音量×1.5倍
+  - 中騒音環境（60-80dB）: 基準音量×1.2倍
+  - 通常環境（60dB未満）: 基準音量維持
 
 #### 4.1.3. センサー統合
 
-```kotlin
-// thinkletMain/src/thinkletMain/kotlin/sensors/ThinkletSensorManager.kt
-actual class SensorManager {
-    private val thinkletSDK = ThinkletSDK()
-    
-    /**
-     * THINKLET搭載センサーの統合管理
-     */
-    actual fun getAvailableSensors(): List<SensorType> {
-        return listOf(
-            SensorType.ACCELEROMETER,      // 加速度センサー
-            SensorType.GYROSCOPE,          // ジャイロスコープ
-            SensorType.MAGNETOMETER,       // 地磁気センサー
-            SensorType.PROXIMITY,          // 近接センサー
-            SensorType.GESTURE,            // ジェスチャーセンサー
-            SensorType.GPS,                // GNSS
-            SensorType.AMBIENT_LIGHT       // 環境光センサー
-        )
-    }
-    
-    /**
-     * 装着状態の検出
-     */
-    actual fun observeWearingState(): Flow<WearingState> = flow {
-        val proximityData = thinkletSDK.getProximitySensor().observe()
-        val motionData = thinkletSDK.getMotionSensors().observe()
-        
-        combine(proximityData, motionData) { proximity, motion ->
-            WearingState(
-                isWorn = proximity.isNearBody,
-                orientation = motion.deviceOrientation,
-                stability = motion.stabilityLevel,
-                timestamp = System.currentTimeMillis()
-            )
-        }.collect { emit(it) }
-    }
-}
-```
+THINKLET搭載センサーの統合管理では、多様なセンサーを活用した作業状態分析を実現します。
+
+**対応センサー一覧:**
+- **加速度センサー**: デバイスの動作・振動検出
+- **ジャイロスコープ**: 回転・姿勢変化の検出
+- **地磁気センサー**: 方向・向きの測定
+- **近接センサー**: 装着状態の検出
+- **ジェスチャーセンサー**: ハンズフリー操作対応
+- **GNSS**: 位置情報の取得
+- **環境光センサー**: 照明条件の自動調整
+
+**装着状態検出機能:**
+- **装着判定**: 近接センサーによる身体接触検出
+- **動作安定性**: モーションセンサーによる安定度測定
+- **デバイス向き**: 姿勢センサーによる装着方向確認
+- **継続監視**: リアルタイムでの装着状態変化検出
 
 ---
 
@@ -407,41 +254,28 @@ actual class SensorManager {
 
 ### 5.1. デバイス能力抽象化
 
-```kotlin
-// commonMain/src/commonMain/kotlin/device/DeviceCapabilities.kt
-data class DeviceCapabilities(
-    val platform: Platform,
-    val camera: CameraCapabilities,
-    val audio: AudioCapabilities,
-    val sensors: List<SensorType>,
-    val connectivity: ConnectivityCapabilities,
-    val performance: PerformanceCapabilities
-)
+デバイス能力抽象化では、プラットフォーム間の違いを統一的なインターフェースで管理します。
 
-data class CameraCapabilities(
-    val maxResolution: Resolution,
-    val viewAngle: ViewAngle?,
-    val supportedFormats: List<VideoFormat>,
-    val canRecord: Boolean,
-    val hasImageStabilization: Boolean
-)
+**デバイス能力の構成要素:**
 
-data class AudioCapabilities(
-    val microphoneChannels: Int,
-    val maxSampleRate: Int,
-    val bitDepth: Int,
-    val hasNoiseReduction: Boolean,
-    val hasSpeaker: Boolean,
-    val supportsBluetoothAudio: Boolean
-)
+**プラットフォーム分類:**
+- **THINKLET**: Fairy OS (AOSP-based) ウェアラブルデバイス
+- **ANDROID**: Android モバイルデバイス
+- **iOS**: iOS モバイルデバイス
+- **DESKTOP**: JVM デスクトップアプリケーション
 
-enum class Platform {
-    THINKLET,   // Fairy OS (AOSP-based)
-    ANDROID,    // Android mobile
-    IOS,        // iOS mobile  
-    DESKTOP     // JVM desktop
-}
-```
+**カメラ能力の定義:**
+- 最大解像度、視野角、対応フォーマット
+- 録画機能、手ブレ補正の有無
+
+**音声能力の定義:**
+- マイクチャンネル数、最大サンプリングレート、ビット深度
+- ノイズリダクション、スピーカー、Bluetooth音声対応
+
+**接続・性能能力:**
+- ネットワーク接続タイプ
+- 処理性能レベル
+- バッテリー制約
 
 ---
 
@@ -449,45 +283,20 @@ enum class Platform {
 
 ### 6.1. gRPC統合（高性能AI処理）
 
-```kotlin
-// commonMain/src/commonMain/kotlin/network/grpc/GrpcImageProcessingClient.kt
-class GrpcImageProcessingClient {
-    /**
-     * 一人称映像のリアルタイム処理
-     */
-    suspend fun processFirstPersonVideoStream(
-        videoStream: Flow<VideoFrame>
-    ): Flow<ProcessedFrame> = callbackFlow {
-        val responseObserver = object : StreamObserver<ProcessedFrame> {
-            override fun onNext(value: ProcessedFrame) {
-                trySend(value)
-            }
-            override fun onError(t: Throwable) {
-                close(t)
-            }
-            override fun onCompleted() {
-                close()
-            }
-        }
-        
-        val requestObserver = stub.processVideoStream(responseObserver)
-        
-        videoStream.collect { frame ->
-            val request = VideoProcessingRequest.newBuilder()
-                .setFrameData(ByteString.copyFrom(frame.data))
-                .setTimestamp(frame.timestamp)
-                .setDeviceId(getDeviceId())
-                .build()
-            
-            requestObserver.onNext(request)
-        }
-        
-        awaitClose {
-            requestObserver.onCompleted()
-        }
-    }
-}
-```
+gRPC統合により、一人称映像のリアルタイム処理を高性能で実現します。
+
+**一人称映像のリアルタイム処理機能:**
+- **双方向ストリーミング**: クライアント-サーバー間でのリアルタイム映像送受信
+- **低遅延処理**: gRPCストリームによる高効率バイナリ転送
+- **メタデータ付与**: デバイスID、タイムスタンプ、位置情報の自動付与
+- **エラーハンドリング**: 接続断絶時の自動再接続機能
+
+**処理フロー:**
+1. 映像フレームストリームの開始
+2. リアルタイム映像データの送信（ByteString形式）
+3. AIパイプラインでの並列処理
+4. 処理結果のストリーミング受信
+5. UI更新とフィードバック提供
 
 ---
 

@@ -33,6 +33,7 @@ THINKLETアプリは、以下の特徴を持つ特化型アプリケーション
 - **過酷環境対応**: 工場・建設現場での長時間安定動作
 - **超低遅延**: <20ms の映像処理とフィードバック
 - **バッテリー最適化**: 8時間連続稼働を実現
+- **デスクトップ連携**: リアルタイム検査結果のデスクトップアプリ表示
 
 ---
 
@@ -147,469 +148,157 @@ graph TB
     %% フィードバックループ
     AIProcessing -.->|リアルタイム結果| NetworkService
     NetworkService -.->|音声・視覚フィードバック| AudioService
+    
+    %% デスクトップ連携
+    AIProcessing -.->|判定結果配信| DesktopApp[Desktop監視アプリ<br/>• 複数デバイス監視<br/>• リアルタイム判定表示<br/>• アラート通知<br/>• 統計分析]
+    NetworkService -.->|映像ストリーム| DesktopApp
 ```
 
 ### 3.2. レイヤー構成
 
 #### 3.2.1. UI Layer (最小限インターフェース)
 
-THINKLETは画面を持たないため、従来のGUIではなく以下のインターフェースを提供：
+THINKLETは画面を持たないため、従来のGUIではなく以下のインターフェースを提供します：
 
-```kotlin
-// thinklet/ui/ThinkletUserInterface.kt
-class ThinkletUserInterface {
-    private val audioUI = AudioUserInterface()
-    private val gestureUI = GestureUserInterface() 
-    private val ledIndicator = LEDIndicator()
-    
-    /**
-     * 音声ベースのユーザーインターフェース
-     */
-    suspend fun handleVoiceCommands(): Flow<UserCommand> = flow {
-        audioUI.startListening { voiceInput ->
-            val command = parseVoiceCommand(voiceInput)
-            emit(command)
-        }
-    }
-    
-    /**
-     * ジェスチャーベースの操作
-     */
-    suspend fun handleGestureCommands(): Flow<UserCommand> = flow {
-        gestureUI.observeGestures { gesture ->
-            val command = parseGestureCommand(gesture)
-            emit(command)
-        }
-    }
-    
-    /**
-     * 状態フィードバック（LED、音声、振動）
-     */
-    suspend fun provideFeedback(feedback: SystemFeedback) {
-        when (feedback.type) {
-            FeedbackType.INSPECTION_START -> {
-                ledIndicator.showBlueLight()
-                audioUI.playSound("inspection_started.mp3")
-            }
-            FeedbackType.DEFECT_DETECTED -> {
-                ledIndicator.showRedLight()
-                audioUI.playAlert("defect_detected.mp3")
-                vibrationController.alertPattern()
-            }
-            FeedbackType.INSPECTION_COMPLETE -> {
-                ledIndicator.showGreenLight()
-                audioUI.announce("検査完了。結果: ${feedback.result}")
-            }
-        }
-    }
-}
-```
+**音声ベースユーザーインターフェース:**
+- 音声コマンドの継続監視
+- 音声入力の解析と制御コマンド変換
+- システムからの音声フィードバック
+
+**ジェスチャーベース操作:**
+- ジェスチャーセンサーによる操作検出
+- ハンズフリーでの基本操作対応
+- 直感的な動作による機器制御
+
+**状態フィードバックシステム:**
+- **LEDインジケーター**: 視覚的状態表示
+  - 青色光: 検査開始状態
+  - 赤色光: 不良検出アラート
+  - 緑色光: 検査完了通知
+- **音声フィードバック**: 状況に応じた音声案内
+- **振動フィードバック**: 緊急時のアラートパターン
 
 #### 3.2.2. Business Logic Layer
 
-```kotlin
-// thinklet/business/FirstPersonInspectionManager.kt
-class FirstPersonInspectionManager(
-    private val cameraService: CameraService,
-    private val audioService: AudioService,
-    private val networkService: NetworkService,
-    private val sensorService: SensorService
-) {
-    /**
-     * 一人称映像検査の実行
-     */
-    suspend fun startRealtimeInspection(
-        inspectionConfig: InspectionConfig
-    ): Flow<InspectionResult> = flow {
-        
-        // 1. 装着状態の確認
-        val wearingState = sensorService.getCurrentWearingState()
-        if (!wearingState.isProperlyWorn) {
-            throw IllegalStateException("THINKLET is not properly worn")
-        }
-        
-        // 2. 一人称映像ストリーム開始
-        val videoStream = cameraService.startFirstPersonVideoStream()
-        
-        // 3. 音声コマンド監視開始
-        val voiceCommands = audioService.startVoiceCommandDetection()
-        
-        // 4. リアルタイムAI処理
-        combine(videoStream, voiceCommands) { frame, command ->
-            processFrameWithCommand(frame, command, inspectionConfig)
-        }.collect { result ->
-            emit(result)
-        }
-    }
-    
-    private suspend fun processFrameWithCommand(
-        frame: VideoFrame,
-        command: VoiceCommand?,
-        config: InspectionConfig
-    ): InspectionResult {
-        
-        // フレームにメタデータを付与
-        val enrichedFrame = frame.copy(
-            metadata = frame.metadata.copy(
-                location = sensorService.getCurrentLocation(),
-                deviceOrientation = sensorService.getDeviceOrientation(),
-                environmentalData = sensorService.getEnvironmentalData(),
-                voiceCommand = command
-            )
-        )
-        
-        // バックエンドでAI処理実行
-        val aiResult = networkService.processFrameRealtime(enrichedFrame, config)
-        
-        // 結果に基づく即座フィードバック
-        if (aiResult.hasDefect) {
-            provideCriticalFeedback(aiResult)
-        }
-        
-        return InspectionResult(
-            frameId = frame.id,
-            timestamp = frame.timestamp,
-            aiResult = aiResult,
-            deviceState = getCurrentDeviceState()
-        )
-    }
-    
-    /**
-     * 重要な検査結果の即座フィードバック
-     */
-    private suspend fun provideCriticalFeedback(result: AIResult) {
-        when (result.severity) {
-            DefectSeverity.CRITICAL -> {
-                audioService.playUrgentAlert()
-                audioService.announce("重大欠陥検出: ${result.defectType}")
-            }
-            DefectSeverity.MAJOR -> {
-                audioService.playAlert()
-                audioService.announce("欠陥検出: ${result.defectType}")
-            }
-            DefectSeverity.MINOR -> {
-                audioService.playNotification()
-            }
-        }
-    }
-}
-```
+一人称映像検査管理では、THINKLETの特性を活かしたリアルタイム検査機能と、デスクトップアプリケーションとの連携を実装します。
+
+**一人称映像検査の実行フロー:**
+1. **装着状態確認**: センサーによる適切な装着状態の検証
+2. **一人称映像ストリーム開始**: 高品質映像の継続取得
+3. **音声コマンド監視**: 作業者の音声指示の同時監視
+4. **リアルタイムAI処理**: バックエンドでの並列画像解析
+5. **デスクトップ結果配信**: 検査結果のリアルタイム配信
+
+**フレーム処理とフィードバック:**
+- 映像フレームへのメタデータ付与（位置情報、デバイス姿勢、環境データ、音声コマンド）
+- バックエンドAI処理の実行
+- 検査結果に基づく即座フィードバック提供
+- デスクトップアプリへのリアルタイム結果配信
+
+**重要検査結果の緊急フィードバック:**
+- **重大欠陥検出**: 緊急アラート音 + 音声案内「重大欠陥検出: [欠陥タイプ]」+ デスクトップ緊急通知
+- **一般欠陥検出**: 警告音 + 音声案内「欠陥検出: [欠陥タイプ]」+ デスクトップアラート表示
+- **軽微欠陥検出**: 通知音のみ + デスクトップ通常表示
+
+**デスクトップ連携機能:**
+- **リアルタイム映像配信**: 一人称映像のデスクトップストリーミング
+- **判定結果即座表示**: <100ms遅延でのAI判定結果表示
+- **アラート通知**: 不良検出時のデスクトップ緊急通知
+- **統計データ送信**: 検査パフォーマンスデータの定期送信
 
 #### 3.2.3. Camera Service (一人称映像特化)
 
-```kotlin
-// thinklet/platform/camera/ThinkletCameraService.kt
-class ThinkletCameraService(
-    private val thinkletSDK: ThinkletSDK
-) : CameraService {
-    
-    /**
-     * 一人称映像ストリーミング
-     * THINKLETの広角カメラを活用
-     */
-    override suspend fun startFirstPersonVideoStream(): Flow<VideoFrame> = flow {
-        val camera = thinkletSDK.getCamera()
-        
-        // THINKLETの最適なカメラ設定
-        camera.configure {
-            resolution = Resolution.EIGHT_MP
-            viewAngle = selectOptimalViewAngle() // 横広角 or 縦広角
-            frameRate = 30
-            quality = VideoQuality.HIGH
-            imageStabilization = true // 肩掛け安定化
-            autoFocus = true
-            autoExposure = true
-            lowLightOptimization = true // 工場内照明対応
-        }
-        
-        camera.startStream { rawFrame ->
-            // 一人称映像特有の前処理
-            val processedFrame = preprocessFirstPersonFrame(rawFrame)
-            emit(processedFrame)
-        }
-    }
-    
-    /**
-     * 作業環境に応じた視野角選択
-     */
-    private fun selectOptimalViewAngle(): ViewAngle {
-        val workContext = getCurrentWorkContext()
-        return when (workContext.workType) {
-            WorkType.ASSEMBLY_LINE -> ViewAngle.WIDE_120_90    // 横広角：作業台全体
-            WorkType.VERTICAL_INSPECTION -> ViewAngle.WIDE_90_120 // 縦広角：縦長対象
-            WorkType.DETAIL_INSPECTION -> ViewAngle.STANDARD     // 標準：詳細作業
-            else -> ViewAngle.WIDE_120_90 // デフォルト
-        }
-    }
-    
-    /**
-     * 一人称映像の前処理
-     */
-    private fun preprocessFirstPersonFrame(rawFrame: RawVideoFrame): VideoFrame {
-        return VideoFrame(
-            id = generateFrameId(),
-            data = rawFrame.data,
-            timestamp = System.currentTimeMillis(),
-            metadata = VideoMetadata(
-                width = rawFrame.width,
-                height = rawFrame.height,
-                viewAngle = rawFrame.viewAngle,
-                deviceOrientation = getDeviceOrientation(),
-                stabilizationApplied = true,
-                lightingCondition = analyzeLightingCondition(rawFrame),
-                focusQuality = analyzeFocusQuality(rawFrame),
-                workContext = getCurrentWorkContext()
-            )
-        )
-    }
-    
-    /**
-     * バッテリー効率を考慮した録画
-     */
-    override suspend fun startRecording(
-        config: RecordingConfig
-    ): RecordingSession {
-        return thinkletSDK.startRecording(config.outputPath) {
-            resolution = config.resolution
-            compressionQuality = optimizeCompressionForBattery(config.quality)
-            includeAudio = config.includeAudio
-            batteryOptimization = true
-            maxDuration = config.maxDuration ?: Duration.ofHours(8)
-        }
-    }
-}
-```
+THINKLET専用カメラサービスでは、広角カメラを活用した一人称映像処理を最適化します。
+
+**一人称映像ストリーミング機能:**
+- **最適カメラ設定**: 8MP解像度、30fps、高品質映像
+- **視野角最適化**: 作業環境に応じた最適視野角の自動選択
+- **映像安定化**: 肩掛け固定に対応した手ブレ補正
+- **自動調整**: オートフォーカス、自動露出、低照度最適化
+
+**作業環境別視野角選択:**
+- **組立ライン作業**: 横広角（120度×90度）- 作業台全体をカバー
+- **縦型検査作業**: 縦広角（90度×120度）- 縦長対象物に最適化
+- **詳細検査作業**: 標準視野角 - 細部作業に集中
+- **デフォルト**: 横広角設定
+
+**一人称映像の前処理:**
+- フレームID生成とタイムスタンプ付与
+- デバイス姿勢情報の付与
+- 照明状態とフォーカス品質の分析
+- 作業コンテキストの記録
+
+**バッテリー効率録画:**
+- 圧縮品質のバッテリー最適化
+- 最大8時間連続録画対応
+- 音声付き録画機能
 
 #### 3.2.4. Audio Service (XFE技術活用)
 
-```kotlin
-// thinklet/platform/audio/ThinkletAudioService.kt
-class ThinkletAudioService(
-    private val thinkletSDK: ThinkletSDK,
-    private val xfeProcessor: XFEProcessor
-) : AudioService {
-    
-    /**
-     * 音声コマンド検出（XFE技術活用）
-     */
-    override suspend fun startVoiceCommandDetection(): Flow<VoiceCommand> = flow {
-        val micArray = thinkletSDK.getMicrophoneArray()
-        
-        micArray.configure {
-            channels = 5              // 5chマイクアレイ
-            sampleRate = 48000        // 48kHz
-            bitDepth = 24             // 24bit
-            enableXFE = true          // XFE騒音抑制
-        }
-        
-        micArray.startRecording { rawAudio ->
-            // XFE技術による音声前処理
-            val cleanAudio = xfeProcessor.processAudio(rawAudio) {
-                suppressEnvironmentalNoise = true    // 工場騒音抑制
-                focusOnWearer = true                  // 装着者音声抽出
-                adaptiveVolumeControl = true          // 適応音量制御
-                windNoiseReduction = true             // 風切り音抑制
-            }
-            
-            // 音声コマンド認識
-            val command = recognizeVoiceCommand(cleanAudio)
-            if (command != null) {
-                emit(command)
-            }
-        }
-    }
-    
-    /**
-     * 工場騒音下での音声コマンド認識
-     */
-    private suspend fun recognizeVoiceCommand(audioFrame: AudioFrame): VoiceCommand? {
-        return try {
-            val recognitionResult = speechRecognizer.recognize(audioFrame) {
-                language = "ja-JP"
-                vocabulary = INSPECTION_COMMAND_VOCABULARY
-                noiseRobustness = NoiseRobustness.HIGH
-                confidenceThreshold = 0.8 // 高い信頼度要求
-            }
-            
-            parseInspectionCommand(recognitionResult.text)
-        } catch (e: Exception) {
-            null // 認識失敗時はnullを返す
-        }
-    }
-    
-    /**
-     * 検査専用音声コマンド語彙
-     */
-    companion object {
-        val INSPECTION_COMMAND_VOCABULARY = listOf(
-            "検査開始", "けんさかいし",
-            "検査終了", "けんさしゅうりょう", 
-            "撮影", "さつえい",
-            "録画開始", "ろくがかいし",
-            "録画停止", "ろくがていし",
-            "結果確認", "けっかかくにん",
-            "不良報告", "ふりょうほうこく",
-            "緊急停止", "きんきゅうていし"
-        )
-    }
-    
-    /**
-     * 環境騒音レベルに応じた音声フィードバック
-     */
-    override suspend fun announceResult(
-        message: String,
-        priority: Priority = Priority.NORMAL
-    ) {
-        val speaker = thinkletSDK.getSpeaker()
-        val environmentNoise = thinkletSDK.getAmbientNoiseLevel()
-        
-        speaker.configure {
-            volume = calculateOptimalVolume(environmentNoise, priority)
-            clarity = PlaybackClarity.VOICE_OPTIMIZED
-            adaptToEnvironment = true
-        }
-        
-        // 緊急時は複数回繰り返し
-        val repeatCount = when (priority) {
-            Priority.CRITICAL -> 3
-            Priority.HIGH -> 2  
-            else -> 1
-        }
-        
-        repeat(repeatCount) {
-            speaker.announce(message)
-            if (it < repeatCount - 1) {
-                delay(500) // 0.5秒間隔
-            }
-        }
-    }
-}
-```
+THINKLET音声サービスでは、XFE技術を活用した高性能音声処理を実現します。
+
+**音声コマンド検出（XFE技術活用）:**
+- **5chマイクアレイ設定**: 48kHz/24bit高品質音声収集
+- **XFE音声前処理**: 
+  - 工場騒音抑制機能
+  - 装着者音声抽出機能
+  - 適応音量制御機能
+  - 風切り音抑制機能
+
+**工場騒音下での音声コマンド認識:**
+- **高精度認識**: 日本語音声認識（信頼度閾値0.8以上）
+- **騒音耐性**: 高騒音環境対応設計
+- **専用語彙**: 検査業務特化語彙セット
+
+**検査専用音声コマンド語彙:**
+- 検査制御: 「検査開始」「検査終了」「緊急停止」
+- 撮影制御: 「撮影」「録画開始」「録画停止」
+- 結果確認: 「結果確認」「不良報告」
+
+**環境騒音対応音声フィードバック:**
+- **適応音量調整**: 環境騒音レベルに応じた自動音量調整
+- **音声品質最適化**: 音声認識向け高明度設定
+- **緊急時対応**: 重要度に応じた繰り返し回数調整
+  - 緊急時（Critical）: 3回繰り返し
+  - 高優先度（High）: 2回繰り返し
+  - 通常（Normal）: 1回のみ
 
 ---
 
-## 4. リアルタイム処理アーキテクチャ
+### 4. リアルタイム処理アーキテクチャ
 
-### 4.1. 超低遅延ストリーミング
+#### 4.1. 超低遅延ストリーミング
 
-```kotlin
-// thinklet/realtime/RealtimeStreamingManager.kt
-class RealtimeStreamingManager(
-    private val cameraService: CameraService,
-    private val networkService: NetworkService
-) {
-    
-    /**
-     * 超低遅延映像ストリーミング (<20ms)
-     */
-    suspend fun startUltraLowLatencyStream(): Flow<ProcessedFrame> = flow {
-        val videoStream = cameraService.startFirstPersonVideoStream()
-        
-        videoStream
-            .onEach { frame ->
-                // フレーム送信時刻を記録（遅延測定用）
-                frame.metadata.sendTimestamp = System.currentTimeMillis()
-            }
-            .chunked(30) // 30フレームバッファ
-            .collect { frameChunk ->
-                // 並列処理でスループット向上
-                val processedFrames = frameChunk.map { frame ->
-                    async {
-                        processFrameRealtime(frame)
-                    }
-                }.awaitAll()
-                
-                processedFrames.forEach { emit(it) }
-            }
-    }
-    
-    private suspend fun processFrameRealtime(frame: VideoFrame): ProcessedFrame {
-        val startTime = System.currentTimeMillis()
-        
-        try {
-            // gRPCストリーミングでバックエンドに送信
-            val result = networkService.processFrameStream(frame)
-            
-            val endTime = System.currentTimeMillis()
-            val latency = endTime - frame.metadata.sendTimestamp
-            
-            // 遅延が閾値を超えた場合の警告
-            if (latency > 20) {
-                logLatencyWarning(latency, frame.id)
-            }
-            
-            return ProcessedFrame(
-                originalFrame = frame,
-                aiResult = result,
-                processingLatency = latency,
-                timestamp = endTime
-            )
-            
-        } catch (e: Exception) {
-            // ネットワークエラー時はローカル処理にフォールバック
-            return fallbackLocalProcessing(frame)
-        }
-    }
-}
-```
+超低遅延映像ストリーミング（20ms未満）では、高効率な並列処理により高性能を実現します。
 
-### 4.2. オフライン処理対応
+**超低遅延ストリーミング機能:**
+- **フレーム送信時刻記録**: 遅延測定用タイムスタンプ付与
+- **バッファリング最適化**: 30フレームチャンク単位での効率処理
+- **並列処理**: 複数フレームの同時処理によるスループット向上
+- **遅延監視**: 20ms閾値超過時の警告機能
 
-```kotlin
-// thinklet/offline/OfflineInspectionManager.kt
-class OfflineInspectionManager(
-    private val localAIProcessor: LocalAIProcessor,
-    private val localDatabase: LocalDatabase
-) {
-    
-    /**
-     * ネットワーク切断時のローカル処理
-     */
-    suspend fun processOffline(frame: VideoFrame): ProcessedFrame {
-        // 軽量なローカルAIモデルで基本的な検査
-        val localResult = localAIProcessor.processBasicInspection(frame)
-        
-        // 結果をローカルに保存
-        localDatabase.storeForLaterSync(
-            InspectionRecord(
-                frameId = frame.id,
-                result = localResult,
-                timestamp = System.currentTimeMillis(),
-                syncStatus = SyncStatus.PENDING
-            )
-        )
-        
-        return ProcessedFrame(
-            originalFrame = frame,
-            aiResult = localResult,
-            processingLatency = 0L, // ローカル処理
-            isOfflineProcessed = true
-        )
-    }
-    
-    /**
-     * ネットワーク復旧時の同期
-     */
-    suspend fun syncPendingResults() {
-        val pendingRecords = localDatabase.getPendingRecords()
-        
-        pendingRecords.forEach { record ->
-            try {
-                // サーバーに再処理要求
-                val enhancedResult = networkService.reprocessWithFullAI(record)
-                
-                // ローカル結果を更新
-                localDatabase.updateResult(record.frameId, enhancedResult)
-                localDatabase.markAsSynced(record.frameId)
-                
-            } catch (e: Exception) {
-                // 同期失敗時はリトライキューに追加
-                localDatabase.addToRetryQueue(record.frameId)
-            }
-        }
-    }
-}
-```
+**リアルタイム処理フロー:**
+1. 映像フレームの受信とタイムスタンプ記録
+2. 30フレーム単位でのチャンク処理
+3. gRPCストリーミングによるバックエンド送信
+4. 並列AI処理の実行
+5. 遅延測定と性能監視
+6. エラー時のローカル処理フォールバック
+
+#### 4.2. オフライン処理対応
+
+ネットワーク切断時には、ローカルAI処理による業務継続性を確保します。
+
+**オフライン処理機能:**
+- **軽量ローカルAI**: 基本的な検査機能をローカルで実行
+- **データ保存**: 検査結果をローカルデータベースに一時保存
+- **同期状態管理**: ネットワーク復旧時の自動同期準備
+
+**ネットワーク復旧時同期:**
+- **保留レコード処理**: ローカル保存された未同期データの自動送信
+- **サーバー再処理**: 高精度AIによる再解析実行
+- **結果更新**: ローカル結果の高精度バージョンへの更新
+- **エラーハンドリング**: 同期失敗時のリトライキュー管理
 
 ---
 
@@ -617,137 +306,55 @@ class OfflineInspectionManager(
 
 ### 5.1. 消費電力管理
 
-```kotlin
-// thinklet/power/BatteryOptimizer.kt
-class BatteryOptimizer(
-    private val thinkletSDK: ThinkletSDK
-) {
-    
-    /**
-     * バッテリーレベルに応じた動的最適化
-     */
-    fun optimizeForBatteryLevel(batteryLevel: Int) {
-        when {
-            batteryLevel > 50 -> {
-                // 高バッテリー時：フル性能
-                configureCameraForFullPerformance()
-                configureProcessingForFullPerformance()
-                configureNetworkForFullPerformance()
-            }
-            batteryLevel > 20 -> {
-                // 中バッテリー時：バランス
-                configureCameraForBalanced()
-                configureProcessingForBalanced()
-                configureNetworkForBalanced()
-            }
-            else -> {
-                // 低バッテリー時：省電力
-                configureCameraForPowerSaving()
-                configureProcessingForPowerSaving()
-                configureNetworkForPowerSaving()
-            }
-        }
-    }
-    
-    private fun configureCameraForPowerSaving() {
-        cameraService.updateConfiguration {
-            frameRate = 15              // 30fps → 15fps
-            resolution = Resolution.FOUR_MP  // 8MP → 4MP
-            quality = VideoQuality.MEDIUM    // HIGH → MEDIUM
-            imageStabilization = false       // 安定化処理を無効
-        }
-    }
-    
-    private fun configureProcessingForPowerSaving() {
-        // CPU使用率制限
-        ProcessorController.limitCPUUsage(maxUsage = 60)
-        
-        // 処理頻度削減
-        realtimeProcessor.setProcessingInterval(interval = 100) // 50ms → 100ms
-        
-        // 不要な機能を無効化
-        sensorService.disableNonEssentialSensors()
-    }
-    
-    private fun configureNetworkForPowerSaving() {
-        // ストリーミング品質を下げる
-        networkService.updateStreamingQuality(quality = StreamingQuality.LOW)
-        
-        // 通信頻度を削減
-        networkService.setBatchingEnabled(enabled = true, batchSize = 10)
-        
-        // Wi-Fiを優先してLTEを制限
-        networkService.setPreferredNetwork(NetworkType.WIFI)
-    }
-    
-    /**
-     * 長時間稼働のための省電力スケジューリング
-     */
-    suspend fun enableLongRunningMode() {
-        // 8時間稼働のための最適化
-        val targetDuration = Duration.ofHours(8)
-        val currentBattery = thinkletSDK.getBatteryLevel()
-        
-        val powerBudget = calculatePowerBudget(currentBattery, targetDuration)
-        
-        // 消費電力を目標値に調整
-        adjustPowerConsumption(powerBudget)
-        
-        // 定期的なバッテリーチェック
-        schedulePeriodicBatteryCheck(interval = Duration.ofMinutes(30))
-    }
-}
-```
+バッテリーレベルに応じた動的最適化により、8時間連続稼働を実現します。
+
+**バッテリーレベル別最適化戦略:**
+
+**高バッテリー時（50%超）: フル性能モード**
+- カメラ: 最高品質設定、フル解像度、30fps
+- 処理: 最大性能、全機能有効
+- ネットワーク: 高品質ストリーミング
+
+**中バッテリー時（20-50%）: バランスモード**
+- カメラ: 中品質設定、解像度・フレームレート調整
+- 処理: 適度な性能制限
+- ネットワーク: 標準品質ストリーミング
+
+**低バッテリー時（20%未満）: 省電力モード**
+- カメラ設定: 15fps、4MP解像度、中品質、手ブレ補正無効
+- 処理制限: CPU使用率60%制限、処理間隔100ms
+- ネットワーク: 低品質ストリーミング、バッチ処理有効
+
+**長時間稼働最適化:**
+- **目標稼働時間**: 8時間連続動作
+- **電力配分計算**: 現在バッテリーレベルから最適配分を算出
+- **定期監視**: 30分間隔でのバッテリーチェック
+- **動的調整**: 消費電力の継続的最適化
 
 ### 5.2. 熱管理
 
-```kotlin
-// thinklet/thermal/ThermalManager.kt
-class ThermalManager(
-    private val thinkletSDK: ThinkletSDK
-) {
-    
-    /**
-     * デバイス温度監視と制御
-     */
-    suspend fun monitorThermalState(): Flow<ThermalState> = flow {
-        while (true) {
-            val temperature = thinkletSDK.getDeviceTemperature()
-            val thermalState = analyzeThermalState(temperature)
-            
-            // 過熱時の自動制御
-            if (thermalState.isOverheating) {
-                applyThermalThrottling(thermalState.severity)
-            }
-            
-            emit(thermalState)
-            delay(5000) // 5秒間隔で監視
-        }
-    }
-    
-    private fun applyThermalThrottling(severity: ThermalSeverity) {
-        when (severity) {
-            ThermalSeverity.MODERATE -> {
-                // 中程度の過熱：処理能力を制限
-                cameraService.reduceFrameRate(targetFPS = 20)
-                processingService.reduceCPUUsage(maxUsage = 70)
-            }
-            ThermalSeverity.HIGH -> {
-                // 高温度：大幅な制限
-                cameraService.reduceFrameRate(targetFPS = 15)
-                cameraService.reduceResolution(Resolution.FOUR_MP)
-                processingService.reduceCPUUsage(maxUsage = 50)
-            }
-            ThermalSeverity.CRITICAL -> {
-                // 危険温度：一時停止
-                cameraService.pauseRecording()
-                processingService.pauseProcessing()
-                alertService.showThermalWarning()
-            }
-        }
-    }
-}
-```
+デバイス温度監視により、過熱防止と安定動作を確保します。
+
+**熱管理監視システム:**
+- **温度監視**: 5秒間隔での継続的デバイス温度測定
+- **熱状態分析**: 温度データから過熱リスクを評価
+- **自動制御**: 過熱検出時の自動スロットリング実行
+
+**過熱時の段階的制御:**
+
+**中程度過熱時の制御:**
+- フレームレート: 30fps → 20fps
+- CPU使用率: 最大70%制限
+
+**高温度時の制御:**
+- フレームレート: 30fps → 15fps  
+- 解像度: 8MP → 4MP
+- CPU使用率: 最大50%制限
+
+**危険温度時の緊急制御:**
+- 録画一時停止
+- 処理一時停止
+- 熱警告アラート表示
 
 ---
 
@@ -755,101 +362,35 @@ class ThermalManager(
 
 ### 6.1. 装着状態検出
 
-```kotlin
-// thinklet/monitoring/WearingStateMonitor.kt
-class WearingStateMonitor(
-    private val sensorService: SensorService
-) {
-    
-    /**
-     * 装着状態の継続監視
-     */
-    suspend fun monitorWearingState(): Flow<WearingState> = flow {
-        val proximity = sensorService.observeProximity()
-        val motion = sensorService.observeMotion()
-        val orientation = sensorService.observeOrientation()
-        
-        combine(proximity, motion, orientation) { prox, mot, ori ->
-            WearingState(
-                isWorn = prox.isNearBody && mot.isStable,
-                orientation = ori.deviceOrientation,
-                stability = calculateStability(mot),
-                confidence = calculateWearingConfidence(prox, mot, ori),
-                timestamp = System.currentTimeMillis()
-            )
-        }.distinctUntilChanged()
-         .collect { emit(it) }
-    }
-    
-    /**
-     * 不適切な装着状態の検出
-     */
-    fun detectImproperWearing(state: WearingState): WearingIssue? {
-        return when {
-            !state.isWorn -> WearingIssue.NOT_WORN
-            state.stability < 0.5 -> WearingIssue.UNSTABLE_MOUNTING
-            state.orientation.deviationDegrees > 30 -> WearingIssue.TILTED_MOUNTING
-            state.confidence < 0.7 -> WearingIssue.UNCERTAIN_STATE
-            else -> null
-        }
-    }
-}
-```
+装着状態の継続監視により、適切な機器使用状況を確保します。
+
+**装着状態監視機能:**
+- **近接センサー監視**: 身体接触の継続検出
+- **モーションセンサー監視**: デバイスの動作安定性測定
+- **姿勢センサー監視**: デバイスの装着角度・向き確認
+- **統合判定**: 複数センサーデータの組み合わせ評価
+
+**不適切装着の検出:**
+- **装着なし**: デバイスが身体から離れている状態
+- **不安定装着**: 振動や揺れによる不安定な装着状態
+- **傾斜装着**: 30度を超える傾斜での装着状態
+- **不確実状態**: センサー信頼度が低い状態
 
 ### 6.2. 作業分析
 
-```kotlin
-// thinklet/analytics/WorkAnalyzer.kt
-class WorkAnalyzer(
-    private val sensorService: SensorService,
-    private val cameraService: CameraService
-) {
-    
-    /**
-     * 作業パターンの分析
-     */
-    suspend fun analyzeWorkPattern(): Flow<WorkPattern> = flow {
-        val motion = sensorService.observeMotion()
-        val video = cameraService.startFirstPersonVideoStream()
-        
-        combine(motion, video) { motionData, videoFrame ->
-            analyzeWorkFrame(motionData, videoFrame)
-        }.collect { emit(it) }
-    }
-    
-    private fun analyzeWorkFrame(
-        motion: MotionData,
-        frame: VideoFrame
-    ): WorkPattern {
-        val activity = classifyActivity(motion)
-        val workArea = analyzeWorkArea(frame)
-        val workIntensity = calculateWorkIntensity(motion)
-        
-        return WorkPattern(
-            activity = activity,
-            workArea = workArea,
-            intensity = workIntensity,
-            efficiency = calculateEfficiency(activity, workArea),
-            timestamp = System.currentTimeMillis()
-        )
-    }
-    
-    /**
-     * 作業効率の計算
-     */
-    private fun calculateEfficiency(
-        activity: WorkActivity,
-        workArea: WorkArea
-    ): EfficiencyMetrics {
-        return EfficiencyMetrics(
-            productivityScore = calculateProductivityScore(activity),
-            focusLevel = calculateFocusLevel(workArea),
-            movementEfficiency = calculateMovementEfficiency(activity),
-            overallEfficiency = calculateOverallEfficiency(activity, workArea)
-        )
-    }
-}
-```
+作業パターンの分析により、作業効率と品質の向上を支援します。
+
+**作業パターン分析機能:**
+- **活動分類**: モーションデータから作業活動の種類を判定
+- **作業エリア分析**: 映像から作業対象領域を特定
+- **作業強度計算**: 動作データから作業負荷を測定
+- **効率性評価**: 作業パターンと成果の相関分析
+
+**作業効率指標:**
+- **生産性スコア**: 活動パターンに基づく生産性評価
+- **集中度レベル**: 作業エリアへの注意集中度測定
+- **動作効率性**: 無駄な動作の検出と改善提案
+- **総合効率性**: 全体的な作業効率の統合評価
 
 ---
 
@@ -857,116 +398,42 @@ class WorkAnalyzer(
 
 ### 7.1. 異常検知
 
-```kotlin
-// thinklet/emergency/EmergencyDetector.kt
-class EmergencyDetector(
-    private val sensorService: SensorService,
-    private val cameraService: CameraService,
-    private val audioService: AudioService
-) {
-    
-    /**
-     * 緊急事態の検出
-     */
-    suspend fun detectEmergency(): Flow<EmergencyEvent> = flow {
-        val motion = sensorService.observeMotion()
-        val audio = audioService.observeAmbientSound()
-        val video = cameraService.startFirstPersonVideoStream()
-        
-        combine(motion, audio, video) { motionData, audioData, videoFrame ->
-            analyzeForEmergency(motionData, audioData, videoFrame)
-        }.collect { emergency ->
-            if (emergency != null) {
-                emit(emergency)
-            }
-        }
-    }
-    
-    private fun analyzeForEmergency(
-        motion: MotionData,
-        audio: AudioData,
-        video: VideoFrame
-    ): EmergencyEvent? {
-        return when {
-            // 急激な落下検出
-            detectSuddenFall(motion) -> EmergencyEvent.SUDDEN_FALL
-            
-            // 異常音検出（爆発音、警報など）
-            detectAbnormalSound(audio) -> EmergencyEvent.ABNORMAL_SOUND
-            
-            // 長時間の静止状態
-            detectExtendedInactivity(motion) -> EmergencyEvent.WORKER_UNCONSCIOUS
-            
-            // 火災・煙検出
-            detectFire(video) -> EmergencyEvent.FIRE_DETECTED
-            
-            // 作業者の呼び声検出
-            detectDistressCall(audio) -> EmergencyEvent.DISTRESS_CALL
-            
-            else -> null
-        }
-    }
-}
-```
+緊急事態の自動検出により、作業者の安全を確保します。
+
+**緊急事態検出機能:**
+- **動作センサー分析**: 急激な落下や異常な動作パターンの検出
+- **音声分析**: 異常音（爆発音、警報音）や救助要請の検出
+- **映像分析**: 火災・煙・危険物の視覚的検出
+- **行動分析**: 長時間の静止状態や意識不明の可能性検出
+
+**検出対象の緊急事態:**
+- **急激な落下**: 転倒や事故による急激な姿勢変化
+- **異常音検出**: 工場警報や危険を示す音響信号
+- **作業者意識不明**: 長時間の静止状態
+- **火災検出**: 炎や煙の映像解析
+- **救助要請**: 作業者の呼び声や救助信号
 
 ### 7.2. 緊急通報機能
 
-```kotlin
-// thinklet/emergency/EmergencyResponse.kt
-class EmergencyResponse(
-    private val networkService: NetworkService,
-    private val audioService: AudioService,
-    private val locationService: LocationService
-) {
-    
-    /**
-     * 緊急事態発生時の自動対応
-     */
-    suspend fun handleEmergency(event: EmergencyEvent) {
-        val emergencyData = gatherEmergencyData(event)
-        
-        // 1. 緊急通報
-        sendEmergencyAlert(emergencyData)
-        
-        // 2. 音声警告
-        playEmergencyAlert(event)
-        
-        // 3. 証拠映像の保存
-        startEmergencyRecording(event)
-        
-        // 4. 位置情報の連続送信
-        startLocationTracking()
-        
-        // 5. 緊急連絡先への通知
-        notifyEmergencyContacts(emergencyData)
-    }
-    
-    private suspend fun gatherEmergencyData(event: EmergencyEvent): EmergencyData {
-        return EmergencyData(
-            eventType = event,
-            timestamp = System.currentTimeMillis(),
-            location = locationService.getCurrentLocation(),
-            deviceId = thinkletSDK.getDeviceId(),
-            workerId = getCurrentWorkerId(),
-            vitals = sensorService.getVitalSigns(),
-            environmentData = sensorService.getEnvironmentalData()
-        )
-    }
-    
-    /**
-     * 緊急時の映像録画
-     */
-    private suspend fun startEmergencyRecording(event: EmergencyEvent) {
-        cameraService.startEmergencyRecording {
-            duration = Duration.ofMinutes(10) // 10分間録画
-            quality = VideoQuality.HIGH
-            includeAudio = true
-            autoUpload = true // 自動でサーバーにアップロード
-            emergencyFlag = true
-        }
-    }
-}
-```
+緊急事態発生時の自動対応により、迅速な救助活動を支援します。
+
+**緊急事態発生時の自動対応フロー:**
+1. **緊急通報**: 即座のアラート送信
+2. **音声警告**: 緊急事態の音声案内
+3. **証拠映像保存**: 事故状況の記録保存
+4. **位置追跡開始**: 継続的な位置情報送信
+5. **緊急連絡先通知**: 関係者への自動通知
+
+**緊急データ収集項目:**
+- 事象タイプ、発生時刻、位置情報
+- デバイスID、作業者ID
+- バイタルサイン、環境データ
+
+**緊急時映像録画:**
+- **録画時間**: 10分間の自動録画
+- **品質設定**: 高品質での証拠保全
+- **音声付き**: 現場音声の同時記録
+- **自動アップロード**: サーバーへの即座転送
 
 ---
 
@@ -974,121 +441,52 @@ class EmergencyResponse(
 
 ### 8.1. ローカルデータ管理
 
-```kotlin
-// thinklet/data/LocalDataManager.kt
-class LocalDataManager(
-    private val database: ThinkletDatabase
-) {
-    
-    /**
-     * 検査データのローカル保存
-     */
-    suspend fun saveInspectionData(data: InspectionData) {
-        database.inspectionDao().insert(
-            InspectionEntity(
-                id = data.id,
-                timestamp = data.timestamp,
-                frameData = compressFrameData(data.frames),
-                results = data.results,
-                metadata = data.metadata,
-                syncStatus = SyncStatus.PENDING
-            )
-        )
-    }
-    
-    /**
-     * ストレージ容量管理
-     */
-    suspend fun manageStorage() {
-        val availableSpace = getAvailableStorageSpace()
-        val usageThreshold = 0.8 // 80%使用率
-        
-        if (availableSpace < usageThreshold) {
-            // 古いデータの削除
-            deleteOldSyncedData()
-            
-            // 動画品質の削減
-            reduceVideoQuality()
-            
-            // 不要ファイルのクリーンアップ
-            cleanupTempFiles()
-        }
-    }
-    
-    /**
-     * データ圧縮による容量節約
-     */
-    private fun compressFrameData(frames: List<VideoFrame>): ByteArray {
-        return FrameCompressor.compress(frames) {
-            compressionLevel = CompressionLevel.HIGH
-            retainKeyFrames = true
-            qualityReduction = 0.2 // 20%品質削減
-        }
-    }
-}
-```
+効率的なローカルデータ管理により、オフライン環境での業務継続性を確保します。
+
+**検査データのローカル保存:**
+- データベースへの検査結果格納
+- フレームデータの圧縮保存
+- メタデータの構造化保存
+- 同期状態の管理
+
+**ストレージ容量管理:**
+- **容量監視**: 使用可能ストレージ領域の継続監視
+- **使用率閾値**: 80%使用率での自動クリーンアップ
+- **データ削除**: 古い同期済みデータの自動削除
+- **品質調整**: 動画品質の段階的削減
+- **クリーンアップ**: 一時ファイルの定期削除
+
+**データ圧縮による容量節約:**
+- **高圧縮レベル**: ストレージ効率の最大化
+- **キーフレーム保持**: 重要フレームの品質維持
+- **品質削減**: 20%品質削減による容量節約
 
 ### 8.2. サーバー同期
 
-```kotlin
-// thinklet/sync/SyncManager.kt
-class SyncManager(
-    private val networkService: NetworkService,
-    private val localDataManager: LocalDataManager
-) {
-    
-    /**
-     * 効率的な差分同期
-     */
-    suspend fun performSync() {
-        if (!networkService.isConnected()) return
-        
-        val pendingData = localDataManager.getPendingData()
-        val syncBatch = createSyncBatch(pendingData)
-        
-        try {
-            val response = networkService.syncData(syncBatch)
-            processSyncResponse(response)
-        } catch (e: Exception) {
-            handleSyncFailure(e, syncBatch)
-        }
-    }
-    
-    /**
-     * ネットワーク状態に応じた同期戦略
-     */
-    private fun createSyncBatch(data: List<InspectionData>): SyncBatch {
-        val networkCondition = networkService.getNetworkCondition()
-        
-        return when (networkCondition.type) {
-            NetworkType.WIFI -> {
-                // Wi-Fi時：フルデータ同期
-                SyncBatch(
-                    data = data,
-                    compressionLevel = CompressionLevel.LOW,
-                    includeVideoData = true
-                )
-            }
-            NetworkType.LTE -> {
-                // LTE時：圧縮データ同期
-                SyncBatch(
-                    data = data.filter { it.priority >= Priority.HIGH },
-                    compressionLevel = CompressionLevel.HIGH,
-                    includeVideoData = false // メタデータのみ
-                )
-            }
-            else -> {
-                // 低速回線：必須データのみ
-                SyncBatch(
-                    data = data.filter { it.priority == Priority.CRITICAL },
-                    compressionLevel = CompressionLevel.MAXIMUM,
-                    includeVideoData = false
-                )
-            }
-        }
-    }
-}
-```
+ネットワーク状態に応じた効率的な差分同期を実現します。
+
+**差分同期機能:**
+- **接続状態確認**: ネットワーク接続の可用性チェック
+- **保留データ取得**: 未同期データの抽出
+- **同期バッチ作成**: ネットワーク条件に応じた最適化
+- **エラーハンドリング**: 同期失敗時の適切な処理
+
+**ネットワーク状態別同期戦略:**
+
+**Wi-Fi接続時: フルデータ同期**
+- 全データの完全同期
+- 低圧縮レベル設定
+- 動画データを含む完全転送
+
+**LTE接続時: 圧縮データ同期**
+- 高優先度データのみ選択同期
+- 高圧縮レベル設定
+- メタデータ中心の転送
+
+**低速回線時: 必須データのみ**
+- 重要度最高データのみ
+- 最大圧縮レベル設定
+- 動画データ除外
 
 ---
 
@@ -1096,88 +494,33 @@ class SyncManager(
 
 ### 9.1. THINKLET特化テスト
 
-```kotlin
-// thinklet/test/ThinkletSpecificTests.kt
-class ThinkletSpecificTests {
-    
-    @Test
-    fun testFirstPersonVideoCapture() = runTest {
-        val cameraService = ThinkletCameraService(mockThinkletSDK)
-        
-        val videoStream = cameraService.startFirstPersonVideoStream()
-        val frames = mutableListOf<VideoFrame>()
-        
-        videoStream.take(30).collect { frame ->
-            frames.add(frame)
-            
-            // THINKLET特有の検証
-            assertThat(frame.metadata.viewAngle).isEqualTo(ViewAngle.WIDE_120_90)
-            assertThat(frame.metadata.deviceOrientation).isNotNull()
-            assertThat(frame.data.size).isGreaterThan(0)
-        }
-        
-        assertThat(frames).hasSize(30)
-    }
-    
-    @Test
-    fun testXFEAudioProcessing() = runTest {
-        val audioService = ThinkletAudioService(mockThinkletSDK, mockXFE)
-        
-        // 騒音環境をシミュレート
-        mockXFE.simulateNoisyEnvironment(noiseLevel = 85) // 85dB
-        
-        val voiceCommands = audioService.startVoiceCommandDetection()
-        
-        // 装着者の音声コマンドを送信
-        mockThinkletSDK.simulateWearerVoice("検査開始")
-        
-        val command = voiceCommands.first()
-        
-        assertThat(command.text).isEqualTo("検査開始")
-        assertThat(command.confidence).isGreaterThan(0.8)
-    }
-}
-```
+THINKLET特有の機能に対する包括的なテスト戦略を実装します。
+
+**一人称映像キャプチャーテスト:**
+- **映像ストリーム検証**: 30フレーム/秒での安定ストリーミング
+- **メタデータ検証**: 視野角120度×90度、デバイス姿勢情報付与
+- **品質確認**: フレームデータの整合性と完全性
+- **THINKLET仕様適合**: ハードウェア固有設定の正確性
+
+**XFE音声処理テスト:**
+- **騒音環境シミュレート**: 85dB騒音環境での音声認識テスト
+- **装着者音声抽出**: XFE技術による選択的音声集音検証
+- **認識精度確認**: 音声コマンド「検査開始」の高精度認識（信頼度0.8以上）
+- **環境適応性**: 様々な騒音レベルでの認識性能評価
 
 ### 9.2. バッテリー・熱管理テスト
 
-```kotlin
-// thinklet/test/PowerManagementTests.kt
-class PowerManagementTests {
-    
-    @Test
-    fun testBatteryOptimization() = runTest {
-        val optimizer = BatteryOptimizer(mockThinkletSDK)
-        
-        // 低バッテリー状態をシミュレート
-        mockThinkletSDK.setBatteryLevel(15)
-        
-        optimizer.optimizeForBatteryLevel(15)
-        
-        // 省電力設定の確認
-        verify(mockCameraService).updateConfiguration(
-            argThat { config ->
-                config.frameRate <= 15 &&
-                config.resolution == Resolution.FOUR_MP &&
-                config.quality == VideoQuality.MEDIUM
-            }
-        )
-    }
-    
-    @Test
-    fun testThermalThrottling() = runTest {
-        val thermalManager = ThermalManager(mockThinkletSDK)
-        
-        // 過熱状態をシミュレート
-        mockThinkletSDK.setDeviceTemperature(65) // 65℃
-        
-        val thermalState = thermalManager.monitorThermalState().first()
-        
-        assertThat(thermalState.isOverheating).isTrue()
-        assertThat(thermalState.severity).isEqualTo(ThermalSeverity.HIGH)
-    }
-}
-```
+長時間稼働における安定性と効率性を検証します。
+
+**バッテリー最適化テスト:**
+- **低バッテリー状態**: 15%バッテリーレベルでの自動最適化検証
+- **省電力設定確認**: フレームレート15fps、4MP解像度、中品質への自動調整
+- **機能制限検証**: バッテリーレベルに応じた段階的機能制限の動作確認
+
+**熱管理テスト:**
+- **過熱状態シミュレート**: 65℃環境での熱制御機能検証
+- **過熱判定**: 高温度での過熱状態検出の正確性
+- **自動制御確認**: 過熱時の自動スロットリング動作の検証
 
 ---
 
@@ -1185,122 +528,57 @@ class PowerManagementTests {
 
 ### 10.1. THINKLETアプリ配布
 
-```kotlin
-// thinklet/deployment/ThinkletAppDistribution.kt
-class ThinkletAppDistribution {
-    
-    /**
-     * THINKLETデバイスへのアプリ配布
-     */
-    fun generateThinkletApk(): ApkPackage {
-        return ApkBuilder.build {
-            targetSdk = 30 // Android 11
-            minSdk = 26    // Android 8.0 (THINKLET要件)
-            
-            // THINKLET固有の権限
-            permissions = listOf(
-                "com.fairydevices.thinklet.CAMERA",
-                "com.fairydevices.thinklet.MICROPHONE_ARRAY",
-                "com.fairydevices.thinklet.SENSORS",
-                "com.fairydevices.thinklet.XFE_PROCESSING"
-            )
-            
-            // Fairy OS固有の設定
-            fairyOSConfig = FairyOSConfig(
-                enableXFE = true,
-                batteryOptimization = true,
-                thermalManagement = true
-            )
-            
-            // デバイス固有ライブラリの組み込み
-            nativeLibraries = listOf(
-                "libthinklet-sdk.so",
-                "libxfe-processor.so"
-            )
-        }
-    }
-    
-    /**
-     * リモートアップデート機能
-     */
-    suspend fun performRemoteUpdate(deviceId: String, version: String) {
-        val updatePackage = createUpdatePackage(version)
-        
-        // デバイスの状態確認
-        val deviceStatus = checkDeviceStatus(deviceId)
-        if (!deviceStatus.isUpdateReady) {
-            throw IllegalStateException("Device not ready for update")
-        }
-        
-        // 段階的アップデート
-        deploymentService.deployUpdate(deviceId, updatePackage) {
-            rollbackOnFailure = true
-            maxRolloutPercentage = 10 // 段階的展開
-            healthCheckInterval = Duration.ofMinutes(5)
-        }
-    }
-}
-```
+THINKLET専用アプリケーションの効率的な配布とアップデート機能を提供します。
+
+**THINKLETアプリケーション配布仕様:**
+- **ターゲットSDK**: Android 11 (API Level 30)
+- **最小SDK**: Android 8.0 (API Level 26) - THINKLET要件準拠
+- **THINKLET固有権限**:
+  - カメラアクセス権限
+  - 5chマイクアレイアクセス権限
+  - センサー統合アクセス権限
+  - XFE処理ライブラリアクセス権限
+
+**Fairy OS固有設定:**
+- **XFE機能**: 有効化設定
+- **バッテリー最適化**: 8時間稼働対応
+- **熱管理**: 工場環境での安定動作保証
+
+**ネイティブライブラリ組み込み:**
+- THINKLET SDK ライブラリ
+- XFE音声処理ライブラリ
+
+**リモートアップデート機能:**
+- **デバイス状態確認**: アップデート可能状態の事前検証
+- **段階的アップデート**: 10%ずつの段階的展開によるリスク管理
+- **健康チェック**: 5分間隔でのアップデート状況監視
+- **ロールバック対応**: 失敗時の自動復旧機能
 
 ### 10.2. 運用監視
 
-```kotlin
-// thinklet/monitoring/ThinkletMonitoring.kt
-class ThinkletMonitoring {
-    
-    /**
-     * デバイス健康状態の監視
-     */
-    suspend fun monitorDeviceHealth(): Flow<DeviceHealthReport> = flow {
-        while (true) {
-            val report = DeviceHealthReport(
-                deviceId = thinkletSDK.getDeviceId(),
-                timestamp = System.currentTimeMillis(),
-                batteryLevel = thinkletSDK.getBatteryLevel(),
-                temperature = thinkletSDK.getDeviceTemperature(),
-                memoryUsage = getMemoryUsage(),
-                storageUsage = getStorageUsage(),
-                networkStatus = networkService.getConnectionStatus(),
-                wearingState = getCurrentWearingState(),
-                activeInspections = getActiveInspections(),
-                errorCount = getErrorCount()
-            )
-            
-            emit(report)
-            delay(Duration.ofMinutes(1)) // 1分間隔で報告
-        }
-    }
-    
-    /**
-     * 異常状態の自動検出
-     */
-    fun detectAnomalies(report: DeviceHealthReport): List<Anomaly> {
-        val anomalies = mutableListOf<Anomaly>()
-        
-        // バッテリー異常
-        if (report.batteryLevel < 10) {
-            anomalies.add(Anomaly.LOW_BATTERY)
-        }
-        
-        // 過熱状態
-        if (report.temperature > 60) {
-            anomalies.add(Anomaly.OVERHEATING)
-        }
-        
-        // メモリ不足
-        if (report.memoryUsage > 0.9) {
-            anomalies.add(Anomaly.MEMORY_SHORTAGE)
-        }
-        
-        // 装着状態異常
-        if (!report.wearingState.isProperlyWorn) {
-            anomalies.add(Anomaly.IMPROPER_WEARING)
-        }
-        
-        return anomalies
-    }
-}
-```
+THINKLETデバイスの健康状態と運用状況を包括的に監視します。
+
+**デバイス健康状態監視項目:**
+- **デバイス識別**: THINKLET固有ID
+- **バッテリーレベル**: 充電状況と消費パターン
+- **温度監視**: デバイス温度と過熱リスク
+- **メモリ使用量**: アプリケーション使用メモリ
+- **ストレージ使用量**: 映像データ蓄積状況
+- **ネットワーク状態**: 接続安定性と通信品質
+- **装着状態**: 適切な装着状況の確認
+- **検査状況**: 実行中検査の状況
+- **エラー発生状況**: システムエラーの頻度と種類
+
+**異常状態の自動検出:**
+- **低バッテリー警告**: 10%未満での警告発出
+- **過熱警告**: 60℃超過での警告発出  
+- **メモリ不足警告**: 90%使用率超過での警告発出
+- **装着異常警告**: 不適切な装着状態の検出
+
+**監視レポート:**
+- **1分間隔**: デバイス健康状態の定期報告
+- **リアルタイム**: 異常検出時の即座通知
+- **傾向分析**: 長期的な性能変化の追跡
 
 ---
 
@@ -1325,6 +603,11 @@ class ThinkletMonitoring {
    - 即座の音声・視覚フィードバック
    - 緊急時の自動対応機能
 
+4. **デスクトップ統合監視**
+   - 複数ウェアラブルデバイスの統合監視
+   - リアルタイム不良判定結果のデスクトップ表示
+   - 管理者・品質保証担当者向けの包括的ダッシュボード
+
 ### 11.2. 技術的達成点
 
 - **XFE技術の活用**: 工場騒音下での高精度音声認識
@@ -1339,4 +622,4 @@ class ThinkletMonitoring {
 - **作業分析高度化**: 作業効率・安全性の詳細分析
 - **多言語対応**: グローバル展開に向けた言語サポート
 
-この設計により、THINKLETアプリはウェアラブルデバイスを活用した次世代品質管理システムの先駆けとなり、製造業のDXに大きく貢献することが期待されます。
+この設計により、THINKLETアプリはウェアラブルデバイスを活用した次世代品質管理システムの先駆けとなり、製造業のDXに大きく貢献することが期待されます。特に、一人称映像のリアルタイム解析とデスクトップアプリケーションでの統合監視により、現場作業者と管理者が連携した効率的な品質管理プロセスを実現します。
