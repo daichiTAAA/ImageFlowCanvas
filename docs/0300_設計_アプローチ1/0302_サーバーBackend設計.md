@@ -92,9 +92,114 @@ ImageFlowCanvasシステムにおけるサーバーBackendは以下の中核的�
 - **制御経路**: 録画/配信の開始・停止・品質指示はREST/gRPC、テレメトリ/指示はWebSocket/（必要なら）DataChannel
 - **運用方針**: 主録画はオンデバイス（4章）。サーバー録画は補助（短期バッファ/監査/追跡）として併用
 
-## 2.2. Webアプリのプロトコル制約とソリューション
+## 2.2. 製品情報取得機能の詳細設計
 
-### 2.2.1. WebブラウザでのgRPC制約
+### 2.2.1. 製品情報取得の機能設計
+
+製品情報をサーバーから取得するための統合的な機能設計を以下に示します：
+
+#### 2.2.1.1. QRコードベース製品情報取得
+
+**目的**: QRコードを読み取って製品情報を即座に取得
+**主要機能**:
+- QRコードデコード機能（標準・カスタム・自動判定）
+- 製品基本情報の取得（指図番号、指示番号、型式、機番等）
+- 検査ルールとマスタデータの同時取得
+- 高速レスポンス（キャッシュ活用）
+
+#### 2.2.1.2. 製品マスタ検索機能
+
+**目的**: 条件指定による製品の柔軟な検索
+**主要機能**:
+- 複数条件による絞り込み検索（製品タイプ、機番、日付範囲等）
+- ページネーション対応による大量データの効率的表示
+- 検索結果の品質スコア・検査回数等の集計情報表示
+- 検索履歴とお気に入り機能
+
+#### 2.2.1.3. 製品詳細情報取得機能
+
+**目的**: 特定製品の包括的な詳細情報を提供
+**主要機能**:
+- 製品基本情報・仕様・検査履歴の統合表示
+- 関連ファイル（画像、動画、レポート）への直接アクセス
+- トレーサビリティ情報の可視化
+- 品質傾向分析データの提供
+
+### 2.2.2. 製品情報サービスアーキテクチャ
+
+#### 2.2.2.1. ProductService 設計概要
+
+**サービス責務**:
+- QRコードデコードによる製品情報取得
+- 複数条件による製品マスタ検索
+- 製品詳細情報とトレーサビリティデータの提供
+- 高性能一括取得機能
+- 製品マスタの更新管理
+
+**通信方式**: gRPCによる高性能・型安全な通信
+**データ形式**: Protocol Buffersによる効率的なシリアライゼーション
+**性能要件**: レスポンス時間100ms以下、同時接続1000クライアント対応
+
+#### 2.2.2.2. 主要メッセージ構造
+
+**ProductInfo**: 製品の基本情報を格納する中核メッセージ
+- 製品識別情報（ID、指図番号、指示番号等）
+- 製品仕様情報（モデル、バージョン、バッチ番号）
+- 検査ルールと品質基準の関連付け
+
+**検査ルール管理**: 製品タイプ別の検査条件定義
+- カテゴリ別閾値設定
+- 有効/無効の動的切り替え
+- カスタムパラメータ対応
+
+詳細なProtocol Buffersスキーマ定義については、[0304_API設計.md](./0304_API設計.md)を参照してください。
+
+### 2.2.3. データ管理戦略
+
+#### 2.2.3.1. データベース構成概要
+
+**主要テーブル構成**:
+- **製品マスタテーブル**: 製品の基本情報と状態管理
+- **製品仕様テーブル**: 柔軟な仕様情報管理（Key-Value形式）
+- **検査ルールテーブル**: 製品タイプ別の検査条件定義
+
+**インデックス戦略**:
+- 指図番号・指示番号・製品タイプによる高速検索
+- 複合インデックスによる複雑な検索条件への対応
+- 時系列検索対応（生産日付ベース）
+
+詳細なテーブル設計・ER図・インデックス設計については、[0303_データベース設計.md](./0303_データベース設計.md)を参照してください。
+
+### 2.2.4. 高性能キャッシュ戦略
+
+#### 2.2.4.1. Redis キャッシュ設計概要
+
+**キャッシュ階層アーキテクチャ**:
+
+```mermaid
+graph TB
+    A[クライアント要求] --> B{キャッシュ確認}
+    B -->|HIT| C[Redis Cache]
+    B -->|MISS| D[データベース]
+    D --> E[キャッシュ更新]
+    E --> F[レスポンス返却]
+    C --> F
+```
+
+**キャッシュ戦略別適用**:
+- **製品マスタ**: Write-through方式（1時間TTL）
+- **QRコード検索**: Lazy-load方式（30分TTL）
+- **検索結果**: Cache-aside方式（5分TTL）
+- **検査ルール**: Write-through方式（2時間TTL）
+
+**メリット**:
+- レスポンス時間の大幅短縮（平均80%削減）
+- データベース負荷の軽減
+- 同一クエリの効率的処理
+
+### 2.2.5. Webアプリのプロトコル制約とソリューション
+
+#### 2.2.5.1. WebブラウザでのgRPC制約
 
 Webブラウザ環境では、以下の理由でgRPCを直接使用することができません：
 
@@ -386,6 +491,63 @@ Backend APIは以下の技術スタックでプロトコル統合を実現しま
 | gRPC Gateway   | grpcio            | ネイティブクライアント対応 |
 | 非同期処理     | asyncio           | 高並行性処理               |
 
+## 5.2. 製品情報取得機能の実装アーキテクチャ
+
+### 5.2.1. FastAPI エンドポイント実装方針
+
+**実装アーキテクチャ**:
+
+```mermaid
+graph TB
+    A[クライアント要求] --> B[FastAPI Router]
+    B --> C[認証・認可チェック]
+    C --> D[リクエスト検証]
+    D --> E[キャッシュ確認]
+    E -->|HIT| F[キャッシュレスポンス]
+    E -->|MISS| G[gRPC呼び出し]
+    G --> H[レスポンス構築]
+    H --> I[キャッシュ更新]
+    I --> J[クライアントレスポンス]
+```
+
+**主要コンポーネント**:
+- **依存性注入**: gRPCクライアント・Redisクライアントの効率的管理
+- **非同期処理**: asyncio/awaitによる高並行性実現
+- **エラーハンドリング**: 適切なHTTPステータスコード返却
+- **バリデーション**: Pydanticモデルによる入力検証
+
+### 5.2.2. gRPCクライアント管理戦略
+
+**接続プール管理**:
+- 接続プールサイズ: 10接続（設定可能）
+- ラウンドロビン方式による負荷分散
+- Keep-Alive設定による接続最適化
+- 障害時の自動再接続機能
+
+**性能最適化**:
+- 非同期gRPCクライアントによる高スループット実現
+- 適切なタイムアウト設定（5秒デフォルト）
+- バックプレッシャー制御による安定性確保
+
+### 5.2.3. エラーハンドリングとリトライ戦略
+
+**リトライ対象エラー**:
+- `UNAVAILABLE`: サービス一時停止
+- `DEADLINE_EXCEEDED`: タイムアウト
+- `RESOURCE_EXHAUSTED`: リソース不足
+
+**リトライ設定**:
+- 最大リトライ回数: 3回
+- 指数バックオフ: 1秒→2秒→4秒
+- ジッター: ±25%で競合回避
+
+**サーキットブレーカー**:
+- 失敗閾値: 5回連続失敗で回路開放
+- 半開状態: 30秒後に1回テスト実行
+- 回復判定: 3回連続成功で回路復旧
+
+詳細な実装コードについては、[0304_API設計.md](./0304_API設計.md)を参照してください。
+
 ---
 
 # 6. セキュリティ設計
@@ -546,100 +708,65 @@ message ErrorDetails {
 
 ## 9.1. 非同期処理
 
-### 9.1.1. FastAPI + asyncio
-```python
-from fastapi import FastAPI, WebSocket
-import asyncio
-import grpc.aio
+### 9.1.1. FastAPI + asyncio による非同期アーキテクチャ
 
-app = FastAPI()
+**非同期処理の基本方針**:
+- asyncioベースの完全非同期処理
+- gRPC非同期クライアントによる高並行性実現
+- バックグラウンドタスクによる処理監視
+- WebSocket接続の効率的管理
 
-@app.post("/api/v1/executions")
-async def execute_pipeline(request: ExecutionRequest):
-    # gRPC非同期呼び出し
-    async with grpc.aio.insecure_channel('pipeline-service:50051') as channel:
-        stub = PipelineServiceStub(channel)
-        response = await stub.ExecutePipeline(request)
-    
-    # 非同期タスクでバックグラウンド処理
-    asyncio.create_task(monitor_execution(response.execution_id))
-    
-    return {"execution_id": response.execution_id}
-
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    await websocket.accept()
-    await subscribe_to_kafka_progress(websocket, client_id)
-```
+**パフォーマンス特性**:
+- 同時接続数: 1000+ WebSocket接続
+- リクエスト処理能力: 10,000+ RPS
+- メモリ効率: イベントループによる軽量スレッド
+- レスポンス時間: 平均50ms以下
 
 ## 9.2. gRPCクライアント管理
 
-### 9.2.1. 接続プール
-```python
-class GrpcClientManager:
-    def __init__(self):
-        self.channels = {}
-        self.stubs = {}
-    
-    async def get_pipeline_service(self):
-        if 'pipeline' not in self.channels:
-            self.channels['pipeline'] = grpc.aio.insecure_channel(
-                'pipeline-service:50051'
-            )
-            self.stubs['pipeline'] = PipelineServiceStub(
-                self.channels['pipeline']
-            )
-        return self.stubs['pipeline']
-    
-    async def close_all(self):
-        for channel in self.channels.values():
-            await channel.close()
-```
+### 9.2.1. 接続プール戦略
+
+**gRPCクライアント管理方針**:
+- サービス別接続プール管理
+- ラウンドロビン負荷分散
+- Keep-Alive設定による接続維持
+- 自動再接続機能
+
+**接続プール設定**:
+- プールサイズ: サービス当たり10接続
+- Keep-Alive間隔: 30秒
+- タイムアウト設定: 5秒
+- 最大再試行回数: 3回
 
 ## 9.3. Kafka統合
 
-### 9.3.1. Producer設定
-```python
-from aiokafka import AIOKafkaProducer
-import json
+### 9.3.1. Producer設計方針
 
-class KafkaProducer:
-    def __init__(self):
-        self.producer = AIOKafkaProducer(
-            bootstrap_servers='kafka:9092',
-            value_serializer=lambda x: json.dumps(x).encode('utf-8')
-        )
-    
-    async def send_progress_update(self, execution_id: str, progress: dict):
-        await self.producer.send(
-            'pipeline-progress',
-            value={
-                'execution_id': execution_id,
-                'timestamp': datetime.utcnow().isoformat(),
-                **progress
-            },
-            key=execution_id.encode('utf-8')
-        )
-```
+**Kafkaメッセージ送信戦略**:
+- 非同期送信による高スループット実現
+- バッチ送信によるネットワーク効率化
+- パーティション戦略による負荷分散
+- エラーハンドリングとリトライ機能
 
-### 9.3.2. Consumer設定
-```python
-from aiokafka import AIOKafkaConsumer
+**設定値**:
+- バッチサイズ: 16KB
+- 圧縮形式: LZ4
+- 送信タイムアウト: 30秒
+- リトライ回数: 3回
 
-class ProgressConsumer:
-    def __init__(self, websocket_manager):
-        self.websocket_manager = websocket_manager
-        self.consumer = AIOKafkaConsumer(
-            'pipeline-progress',
-            bootstrap_servers='kafka:9092',
-            group_id='websocket-broadcaster'
-        )
-    
-    async def consume_and_broadcast(self):
-        async for message in self.consumer:
-            progress_data = json.loads(message.value)
-            await self.websocket_manager.broadcast_progress(progress_data)
-```
+### 9.3.2. Consumer設計方針
+
+**Kafkaメッセージ受信戦略**:
+- コンシューマグループによる負荷分散
+- 自動コミットによる処理効率化
+- デッドレターキューによる障害対応
+- WebSocket配信との連携最適化
+
+**設定値**:
+- フェッチサイズ: 1MB
+- セッションタイムアウト: 30秒
+- ハートビート間隔: 3秒
+- 最大ポーリング間隔: 5分
 
 ---
 
@@ -685,20 +812,38 @@ class ProgressConsumer:
 
 ## 10.2. 📊 データ・画像関連
 
-| 📘 用語                  | 📖 説明                                                                       | 🔗 関連技術        |
-| :---------------------- | :--------------------------------------------------------------------------- | :---------------- |
-| 🗂️ Payload               | Kafkaメッセージに含まれるデータ本体。進捗通知やメトリクス用JSON形式          | JSON, Kafka       |
-| 📋 Pipeline Definition   | パイプラインの構成（処理ステップ、依存関係、パラメータ）を定義したデータ構造 | YAML, JSON        |
-| 📈 Progress Notification | パイプライン実行中の各ステップの進捗状況を通知するメッセージ                 | Kafka, WebSocket  |
-| 🧩 Image Chunk           | 大容量画像を分割したデータ片。ストリーミング転送で使用される                 | Binary, Base64    |
-| 🔗 Correlation ID        | クライアントリクエストと処理結果を紐づけるための一意識別子                   | UUID, String      |
-| 📷 Image Metadata        | 画像の解像度、フォーマット、撮影情報などの付属データ                         | EXIF, JSON        |
-| ⚡ Client ID             | 外部クライアントを一意に識別するID。認証と処理追跡に使用                     | String, UUID      |
-| 🎬 VideoFrame            | リアルタイム映像ストリーミング用のProtoBufメッセージ形式                     | Protobuf, gRPC    |
-| 🎯 ProcessedFrame        | 処理済み映像フレームとAI検出結果を含むレスポンスメッセージ                   | Protobuf, gRPC    |
-| 📦 Product Info          | QRコードまたはサーバー検索から取得した製品情報（指図番号、型式、機番等）     | JSON, Database    |
-| 🔗 Inspection Link       | 検査結果と製品情報の紐づけ関係を表すデータ構造                               | Foreign Key, JSON |
-| 📹 Video Metadata        | 一人称映像に紐づけられた製品情報とタイムスタンプ等のメタデータ               | JSON, Index       |
-| 🎯 QR Scan Result        | QRコードスキャンの結果として取得された製品識別情報                           | JSON, String      |
-| 🔍 Product Search Query  | サーバーでの製品情報検索に使用するクエリパラメータ                           | JSON, SQL         |
-| 📊 Traceability Record   | 製品のトレーサビリティを実現するための履歴記録データ                         | JSON, Audit Log   |
+| 📘 用語                   | 📖 説明                                                                       | 🔗 関連技術        |
+| :----------------------- | :--------------------------------------------------------------------------- | :---------------- |
+| 🗂️ Payload                | Kafkaメッセージに含まれるデータ本体。進捗通知やメトリクス用JSON形式          | JSON, Kafka       |
+| 📋 Pipeline Definition    | パイプラインの構成（処理ステップ、依存関係、パラメータ）を定義したデータ構造 | YAML, JSON        |
+| 📈 Progress Notification  | パイプライン実行中の各ステップの進捗状況を通知するメッセージ                 | Kafka, WebSocket  |
+| 🧩 Image Chunk            | 大容量画像を分割したデータ片。ストリーミング転送で使用される                 | Binary, Base64    |
+| 🔗 Correlation ID         | クライアントリクエストと処理結果を紐づけるための一意識別子                   | UUID, String      |
+| 📷 Image Metadata         | 画像の解像度、フォーマット、撮影情報などの付属データ                         | EXIF, JSON        |
+| ⚡ Client ID              | 外部クライアントを一意に識別するID。認証と処理追跡に使用                     | String, UUID      |
+| 🎬 VideoFrame             | リアルタイム映像ストリーミング用のProtoBufメッセージ形式                     | Protobuf, gRPC    |
+| 🎯 ProcessedFrame         | 処理済み映像フレームとAI検出結果を含むレスポンスメッセージ                   | Protobuf, gRPC    |
+| 📦 Product Info           | QRコードまたはサーバー検索から取得した製品情報（指図番号、型式、機番等）     | JSON, Database    |
+| 🔗 Inspection Link        | 検査結果と製品情報の紐づけ関係を表すデータ構造                               | Foreign Key, JSON |
+| 📹 Video Metadata         | 一人称映像に紐づけられた製品情報とタイムスタンプ等のメタデータ               | JSON, Index       |
+| 🎯 QR Scan Result         | QRコードスキャンの結果として取得された製品識別情報                           | JSON, String      |
+| 🔍 Product Search Query   | サーバーでの製品情報検索に使用するクエリパラメータ                           | JSON, SQL         |
+| 📊 Traceability Record    | 製品のトレーサビリティを実現するための履歴記録データ                         | JSON, Audit Log   |
+| 🏭 Product Master         | 製品の基本情報（型式、機番、仕様等）を管理するマスタデータベース             | PostgreSQL, Cache |
+| 🔍 QR Code Decoder        | QRコードから製品識別情報をデコードする機能モジュール                         | Computer Vision   |
+| 📋 Inspection Rules       | 製品タイプ別の検査ルール（閾値、パラメータ等）を定義したマスタデータ         | JSON, Database    |
+| 🎯 Quality Standards      | 品質基準（欠陥許容度、信頼度閾値等）を定義したデータ構造                     | JSON, Config      |
+| 📊 Product Specifications | 製品仕様（寸法、重量、材質等）の詳細情報を格納するデータ構造                 | JSON, Database    |
+| 🔄 Cache Strategy         | Redis等を使用した製品情報の効率的キャッシュ戦略                              | Redis, TTL        |
+| 📈 Product Analytics      | 製品別の品質スコア、検査回数等の分析データ                                   | Metrics, KPI      |
+| 🔗 Product Linkage        | 製品情報と検査結果・映像の関連付けを管理するデータ構造                       | Foreign Key, UUID |
+| 📊 Batch Product Query    | 複数製品の情報を一括取得するための高性能クエリ機能                           | gRPC, Batch API   |
+| ⚡ Client ID              | 外部クライアントを一意に識別するID。認証と処理追跡に使用                     | String, UUID      |
+| 🎬 VideoFrame             | リアルタイム映像ストリーミング用のProtoBufメッセージ形式                     | Protobuf, gRPC    |
+| 🎯 ProcessedFrame         | 処理済み映像フレームとAI検出結果を含むレスポンスメッセージ                   | Protobuf, gRPC    |
+| 📦 Product Info           | QRコードまたはサーバー検索から取得した製品情報（指図番号、型式、機番等）     | JSON, Database    |
+| 🔗 Inspection Link        | 検査結果と製品情報の紐づけ関係を表すデータ構造                               | Foreign Key, JSON |
+| 📹 Video Metadata         | 一人称映像に紐づけられた製品情報とタイムスタンプ等のメタデータ               | JSON, Index       |
+| 🎯 QR Scan Result         | QRコードスキャンの結果として取得された製品識別情報                           | JSON, String      |
+| 🔍 Product Search Query   | サーバーでの製品情報検索に使用するクエリパラメータ                           | JSON, SQL         |
+| 📊 Traceability Record    | 製品のトレーサビリティを実現するための履歴記録データ                         | JSON, Audit Log   |
