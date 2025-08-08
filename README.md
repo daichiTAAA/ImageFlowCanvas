@@ -86,7 +86,7 @@ ImageFlowCanvas/
 │
 ├── backend/                        # バックエンドAPI
 ├── web/                            # Web UI
-├── app/                            # Tauriアプリケーション
+├── kmp/                            # Kotlin Multiplatformアプリケーション
 ├── docs/                           # ドキュメント
 ├── generated/                      # 自動生成コード(Protocol Buffers)
 └── proto/                          # Protocol Buffers定義
