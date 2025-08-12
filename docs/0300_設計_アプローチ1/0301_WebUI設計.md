@@ -5,9 +5,9 @@
 | 項目       | 内容                        |
 | ---------- | --------------------------- |
 | 文書名     | ImageFlowCanvas WebUI設計書 |
-| バージョン | 1.0                         |
+| バージョン | 1.1                         |
 | 作成日     | 2025年7月27日               |
-| 更新日     | 2025年8月9日                |
+| 更新日     | 2025年8月13日               |
 
 ---
 
@@ -60,6 +60,9 @@ Webブラウザ → WebSocket → Backend API → gRPC Services
 - Web標準による高い互換性
 - リアルタイム双方向通信
 - 既存HTTPインフラでの動作
+
+補足（映像視聴）:
+- ブラウザでの映像視聴は、サーバ分岐された配信（WebRTC/HLS）をプレイヤーで受信します。ブラウザ自体は映像インジェストを行いません（THINKLETはWHEPで単一路インジェスト）。
 
 # 2. WebUIでのパイプライン作成
 
@@ -123,10 +126,12 @@ graph TD
 
 ## 3.2. リアルタイム処理（ストリーミング）概要
 
-- **実行方式**: gRPCストリーミング
-- **レイテンシ**: <50ms
-- **データ**: メモリベース処理、選択的アーカイブ
-- **用途**: ライブ映像処理、リアルタイム監視
+- **実行方式**: 
+  - THINKLET: WebRTC(WHEP)でサーバーへ単一路インジェスト（サーバ分岐）
+  - 端末アプリ（ハンディーターミナル/デスクトップ）: gRPCストリーミングでサーバーと双方向通信
+- **視聴/監視（WebUI）**: WebSocketで結果・統計を購読、配信映像（WebRTC/HLS）をプレイヤーで再生
+- **レイテンシ目標**: <20ms（WHEP経路）。gRPC経路はアプリ→サーバで<50msを目標
+- **用途**: ライブ映像監視、AI結果のリアルタイム表示、状態・統計可視化
 
 ---
 
@@ -233,6 +238,7 @@ graph LR
         A[React Components]
         B[WebSocket Client]
         C[REST API Client]
+        P[Stream Player\nWebRTC/HLS]
     end
     
     subgraph "Backend API"
@@ -247,6 +253,7 @@ graph LR
     
     A --> B
     A --> C
+    A --> P
     B --> E
     C --> D
     E --> F
@@ -274,6 +281,7 @@ graph TD
     VideoSearch[録画映像検索]
     VideoPlayer[録画映像再生]
     VideoAnalytics[映像分析ダッシュボード]
+    IngestMonitor[Ingest/録画/配信 監視]
     
     %% 製品管理系
     ProductMaster[製品マスタ管理]
@@ -295,6 +303,7 @@ graph TD
     Dashboard --> PipelineList
     Dashboard --> ExecutionMonitor
     Dashboard --> VideoSearch
+    Dashboard --> IngestMonitor
     Dashboard --> ProductMaster
     Dashboard --> InspectionMaster
     Dashboard --> QualityDashboard
@@ -309,6 +318,7 @@ graph TD
     VideoSearch --> VideoPlayer
     VideoSearch --> VideoAnalytics
     VideoPlayer --> VideoAnalytics
+    IngestMonitor --> VideoAnalytics
     
     %% 製品管理の詳細遷移
     ProductMaster --> QRCodeManagement
@@ -339,6 +349,7 @@ graph TD
 | 品質ダッシュボード         | 検査結果分析           | ・統計チャート<br/>・トレンド分析<br/>・アラート表示<br/>・レポート生成                          | Chart.js使用                       |
 | 検査結果統合ダッシュボード | 統合品質管理           | ・KPIサマリー<br/>・製品別品質状況<br/>・時系列トレンド<br/>・映像管理統計                       | WebUI+アプリ統合表示               |
 | デバイス管理・連携         | アプリ連携状況管理     | ・同期状況表示<br/>・デバイス一覧<br/>・使用統計<br/>・手動同期                                  | リアルタイム状態監視               |
+| Ingest/録画/配信 監視      | 映像経路監視           | ・接続数<br/>・E2E遅延<br/>・ドロップ率<br/>・復旧時間<br/>・未送信件数<br/>・キュー滞留        | WebSocketリアルタイム更新          |
 
 ## 6.3. 詳細画面設計
 
@@ -396,6 +407,7 @@ graph TD
 - 各ステップの実行状況・処理時間
 - リアルタイムログストリーミング
 - リソース使用量グラフ
+- Ingest/AI/録画/配信メトリクス: 接続数・E2E遅延・ドロップ率・復旧時間 等
 
 **アクションパネル**:
 - 実行キャンセル・強制停止
@@ -597,4 +609,3 @@ graph TD
 - ユーザーフィードバック収集機能
 
 ---
-

@@ -1,0 +1,21 @@
+CREATE TABLE products (
+  id TEXT NOT NULL PRIMARY KEY,
+  model TEXT NOT NULL,
+  serial_number TEXT NOT NULL,
+  sequence_number INTEGER,
+  status TEXT NOT NULL DEFAULT 'ACTIVE'
+);
+
+selectAll:
+SELECT * FROM products;
+
+selectById:
+SELECT * FROM products WHERE id = ?;
+
+insertOrReplace:
+INSERT OR REPLACE INTO products(id, model, serial_number, sequence_number, status)
+VALUES (?, ?, ?, ?, COALESCE(?, 'ACTIVE'));
+
+deleteAll:
+DELETE FROM products;
+
