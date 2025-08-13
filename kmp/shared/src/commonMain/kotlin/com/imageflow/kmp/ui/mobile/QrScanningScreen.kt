@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -36,43 +37,41 @@ fun QrScanningScreen(
     onAcceptResult: (QrScanResult) -> Unit = {},
     onRetryClick: () -> Unit = {}
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        // Top bar
-        QrScanTopBar(
-            torchEnabled = torchEnabled,
-            onBackClick = onBackClick,
-            onTorchToggle = onTorchToggle,
-            onManualEntryClick = onManualEntryClick
-        )
-        
-        Box(
+    Scaffold(
+        topBar = {
+            QrScanTopBar(
+                torchEnabled = torchEnabled,
+                onBackClick = onBackClick,
+                onTorchToggle = onTorchToggle,
+                onManualEntryClick = onManualEntryClick
+            )
+        },
+        containerColor = Color.Black
+    ) { innerPadding ->
+        Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(Color.Black)
         ) {
-            // Camera preview placeholder (would be actual camera in real implementation)
-            CameraPreviewPlaceholder()
-            
-            // Scanning overlay
-            QrScanningOverlay(isScanning = isScanning)
-            
-            // Scanning instructions
-            QrScanningInstructions(
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
-        }
-        
-        // Bottom result area
-        lastScanResult?.let { result ->
-            QrScanResultCard(
-                result = result,
-                onAccept = { onAcceptResult(result) },
-                onRetry = onRetryClick
-            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                CameraPreviewPlaceholder()
+                QrScanningOverlay(isScanning = isScanning)
+                QrScanningInstructions(
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+            lastScanResult?.let { result ->
+                QrScanResultCard(
+                    result = result,
+                    onAccept = { onAcceptResult(result) },
+                    onRetry = onRetryClick
+                )
+            }
         }
     }
 }
@@ -86,6 +85,7 @@ private fun QrScanTopBar(
     onManualEntryClick: () -> Unit
 ) {
     TopAppBar(
+        modifier = Modifier.statusBarsPadding(),
         title = {
             Text(
                 text = "QRコードスキャン",
