@@ -12,6 +12,33 @@ ImageFlowCanvas のエッジ/端末クライアント向け共通ライブラリ
 ## リポジトリ内の実体
 本プロジェクトは 2 モジュール構成（`:shared`, `:androidApp`）です。
 
+### モジュール構成の詳細
+
+#### `:shared` - Kotlin Multiplatform ライブラリ（本体）
+- **役割**: 複数プラットフォームで再利用可能な共通ライブラリ
+- **出力**: JAR/AAR/Framework（各プラットフォーム用のライブラリファイル）
+- **内容**: 
+  - **commonMain**: 全プラットフォーム共通のビジネスロジック、UI、データ層
+  - **androidMain**: Android固有実装（カメラ、センサー、SQLiteドライバー）
+  - **iosMain**: iOS固有実装（Native SQLiteドライバー）
+  - **desktopMain**: Desktop固有実装（プレビューアプリ）
+
+#### `:androidApp` - Android実行可能アプリ
+- **役割**: `:shared`を使用するAndroid専用アプリケーション
+- **出力**: APK（インストール可能なAndroidアプリ）
+- **内容**:
+  - `MainActivity`: アプリのエントリーポイント
+  - `AndroidManifest.xml`: アプリの権限・設定
+  - `:shared`への依存関係
+
+### 依存関係の流れ
+```
+:androidApp ─depends on─> :shared
+                         ↓
+                    commonMain (共通ロジック)
+                    androidMain (Android実装)
+```
+
 ```
 kmp/
 ├─ settings.gradle.kts         # `:shared`, `:androidApp` を含む
@@ -179,13 +206,47 @@ adb shell am start -n com.imageflow.kmp.app/.MainActivity
 ```
 
 ## ビルドとテスト（何をしているか）
-- 目的: `:shared` はKMPライブラリ（共通コード）です。この節はライブラリ単体のビルド/テストをまとめています。Androidアプリ（`:androidApp`）のAPKは次の節で扱います。
-- 共通ビルド（ライブラリのビルド）: `./gradlew :shared:build`
-  - 生成物の例: `shared/build/` 配下（ターゲット別にKLIB/JVMクラス/JARなど）
-  - 備考: Androidアプリをビルドするときは、Gradleが依存として自動ビルドするため省略可です。
-- 共通テスト（ライブラリのテスト）: `./gradlew :shared:check`
-  - 実行されるもの: `shared/src/commonTest` 等のユニットテスト（現状はプレースホルダ）
-  - 成果物: テストレポート（`shared/build/reports/tests` など）
+
+### モジュール別のビルドプロセス
+
+#### `:shared` ライブラリのビルド
+- **目的**: KMPライブラリ（共通コード）をプラットフォーム別にコンパイル
+- **コマンド**: `./gradlew :shared:build`
+- **生成物**: 
+  - `shared/build/libs/` - JVM用JAR
+  - `shared/build/outputs/aar/` - Android用AAR
+  - `shared/build/bin/` - iOS用Framework、Native用KLIB
+- **備考**: Androidアプリをビルドするときは、Gradleが依存として自動ビルドするため通常は省略可
+
+#### `:androidApp` アプリのビルド
+- **目的**: `:shared`を使用してAndroid APKを生成
+- **コマンド**: `./gradlew :androidApp:assembleDebug`
+- **プロセス**:
+  1. `:shared`の`androidMain`と`commonMain`をコンパイル
+  2. `:androidApp`のAndroid固有コードをコンパイル
+  3. すべてを統合してAPKを生成
+- **生成物**: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`
+
+#### 依存関係の自動解決
+```
+./gradlew :androidApp:assembleDebug
+    ↓
+:shared:compileDebugKotlinAndroid (自動実行)
+    ↓
+:androidApp:assembleDebug
+```
+
+### テスト実行
+
+#### 共通テスト（ライブラリのテスト）
+- **コマンド**: `./gradlew :shared:check`
+- **実行されるもの**: `shared/src/commonTest` 等のユニットテスト（現状はプレースホルダ）
+- **成果物**: テストレポート（`shared/build/reports/tests` など）
+
+#### プラットフォーム固有テスト
+- **Android**: `./gradlew :shared:testDebugUnitTest`
+- **JVM**: `./gradlew :shared:jvmTest`
+- **iOS**: `./gradlew :shared:iosSimulatorArm64Test`（要：Xcode）
 
 ### Android Studioでの実行（詳細手順）
 
@@ -359,10 +420,45 @@ kmp/androidApp/build/outputs/apk/debug/androidApp-debug.apk
 adb logcat | grep -i imageflow
 ```
 
-#### 主な変更箇所
-- **共有ロジック/UI**: `shared/src/commonMain/...`（例: `ui/placeholder/RootUI.kt`）
-- **Android固有実装**: `shared/src/androidMain/...`（例: カメラやセンサー実装）
+#### 主な変更箇所と開発時の使い分け
+
+#### `:shared`での開発（ライブラリ側）
+- **共有ロジック/UI**: `shared/src/commonMain/...`
+  - 例: `ui/placeholder/RootUI.kt` - 全プラットフォーム共通のUI
+  - 例: `network/ApiClient.kt` - ネットワーク通信の抽象化
+  - 例: `data/repository/` - データアクセス層
+- **Android固有実装**: `shared/src/androidMain/...`
+  - 例: `platform/AndroidCameraController.kt` - Androidカメラ実装
+  - 例: `database/DriverFactory.android.kt` - Android SQLiteドライバー
 - **SQLスキーマ**: `shared/src/commonMain/sqldelight/com/imageflow/kmp/db/`
+  - 例: `Inspection.sq`, `Product.sq` - データベーススキーマ定義
+
+#### `:androidApp`での開発（アプリ側）
+- **アプリ設定**: `androidApp/src/main/AndroidManifest.xml`
+  - 権限設定、アクティビティ定義
+- **エントリーポイント**: `androidApp/src/main/kotlin/.../MainActivity.kt`
+  - アプリ起動時の初期化処理
+  - `:shared`ライブラリの初期化（例：`AndroidDbContextHolder.context`の設定）
+
+#### 開発フローの違い
+
+**ライブラリ開発（`:shared`）**
+```bash
+# ライブラリのビルド・テスト
+./gradlew :shared:build
+./gradlew :shared:check
+
+# 他のプラットフォーム用の出力生成
+./gradlew :shared:assembleRelease  # Android AAR
+./gradlew :shared:linkDebugFrameworkIosArm64  # iOS Framework
+```
+
+**アプリ開発（`:androidApp`）**
+```bash
+# アプリのビルド・インストール（ライブラリも自動ビルド）
+./gradlew :androidApp:assembleDebug
+./gradlew :androidApp:installDebug
+```
 
 #### 変更の反映
 - **Android Studio**: 再ビルド/再実行（または `installDebug` タスク）
