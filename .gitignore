@@ -386,3 +386,23 @@ models/*/1/*.trt
 models/*/1/*.engine
 
 test.png
+
+# Android / Gradle (app development)
+.gradle/
+local.properties
+**/.cxx/
+**/.externalNativeBuild/
+captures/
+*.apk
+*.ap_
+*.aab
+output.json
+
+# Android signing (do not commit)
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# Kotlin/Compose build cache
+.kotlin/
