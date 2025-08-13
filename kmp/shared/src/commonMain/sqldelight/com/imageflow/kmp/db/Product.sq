@@ -76,3 +76,6 @@ WHERE status != 'ACTIVE'
 AND last_accessed_at < ?
 AND is_cached = 1;
 
+deleteById:
+DELETE FROM products
+WHERE id = ?;

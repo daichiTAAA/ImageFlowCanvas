@@ -107,7 +107,7 @@ class ProductRepositoryImpl : ProductRepository {
 
     override suspend fun deleteProduct(id: String): Boolean {
         return try {
-            // Note: SQLDelight doesn't have delete query defined, would need to add to Product.sq
+            db.productQueries.deleteById(id)
             _productUpdates.tryEmit(ProductUpdate.Deleted(id))
             true
         } catch (e: Exception) {

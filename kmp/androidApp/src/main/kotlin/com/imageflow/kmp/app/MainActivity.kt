@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import com.imageflow.kmp.database.AndroidDbContextHolder
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
 import com.imageflow.kmp.ui.mobile.QrScanningScreen
+import com.imageflow.kmp.ui.mobile.ProductSearchScreen
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.state.InspectionState
 import com.imageflow.kmp.di.DependencyContainer
@@ -50,6 +51,8 @@ fun ImageFlowMobileApp() {
     val qrScanResult by viewModel.qrScanResult.collectAsState()
     val inspectionState by viewModel.inspectionState.collectAsState()
     val inspectionProgress by viewModel.inspectionProgress.collectAsState()
+    val suggestions by viewModel.suggestions.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
     
     MaterialTheme {
         when (currentScreen) {
@@ -119,11 +122,22 @@ fun ImageFlowMobileApp() {
             }
             
             AppScreen.PRODUCT_SEARCH -> {
-                ScreenWithTopBar(title = "製品検索", onBack = { currentScreen = AppScreen.MAIN }) {
-                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("Product Search Screen - Coming Soon")
+                ProductSearchScreen(
+                    isLoading = uiState.isLoading,
+                    suggestions = suggestions,
+                    searchResults = searchResults?.products ?: emptyList(),
+                    onQueryChange = { q -> viewModel.loadSuggestions(q) },
+                    onSearch = { q -> viewModel.searchProducts(q) },
+                    onSelectProduct = { p ->
+                        viewModel.selectProduct(p)
+                        currentScreen = AppScreen.MAIN
+                        viewModel.clearSearchResults()
+                    },
+                    onBack = {
+                        currentScreen = AppScreen.MAIN
+                        viewModel.clearSearchResults()
                     }
-                }
+                )
             }
             
             AppScreen.INSPECTION_DETAIL -> {

@@ -8,6 +8,8 @@ import com.imageflow.kmp.repository.InspectionStats
 import com.imageflow.kmp.repository.DefectStatistics
 import com.imageflow.kmp.repository.InspectorStats
 import com.imageflow.kmp.state.InspectionState
+import com.imageflow.kmp.state.toDbToken
+import com.imageflow.kmp.state.inspectionStateFromDbToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -38,7 +40,7 @@ class InspectionRepositoryImpl : InspectionRepository {
                 work_order_id = inspection.workOrderId,
                 instruction_id = inspection.instructionId,
                 inspection_type = inspection.inspectionType.name,
-                inspection_state = inspection.inspectionState.toString(),
+                inspection_state = inspection.inspectionState.toDbToken(),
                 ai_result = inspection.aiResult?.let { json.encodeToString(it) },
                 ai_confidence = inspection.aiConfidence?.toDouble(),
                 human_verified = if (inspection.humanVerified) 1 else 0,
@@ -111,7 +113,7 @@ class InspectionRepositoryImpl : InspectionRepository {
     override suspend fun updateInspectionState(inspectionId: String, newState: InspectionState): Boolean {
         return try {
             val now = System.currentTimeMillis()
-            db.inspectionQueries.updateState(newState.toString(), now, inspectionId)
+            db.inspectionQueries.updateState(newState.toDbToken(), now, inspectionId)
             _inspectionUpdates.tryEmit(InspectionUpdate.StateChanged(inspectionId, newState))
             true
         } catch (e: Exception) {
@@ -267,19 +269,5 @@ class InspectionRepositoryImpl : InspectionRepository {
         )
     }
 
-    private fun parseInspectionState(stateString: String): InspectionState {
-        return when (stateString) {
-            "ProductScanning" -> InspectionState.ProductScanning
-            "ProductIdentified" -> InspectionState.ProductIdentified
-            "InProgress" -> InspectionState.InProgress
-            "AiCompleted" -> InspectionState.AiCompleted
-            "HumanReview" -> InspectionState.HumanReview
-            "Completed" -> InspectionState.Completed
-            "ProductNotFound" -> InspectionState.ProductNotFound
-            "QrDecodeFailed" -> InspectionState.QrDecodeFailed
-            "Failed" -> InspectionState.Failed
-            "Cancelled" -> InspectionState.Cancelled
-            else -> InspectionState.ProductScanning
-        }
-    }
+    private fun parseInspectionState(stateString: String): InspectionState = inspectionStateFromDbToken(stateString)
 }

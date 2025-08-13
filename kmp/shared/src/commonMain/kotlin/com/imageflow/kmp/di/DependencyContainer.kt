@@ -6,6 +6,10 @@ import com.imageflow.kmp.repository.impl.ProductRepositoryImpl
 import com.imageflow.kmp.repository.impl.InspectionRepositoryImpl
 import com.imageflow.kmp.network.ProductApiService
 import com.imageflow.kmp.network.InspectionApiService
+import com.imageflow.kmp.network.ktor.BasicRestClient
+import com.imageflow.kmp.network.ktor.createHttpClient
+import com.imageflow.kmp.network.impl.KtorProductApiService
+import com.imageflow.kmp.network.impl.KtorInspectionApiService
 import com.imageflow.kmp.qr.BarcodeDecoder
 import com.imageflow.kmp.qr.DefaultBarcodeDecoder
 import com.imageflow.kmp.usecase.*
@@ -19,9 +23,12 @@ object DependencyContainer {
     private val productRepository: ProductRepository by lazy { ProductRepositoryImpl() }
     private val inspectionRepository: InspectionRepository by lazy { InspectionRepositoryImpl() }
     
-    // Network service instances (would be injected with actual implementations)
-    private val productApiService: ProductApiService by lazy { MockProductApiService() }
-    private val inspectionApiService: InspectionApiService by lazy { MockInspectionApiService() }
+    // Network clients and services
+    private var apiBaseUrl: String = "http://localhost:8080/api/v1"
+    private val httpClient by lazy { createHttpClient() }
+    private val restClient by lazy { BasicRestClient(httpClient, apiBaseUrl) }
+    private val productApiService: ProductApiService by lazy { KtorProductApiService(restClient) }
+    private val inspectionApiService: InspectionApiService by lazy { KtorInspectionApiService(restClient) }
     
     // QR decoder
     private val barcodeDecoder: BarcodeDecoder by lazy { DefaultBarcodeDecoder() }
@@ -59,92 +66,11 @@ object DependencyContainer {
     fun provideScanProductUseCase(): ScanProductUseCase = scanProductUseCase
     fun provideSearchProductUseCase(): SearchProductUseCase = searchProductUseCase
     fun provideInspectionWorkflowUseCase(): InspectionWorkflowUseCase = inspectionWorkflowUseCase
+
+    // Configuration hook for overriding API base URL at runtime
+    fun configureApiBase(url: String) {
+        apiBaseUrl = url
+    }
 }
 
-// Mock implementations for testing and development
-// In production, these would be replaced with actual network implementations
-
-private class MockProductApiService : ProductApiService {
-    override suspend fun getProductInfo(productId: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getProductByWorkOrderId(workOrderId: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getProductByQrData(qrData: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun searchProducts(query: com.imageflow.kmp.workflow.ProductSearchQuery) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getProductSuggestions(partialQuery: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getProductsByType(productType: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun validateProduct(productInfo: com.imageflow.kmp.models.ProductInfo) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun validateQrCode(qrData: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getProductsBatch(productIds: List<String>) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun syncProductCache(lastSyncTime: Long) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-}
-
-private class MockInspectionApiService : InspectionApiService {
-    override suspend fun submitForAiInspection(request: com.imageflow.kmp.network.AiInspectionRequest) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getAiInspectionStatus(requestId: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun uploadInspectionImage(inspectionId: String, imagePath: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun uploadInspectionVideo(inspectionId: String, videoPath: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun createInspection(inspection: com.imageflow.kmp.models.Inspection) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun updateInspection(inspection: com.imageflow.kmp.models.Inspection) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun submitInspectionResult(inspectionId: String, result: com.imageflow.kmp.network.InspectionSubmission) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getInspectionHistory(productId: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun submitHumanReview(review: com.imageflow.kmp.network.HumanReviewSubmission) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getInspectionsForReview(inspectorId: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun updateReviewStatus(inspectionId: String, status: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun getInspectionStatistics(request: com.imageflow.kmp.network.StatisticsRequest) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun generateInspectionReport(request: com.imageflow.kmp.network.ReportRequest) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun startRealtimeInspection(request: com.imageflow.kmp.network.RealtimeInspectionRequest) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun stopRealtimeInspection(sessionId: String) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun submitInspectionBatch(inspections: List<com.imageflow.kmp.models.Inspection>) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-    
-    override suspend fun syncInspectionData(lastSyncTime: Long) = 
-        com.imageflow.kmp.network.ApiResult.Error("MOCK", "Mock implementation")
-}
+// Note: mock implementations were removed in favor of real Ktor-based services.

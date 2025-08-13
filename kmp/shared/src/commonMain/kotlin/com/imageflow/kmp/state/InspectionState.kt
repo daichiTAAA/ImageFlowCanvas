@@ -63,3 +63,41 @@ fun InspectionState.canProgressTo(nextState: InspectionState): Boolean = when (t
     else -> false
 }
 
+fun InspectionState.toDbToken(): String = when (this) {
+    InspectionState.ProductScanning -> "PRODUCT_SCANNING"
+    InspectionState.ProductIdentified -> "PRODUCT_IDENTIFIED"
+    InspectionState.InProgress -> "IN_PROGRESS"
+    InspectionState.AiCompleted -> "AI_COMPLETED"
+    InspectionState.HumanReview -> "HUMAN_REVIEW"
+    InspectionState.Completed -> "COMPLETED"
+    InspectionState.ProductNotFound -> "PRODUCT_NOT_FOUND"
+    InspectionState.QrDecodeFailed -> "QR_DECODE_FAILED"
+    InspectionState.Failed -> "FAILED"
+    InspectionState.Cancelled -> "CANCELLED"
+}
+
+fun inspectionStateFromDbToken(token: String): InspectionState = when (token.uppercase()) {
+    "PRODUCT_SCANNING" -> InspectionState.ProductScanning
+    "PRODUCT_IDENTIFIED" -> InspectionState.ProductIdentified
+    "IN_PROGRESS" -> InspectionState.InProgress
+    "AI_COMPLETED" -> InspectionState.AiCompleted
+    "HUMAN_REVIEW" -> InspectionState.HumanReview
+    "COMPLETED" -> InspectionState.Completed
+    "PRODUCT_NOT_FOUND" -> InspectionState.ProductNotFound
+    "QR_DECODE_FAILED" -> InspectionState.QrDecodeFailed
+    "FAILED" -> InspectionState.Failed
+    "CANCELLED" -> InspectionState.Cancelled
+    else -> when (token) {
+        "ProductScanning" -> InspectionState.ProductScanning
+        "ProductIdentified" -> InspectionState.ProductIdentified
+        "InProgress" -> InspectionState.InProgress
+        "AiCompleted" -> InspectionState.AiCompleted
+        "HumanReview" -> InspectionState.HumanReview
+        "Completed" -> InspectionState.Completed
+        "ProductNotFound" -> InspectionState.ProductNotFound
+        "QrDecodeFailed" -> InspectionState.QrDecodeFailed
+        "Failed" -> InspectionState.Failed
+        "Cancelled" -> InspectionState.Cancelled
+        else -> InspectionState.ProductScanning
+    }
+}

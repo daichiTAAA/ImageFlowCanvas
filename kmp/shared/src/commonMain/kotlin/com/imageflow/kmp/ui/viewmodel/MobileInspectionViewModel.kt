@@ -1,6 +1,7 @@
 package com.imageflow.kmp.ui.viewmodel
 
 import com.imageflow.kmp.models.*
+import com.imageflow.kmp.network.ProductSuggestion
 import com.imageflow.kmp.state.InspectionState
 import com.imageflow.kmp.usecase.*
 import com.imageflow.kmp.workflow.InspectionProgress
@@ -27,6 +28,9 @@ class MobileInspectionViewModel(
     
     private val _searchResults = MutableStateFlow<ProductSearchResult?>(null)
     val searchResults: StateFlow<ProductSearchResult?> = _searchResults.asStateFlow()
+
+    private val _suggestions = MutableStateFlow<List<ProductSuggestion>>(emptyList())
+    val suggestions: StateFlow<List<ProductSuggestion>> = _suggestions.asStateFlow()
     
     // Inspection workflow state
     val inspectionState: StateFlow<InspectionState> = inspectionWorkflowUseCase.state
@@ -115,6 +119,16 @@ class MobileInspectionViewModel(
             updateUiState { it.copy(isLoading = false) }
         }
     }
+
+    fun loadSuggestions(partial: String) {
+        viewModelScope.launch {
+            try {
+                _suggestions.value = searchProductUseCase.getProductSuggestions(partial)
+            } catch (_: Exception) {
+                _suggestions.value = emptyList()
+            }
+        }
+    }
     
     fun selectProduct(productInfo: ProductInfo) {
         viewModelScope.launch {
@@ -139,6 +153,7 @@ class MobileInspectionViewModel(
     
     fun clearSearchResults() {
         _searchResults.value = null
+        _suggestions.value = emptyList()
     }
     
     // Inspection actions
