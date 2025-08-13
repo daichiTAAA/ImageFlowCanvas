@@ -5,12 +5,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
     id("app.cash.sqldelight")
+    kotlin("plugin.serialization")
 }
 
 // Resolve versions from gradle.properties
 val coroutinesVersion = findProperty("coroutines.version") as String
 val ktorVersion = findProperty("ktor.version") as String
 val sqldelightVersion = findProperty("sqldelight.version") as String
+val serializationVersion = findProperty("serialization.version") as String
 val androidCompileSdk = (findProperty("android.compileSdk") as String).toInt()
 val androidMinSdk = (findProperty("android.minSdk") as String).toInt()
 
@@ -36,6 +38,9 @@ kotlin {
 
                 // Coroutines
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+
+                // Kotlinx Serialization
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serializationVersion")
 
                 // Ktor client
                 implementation("io.ktor:ktor-client-core:$ktorVersion")
@@ -65,6 +70,20 @@ kotlin {
                 implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
                 // SQLDelight Android driver
                 implementation("app.cash.sqldelight:android-driver:$sqldelightVersion")
+                
+                // CameraX dependencies for Android
+                implementation("androidx.camera:camera-core:1.3.4")
+                implementation("androidx.camera:camera-camera2:1.3.4")
+                implementation("androidx.camera:camera-lifecycle:1.3.4")
+                implementation("androidx.camera:camera-video:1.3.4")
+                implementation("androidx.camera:camera-view:1.3.4")
+                
+                // ML Kit for QR code scanning
+                implementation("com.google.mlkit:barcode-scanning:17.2.0")
+                
+                // Additional Android dependencies
+                implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+                implementation("androidx.core:core-ktx:1.13.1")
             }
         }
         val androidUnitTest by getting {

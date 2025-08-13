@@ -1,25 +1,104 @@
 -- Local inspection records (aligned with docs: inspection result + product linkage)
+-- Enhanced schema based on F-022, F-023, F-024 requirements
 CREATE TABLE inspections (
   id TEXT NOT NULL PRIMARY KEY,
   product_id TEXT NOT NULL,
-  result TEXT,
-  timestamp INTEGER NOT NULL,
-  synced INTEGER NOT NULL DEFAULT 0
+  work_order_id TEXT NOT NULL,
+  instruction_id TEXT NOT NULL,
+  inspection_type TEXT NOT NULL, -- STATIC_IMAGE, VIDEO, REALTIME
+  inspection_state TEXT NOT NULL DEFAULT 'PRODUCT_SCANNING', -- State machine from requirements
+  ai_result TEXT, -- JSON format AI results
+  ai_confidence REAL,
+  human_verified INTEGER NOT NULL DEFAULT 0,
+  human_result TEXT, -- OK, NG, PENDING
+  human_comments TEXT,
+  inspector_id TEXT,
+  started_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  image_paths TEXT, -- JSON array of image file paths
+  video_path TEXT,
+  metadata TEXT, -- JSON format additional metadata
+  synced INTEGER NOT NULL DEFAULT 0,
+  sync_attempts INTEGER NOT NULL DEFAULT 0,
+  last_sync_attempt INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
 );
 
+-- Enhanced queries for inspection management
 insertOrReplace:
-INSERT OR REPLACE INTO inspections(id, product_id, result, timestamp, synced)
-VALUES (?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO inspections(
+  id, product_id, work_order_id, instruction_id, inspection_type, inspection_state,
+  ai_result, ai_confidence, human_verified, human_result, human_comments, inspector_id,
+  started_at, completed_at, image_paths, video_path, metadata,
+  synced, sync_attempts, last_sync_attempt, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectByProduct:
 SELECT *
 FROM inspections
 WHERE product_id = ?
-ORDER BY timestamp DESC;
+ORDER BY started_at DESC;
+
+selectByWorkOrder:
+SELECT *
+FROM inspections
+WHERE work_order_id = ?
+ORDER BY started_at DESC;
 
 selectUnsynced:
 SELECT *
 FROM inspections
 WHERE synced = 0
-ORDER BY timestamp ASC;
+ORDER BY started_at ASC;
+
+selectByInspector:
+SELECT *
+FROM inspections
+WHERE inspector_id = ?
+ORDER BY started_at DESC;
+
+selectInProgress:
+SELECT *
+FROM inspections
+WHERE inspection_state IN ('PRODUCT_SCANNING', 'PRODUCT_IDENTIFIED', 'IN_PROGRESS', 'AI_COMPLETED', 'HUMAN_REVIEW')
+ORDER BY started_at ASC;
+
+selectCompleted:
+SELECT *
+FROM inspections
+WHERE inspection_state = 'COMPLETED'
+ORDER BY completed_at DESC;
+
+selectByDateRange:
+SELECT *
+FROM inspections
+WHERE started_at >= ? AND started_at <= ?
+ORDER BY started_at DESC;
+
+updateState:
+UPDATE inspections
+SET inspection_state = ?, updated_at = ?
+WHERE id = ?;
+
+updateAiResult:
+UPDATE inspections
+SET ai_result = ?, ai_confidence = ?, inspection_state = 'AI_COMPLETED', updated_at = ?
+WHERE id = ?;
+
+updateHumanResult:
+UPDATE inspections
+SET human_verified = 1, human_result = ?, human_comments = ?, 
+    inspection_state = 'COMPLETED', completed_at = ?, updated_at = ?
+WHERE id = ?;
+
+updateSyncStatus:
+UPDATE inspections
+SET synced = ?, sync_attempts = sync_attempts + 1, last_sync_attempt = ?, updated_at = ?
+WHERE id = ?;
+
+markSynced:
+UPDATE inspections
+SET synced = 1, updated_at = ?
+WHERE id = ?;
 

@@ -1,18 +1,78 @@
 -- Local product cache for KMP (aligned with docs: product info linking)
+-- Enhanced schema based on F-021-1, F-021-2 requirements
 CREATE TABLE products (
   id TEXT NOT NULL PRIMARY KEY,
-  model TEXT NOT NULL,
-  serial_number TEXT NOT NULL,
-  sequence_number INTEGER,
-  status TEXT NOT NULL
+  work_order_id TEXT NOT NULL,
+  instruction_id TEXT NOT NULL,
+  product_type TEXT NOT NULL,
+  machine_number TEXT NOT NULL,
+  production_date TEXT NOT NULL, -- ISO-8601 format
+  monthly_sequence INTEGER NOT NULL,
+  qr_raw_data TEXT,
+  status TEXT NOT NULL DEFAULT 'ACTIVE', -- ACTIVE, INACTIVE, OBSOLETE
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  last_accessed_at INTEGER,
+  access_count INTEGER NOT NULL DEFAULT 0,
+  is_cached INTEGER NOT NULL DEFAULT 1, -- For offline support
+  server_sync_status TEXT NOT NULL DEFAULT 'SYNCED' -- SYNCED, PENDING, FAILED
 );
 
+-- Enhanced queries for product management
 selectAll:
 SELECT *
-FROM products;
+FROM products
+ORDER BY last_accessed_at DESC;
 
 selectById:
 SELECT *
 FROM products
 WHERE id = ?;
+
+selectByWorkOrderId:
+SELECT *
+FROM products
+WHERE work_order_id = ?;
+
+selectByQrData:
+SELECT *
+FROM products
+WHERE qr_raw_data = ?;
+
+selectFrequentlyUsed:
+SELECT *
+FROM products
+WHERE status = 'ACTIVE'
+ORDER BY access_count DESC, last_accessed_at DESC
+LIMIT ?;
+
+selectByProductType:
+SELECT *
+FROM products
+WHERE product_type LIKE ?
+AND status = 'ACTIVE'
+ORDER BY machine_number;
+
+insertOrReplace:
+INSERT OR REPLACE INTO products(
+  id, work_order_id, instruction_id, product_type, machine_number,
+  production_date, monthly_sequence, qr_raw_data, status,
+  created_at, updated_at, last_accessed_at, access_count, is_cached, server_sync_status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateAccessInfo:
+UPDATE products
+SET last_accessed_at = ?, access_count = access_count + 1
+WHERE id = ?;
+
+updateSyncStatus:
+UPDATE products
+SET server_sync_status = ?, updated_at = ?
+WHERE id = ?;
+
+deleteOldUnused:
+DELETE FROM products
+WHERE status != 'ACTIVE'
+AND last_accessed_at < ?
+AND is_cached = 1;
 
