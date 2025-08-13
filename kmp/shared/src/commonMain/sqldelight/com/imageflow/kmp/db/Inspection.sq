@@ -34,6 +34,16 @@ INSERT OR REPLACE INTO inspections(
   synced, sync_attempts, last_sync_attempt, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+selectById:
+SELECT *
+FROM inspections
+WHERE id = ?;
+
+selectAll:
+SELECT *
+FROM inspections
+ORDER BY started_at DESC;
+
 selectByProduct:
 SELECT *
 FROM inspections
