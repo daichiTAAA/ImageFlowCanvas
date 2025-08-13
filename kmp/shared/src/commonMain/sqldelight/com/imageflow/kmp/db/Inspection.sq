@@ -1,21 +1,25 @@
+-- Local inspection records (aligned with docs: inspection result + product linkage)
 CREATE TABLE inspections (
   id TEXT NOT NULL PRIMARY KEY,
-  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL,
   result TEXT,
   timestamp INTEGER NOT NULL,
   synced INTEGER NOT NULL DEFAULT 0
 );
 
-selectByProduct:
-SELECT * FROM inspections WHERE product_id = ? ORDER BY timestamp DESC;
-
-selectUnsynced:
-SELECT * FROM inspections WHERE synced = 0;
-
 insertOrReplace:
 INSERT OR REPLACE INTO inspections(id, product_id, result, timestamp, synced)
-VALUES (?, ?, ?, ?, COALESCE(?, 0));
+VALUES (?, ?, ?, ?, ?);
 
-deleteAll:
-DELETE FROM inspections;
+selectByProduct:
+SELECT *
+FROM inspections
+WHERE product_id = ?
+ORDER BY timestamp DESC;
+
+selectUnsynced:
+SELECT *
+FROM inspections
+WHERE synced = 0
+ORDER BY timestamp ASC;
 

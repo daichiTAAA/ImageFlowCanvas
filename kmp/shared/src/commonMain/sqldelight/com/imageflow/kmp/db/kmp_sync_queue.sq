@@ -1,0 +1,35 @@
+-- Offline sync queue for KMP (based on docs §1.3.3; SQLite variant)
+CREATE TABLE kmp_sync_queue (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  device_id TEXT NOT NULL,
+  device_type TEXT NOT NULL,     -- mobile, desktop, thinklet, etc.
+  app_version TEXT NOT NULL,
+  entity_type TEXT NOT NULL,     -- inspection_execution, inspection_result, etc.
+  entity_id TEXT NOT NULL,
+  operation TEXT NOT NULL,       -- INSERT, UPDATE, DELETE
+  data TEXT NOT NULL,            -- JSON payload (as TEXT in SQLite)
+  priority INTEGER NOT NULL DEFAULT 0,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  last_retry_at INTEGER,         -- epoch millis
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+  processed_at INTEGER           -- epoch millis (NULL means unprocessed)
+);
+
+insertItem:
+INSERT INTO kmp_sync_queue(
+  device_id, device_type, app_version, entity_type, entity_id, operation, data, priority
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectUnprocessed:
+SELECT *
+FROM kmp_sync_queue
+WHERE processed_at IS NULL
+ORDER BY priority DESC, created_at ASC
+LIMIT ?;
+
+markProcessed:
+UPDATE kmp_sync_queue
+SET processed_at = ?
+WHERE id = ?;
+
