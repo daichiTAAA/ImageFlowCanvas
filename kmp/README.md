@@ -224,28 +224,66 @@ sudo ln -sfn /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/Java
 java -version
 ```
 
-現在のセッションでJava 17を使用する場合：
+#### 永続的な設定（推奨）
+毎回環境変数を設定するのを避けるため、シェル設定ファイルに追加します：
+
+```bash
+# .zshrcファイルにJava 17の設定を追加
+echo '
+# Java 17 for ImageFlowCanvas KMP development
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.zshrc
+
+# 設定を現在のセッションに適用
+source ~/.zshrc
+
+# 設定確認
+java -version  # "17.0.x" が表示されることを確認
+echo $JAVA_HOME  # "/opt/homebrew/opt/openjdk@17" が表示されることを確認
+```
+
+#### 一時的な設定（セッションのみ）
+現在のターミナルセッションでのみJava 17を使用する場合：
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export PATH="$JAVA_HOME/bin:$PATH"
 ```
 
+**注意**: bashを使用している場合は `.zshrc` の代わりに `.bashrc` または `.bash_profile` を使用してください。
+
 #### Windows
-1. **手動インストール**
+1. **手動インストール（推奨）**
    - [Eclipse Temurin](https://adoptium.net/temurin/releases/?version=17) からJDK 17をダウンロード
    - インストーラーを実行し、「Set JAVA_HOME environment variable」をチェック
    - 環境変数PATHにJavaのbinディレクトリを追加
+   - **この方法では永続的にJAVA_HOMEが設定されます**
 
-2. **Chocolateyを使用**
+2. **PowerShellで永続的な環境変数設定**
    ```powershell
-   # Chocolateyでインストール
+   # システム環境変数としてJAVA_HOMEを設定（管理者権限が必要）
+   [Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Eclipse Adoptium\jdk-17.0.xx-hotspot", "Machine")
+   
+   # ユーザー環境変数として設定（管理者権限不要）
+   [Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Eclipse Adoptium\jdk-17.0.xx-hotspot", "User")
+   
+   # PATHに追加
+   $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+   [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$env:JAVA_HOME\bin", "User")
+   
+   # 新しいPowerShellセッションで確認
+   java -version
+   ```
+
+3. **Chocolateyを使用**
+   ```powershell
+   # Chocolateyでインストール（自動的に環境変数も設定される）
    choco install openjdk17
 
    # インストール確認
    java -version
    ```
 
-3. **Scoopを使用**
+4. **Scoopを使用**
    ```powershell
    # Scoopでインストール
    scoop bucket add java
@@ -266,7 +304,22 @@ java -version
 
 # 複数のJavaがインストールされている場合の切り替え
 sudo update-alternatives --config java
+
+# 永続的な環境変数設定
+echo '# Java 17 for development
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.bashrc
+
+# 設定を現在のセッションに適用
+source ~/.bashrc
+
+# 設定確認
+echo $JAVA_HOME
+java -version
 ```
+
+**注意**: zshを使用している場合は `.bashrc` の代わりに `.zshrc` を使用してください。
+JAVA_HOMEのパスは `sudo update-alternatives --config java` で確認できます。
 
 #### Linux (CentOS/RHEL/Fedora)
 ```bash
@@ -280,7 +333,22 @@ java -version
 
 # 複数のJavaがインストールされている場合の切り替え
 sudo alternatives --config java
+
+# 永続的な環境変数設定
+echo '# Java 17 for development
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.bashrc
+
+# 設定を現在のセッションに適用
+source ~/.bashrc
+
+# 設定確認
+echo $JAVA_HOME
+java -version
 ```
+
+**注意**: zshを使用している場合は `.bashrc` の代わりに `.zshrc` を使用してください。
+JAVA_HOMEのパスは `sudo alternatives --config java` で確認できます。
 
 #### SDKMAN（全プラットフォーム共通）
 ```bash
@@ -293,9 +361,18 @@ sdk list java                    # 利用可能なJavaバージョンを確認
 sdk install java 17.0.16-tem    # Eclipse Temurin 17をインストール
 sdk use java 17.0.16-tem        # Java 17を使用
 
+# Java 17をデフォルトに設定（永続的な設定）
+sdk default java 17.0.16-tem
+
 # インストール確認
 java -version
+echo $JAVA_HOME
 ```
+
+**SDKMANの利点**: 
+- 複数のJavaバージョンを簡単に管理できる
+- `sdk default` で永続的なデフォルト設定が可能
+- プロジェクトごとに異なるJavaバージョンを使用できる
 
 ## 開発フロー（順番）
 
