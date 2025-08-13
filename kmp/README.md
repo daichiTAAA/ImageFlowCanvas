@@ -1,13 +1,151 @@
-# Kotlin Multiplatform (KMP) モジュール — ImageFlowCanvas クライアント共通
+# ImageFlowCanvas - Android Mobile Inspection Application
 
-ImageFlowCanvas のエッジ/端末クライアント向け共通ライブラリ（Kotlin Multiplatform）です。カメラ・センサー抽象化、軽量DB、ネットワークIF（gRPC/REST/WebSocket）と簡易UIを提供し、Android/iOS/Desktop で再利用します。
+Android mobile inspection application implemented using Kotlin Multiplatform (KMP) architecture based on the requirements in `docs/0100_要件定義/0100_要件定義書.md` and design specifications in `docs/0300_設計_アプローチ1/0307_KotlinMultiplatformアプリ設計.md`.
 
-## 役割と特徴
-- 共通ロジック: `commonMain` にドメイン/ネットワーク/DB 抽象を集約
-- プラットフォーム実装: `androidMain`/`iosMain`/`desktopMain` でカメラ、ファイル、通知、センサーを実装
-- データ永続化: SQLDelight によるローカルDB（`AppDatabase`）
-- UI: Compose Multiplatform による軽量 UI（`RootUI` にプレースホルダー）
-- Desktopプレビュー: `PreviewApp.kt` の `main()` で簡易起動
+## Overview
+
+This implementation provides a comprehensive mobile inspection application that enables quality control inspectors to:
+
+- **Scan QR codes** to identify products for inspection (F-021-1)
+- **Search for products** via server integration (F-021-2)  
+- **Perform AI-powered inspections** using captured images/video (F-022)
+- **Verify and annotate AI results** through human review (F-023)
+- **Manage inspection results** with full traceability (F-024)
+- **Work offline** with automatic synchronization when connected
+
+## Architecture
+
+### Kotlin Multiplatform Structure
+
+```
+shared/
+├── commonMain/          # Shared business logic across platforms
+│   ├── kotlin/
+│   │   └── com/imageflow/kmp/
+│   │       ├── models/          # Data models (ProductInfo, Inspection, etc.)
+│   │       ├── repository/      # Repository interfaces and implementations
+│   │       ├── network/         # API service interfaces
+│   │       ├── usecase/         # Business logic use cases
+│   │       ├── workflow/        # Inspection workflow management
+│   │       ├── state/           # State management
+│   │       ├── qr/              # QR code processing
+│   │       ├── ui/              # Shared UI components
+│   │       └── di/              # Dependency injection
+│   └── sqldelight/             # Database schema definitions
+├── androidMain/         # Android-specific implementations
+├── iosMain/             # iOS-specific implementations (placeholder)
+├── desktopMain/         # Desktop-specific implementations (placeholder)
+├── handheldMain/        # Handheld terminal optimizations
+└── thinkletMain/        # THINKLET wearable device support
+```
+
+### Clean Architecture Layers
+
+1. **Presentation Layer**: Jetpack Compose UI with reactive ViewModels
+2. **Domain Layer**: Use cases encapsulating business logic
+3. **Data Layer**: Repositories with offline-first design
+4. **Platform Layer**: expect/actual implementations for platform-specific features
+
+## Key Features Implemented
+
+### 1. Product Identification (F-021-1, F-021-2)
+
+- **QR Code Scanning**: Camera-based QR code recognition with validation
+- **Product Search**: Server-based product lookup with local caching
+- **Smart Caching**: Frequently used products cached for offline access
+- **Validation**: Comprehensive product data validation with error handling
+
+### 2. Inspection Workflow (F-022, F-023, F-024)
+
+- **State Machine**: Complete inspection state management
+- **AI Integration**: Automated inspection processing with confidence scoring
+- **Human Verification**: Manual review and annotation of AI results
+- **Progress Tracking**: Real-time inspection progress with completion indicators
+- **Result Management**: Comprehensive inspection result storage and retrieval
+
+### 3. Mobile-Optimized UI
+
+- **Material Design 3**: Modern Android UI components
+- **Reactive State Management**: StateFlow-based UI updates
+- **Responsive Design**: Optimized for various screen sizes
+- **Accessibility**: Support for accessibility features
+
+### 4. Offline Support
+
+- **Local Database**: SQLDelight-based offline storage
+- **Sync Management**: Automatic background synchronization
+- **Conflict Resolution**: Intelligent handling of data conflicts
+- **Queue Management**: Offline operation queueing
+
+## Technical Implementation
+
+### Core Models
+
+#### ProductInfo
+```kotlin
+@Serializable
+data class ProductInfo(
+    val id: String,
+    val workOrderId: String,      // 指図番号
+    val instructionId: String,    // 指示番号
+    val productType: String,      // 型式
+    val machineNumber: String,    // 機番
+    val productionDate: String,   // 生産年月日
+    val monthlySequence: Int,     // 月連番
+    val qrRawData: String? = null,
+    val status: ProductStatus = ProductStatus.ACTIVE,
+    // ... additional fields for caching and sync
+)
+```
+
+#### Inspection
+```kotlin
+@Serializable
+data class Inspection(
+    val id: String,
+    val productId: String,
+    val inspectionType: InspectionType,
+    val inspectionState: InspectionState,
+    val aiResult: AiInspectionResult? = null,
+    val humanResult: HumanResult? = null,
+    val imagePaths: List<String> = emptyList(),
+    // ... additional fields for workflow management
+)
+```
+
+### Key Use Cases
+
+- **ScanProductUseCase**: QR code scanning and product identification
+- **SearchProductUseCase**: Server-based product search with caching
+- **InspectionWorkflowUseCase**: Complete inspection workflow management
+- **SyncUseCase**: Data synchronization and offline support
+
+### Database Schema
+
+- **Products table**: Enhanced product information with access tracking
+- **Inspections table**: Comprehensive inspection data with state management
+- **Sync queues**: Priority-based synchronization management
+
+## Android-Specific Features
+
+### Camera Integration
+- **CameraX**: Modern camera API with lifecycle awareness
+- **QR Scanning**: Real-time QR code detection and processing
+- **Image Capture**: High-quality image capture with metadata
+- **Video Recording**: Video capture for detailed inspections
+
+### UI Components
+- **MobileInspectionScreen**: Main inspection interface
+- **QrScanningScreen**: Real-time QR scanning interface
+- **State-driven UI**: Reactive UI updates based on inspection workflow
+
+## Getting Started
+
+### Prerequisites
+- Android Studio Arctic Fox or later
+- Kotlin 1.9.0 or later
+- Android SDK 24 or later
+- **JDK 17** (required for SQLDelight)
 
 ## リポジトリ内の実体
 本プロジェクトは 2 モジュール構成（`:shared`, `:androidApp`）です。

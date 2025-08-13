@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import com.imageflow.kmp.database.AndroidDbContextHolder
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
 import com.imageflow.kmp.ui.mobile.QrScanningScreen
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.state.InspectionState
+import com.imageflow.kmp.di.DependencyContainer
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,86 +32,130 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ImageFlowMobileApp() {
     var currentScreen by remember { mutableStateOf(AppScreen.MAIN) }
-    var inspectionState by remember { mutableStateOf(InspectionState.ProductScanning) }
-    var currentProduct by remember { mutableStateOf<ProductInfo?>(null) }
-    var qrScanResult by remember { mutableStateOf<QrScanResult?>(null) }
+    
+    // Create ViewModel instance using dependency injection
+    val viewModel = remember { 
+        DependencyContainer.createMobileInspectionViewModel(
+            // In real app, would use proper ViewModel scope
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
+        )
+    }
+    
+    // Observe ViewModel state
+    val uiState by viewModel.uiState.collectAsState()
+    val qrScanResult by viewModel.qrScanResult.collectAsState()
+    val inspectionState by viewModel.inspectionState.collectAsState()
+    val inspectionProgress by viewModel.inspectionProgress.collectAsState()
     
     MaterialTheme {
         when (currentScreen) {
             AppScreen.MAIN -> {
                 MobileInspectionScreen(
                     inspectionState = inspectionState,
-                    currentProduct = currentProduct,
+                    currentProduct = uiState.currentProduct,
+                    inspectionProgress = inspectionProgress.completionPercentage,
                     onQrScanClick = {
                         currentScreen = AppScreen.QR_SCAN
+                        viewModel.startQrScanning()
                     },
                     onSearchProductClick = {
                         // TODO: Implement product search screen
+                        currentScreen = AppScreen.PRODUCT_SEARCH
                     },
                     onStartInspectionClick = {
-                        if (currentProduct != null) {
-                            inspectionState = InspectionState.InProgress
-                            // TODO: Start actual inspection workflow
-                        }
+                        viewModel.startInspection(InspectionType.STATIC_IMAGE)
                     },
                     onViewHistoryClick = {
                         // TODO: Implement inspection history screen
+                        currentScreen = AppScreen.HISTORY
                     },
                     onSettingsClick = {
                         // TODO: Implement settings screen
+                        currentScreen = AppScreen.SETTINGS
                     }
                 )
+                
+                // Show error snackbar if there's an error
+                uiState.errorMessage?.let { errorMessage ->
+                    LaunchedEffect(errorMessage) {
+                        // In real app, would show Snackbar
+                        println("Error: $errorMessage")
+                        viewModel.clearErrorMessage()
+                    }
+                }
             }
             
             AppScreen.QR_SCAN -> {
                 QrScanningScreen(
-                    isScanning = true,
+                    isScanning = uiState.isQrScanningActive,
+                    torchEnabled = uiState.torchEnabled,
                     lastScanResult = qrScanResult,
                     onBackClick = {
                         currentScreen = AppScreen.MAIN
-                        qrScanResult = null
+                        viewModel.stopQrScanning()
                     },
                     onAcceptResult = { result ->
-                        if (result.success && result.productInfo != null) {
-                            currentProduct = result.productInfo
-                            inspectionState = InspectionState.ProductIdentified
-                            currentScreen = AppScreen.MAIN
-                        }
+                        viewModel.acceptQrResult(result)
+                        currentScreen = AppScreen.MAIN
                     },
                     onRetryClick = {
-                        qrScanResult = null
-                        // Restart scanning
+                        viewModel.retryQrScan()
                     },
                     onTorchToggle = {
-                        // TODO: Implement torch toggle
+                        viewModel.setTorchEnabled(!uiState.torchEnabled)
                     },
                     onManualEntryClick = {
                         // TODO: Implement manual product entry
+                        currentScreen = AppScreen.PRODUCT_SEARCH
                     }
                 )
+            }
+            
+            AppScreen.PRODUCT_SEARCH -> {
+                // TODO: Implement product search screen
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Text("Product Search Screen - Coming Soon")
+                }
+            }
+            
+            AppScreen.INSPECTION_DETAIL -> {
+                // TODO: Implement inspection detail screen
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Text("Inspection Detail Screen - Coming Soon")
+                }
+            }
+            
+            AppScreen.HISTORY -> {
+                // TODO: Implement history screen
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Text("History Screen - Coming Soon")
+                }
+            }
+            
+            AppScreen.SETTINGS -> {
+                // TODO: Implement settings screen
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Text("Settings Screen - Coming Soon")
+                }
             }
         }
     }
     
-    // Simulate QR scan result for demo
+    // Simulate QR scan result for demo purposes
     LaunchedEffect(currentScreen) {
-        if (currentScreen == AppScreen.QR_SCAN) {
+        if (currentScreen == AppScreen.QR_SCAN && uiState.isQrScanningActive) {
             kotlinx.coroutines.delay(3000) // Simulate scan delay
-            qrScanResult = QrScanResult(
-                success = true,
-                productInfo = ProductInfo(
-                    workOrderId = "WORK001",
-                    instructionId = "INST001",
-                    productType = "TYPE-A",
-                    machineNumber = "MACHINE-123",
-                    productionDate = "2024-01-15",
-                    monthlySequence = 1
-                ).let { it.copy(id = it.generateId()) },
-                rawData = "WORK001,INST001,TYPE-A,MACHINE-123,2024-01-15,1",
-                scanType = ScanType.QR_CODE,
-                confidence = 0.95f,
-                validationStatus = ValidationStatus.VALID
-            )
+            
+            // Simulate a successful QR scan
+            val simulatedQrData = "WORK001,INST001,TYPE-A,MACHINE-123,2024-01-15,1"
+            viewModel.processQrScan(simulatedQrData)
+        }
+    }
+    
+    // Handle loading states
+    if (uiState.isLoading) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            CircularProgressIndicator()
         }
     }
 }
