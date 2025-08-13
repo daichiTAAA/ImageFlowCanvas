@@ -1,6 +1,7 @@
 package com.imageflow.kmp.network
 
 import com.imageflow.kmp.models.*
+import com.imageflow.kmp.qr.DecodedProductInfo
 import com.imageflow.kmp.workflow.ProductSearchQuery
 import kotlinx.serialization.Serializable
 

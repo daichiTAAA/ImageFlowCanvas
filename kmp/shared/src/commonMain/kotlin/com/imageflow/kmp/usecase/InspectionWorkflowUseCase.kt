@@ -7,6 +7,12 @@ import com.imageflow.kmp.network.InspectionApiService
 import com.imageflow.kmp.network.ApiResult
 import com.imageflow.kmp.state.InspectionState
 import com.imageflow.kmp.workflow.InspectionWorkflow
+import com.imageflow.kmp.workflow.InspectionProgress
+import com.imageflow.kmp.workflow.ProductSearchQuery
+import com.imageflow.kmp.workflow.ProductSearchResult
+import com.imageflow.kmp.workflow.HumanReview
+import com.imageflow.kmp.network.AiInspectionRequest
+import com.imageflow.kmp.network.InspectionSubmission
 import kotlinx.coroutines.flow.*
 import java.util.UUID
 
@@ -23,7 +29,16 @@ class InspectionWorkflowUseCase(
     private val _currentInspection = MutableStateFlow<Inspection?>(null)
     override val currentInspection: StateFlow<Inspection?> = _currentInspection.asStateFlow()
     
-    private val _progress = MutableStateFlow(InspectionProgress(0, 0, 0, 0, InspectionState.ProductScanning))
+    private val _progress = MutableStateFlow(
+        InspectionProgress(
+            currentStep = 0,
+            totalSteps = 0,
+            completedItems = 0,
+            totalItems = 0,
+            estimatedTimeRemaining = null,
+            overallStatus = InspectionState.ProductScanning
+        )
+    )
     override val progress: StateFlow<InspectionProgress> = _progress.asStateFlow()
     
     override suspend fun start() {

@@ -1,9 +1,10 @@
 package com.imageflow.kmp.platform
 
-package com.imageflow.kmp.platform
-
 import com.imageflow.kmp.models.QrScanResult
+import com.imageflow.kmp.qr.DecodedProductInfo
+import com.imageflow.kmp.qr.toProductInfo
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.runBlocking
 
 // Enhanced camera controller interface with mobile inspection features
 // Based on F-021-1 QR scanning and F-022 image capture requirements
@@ -39,4 +40,3 @@ actual interface CameraController {
     fun isQrScanningActive(): Boolean
     fun isRecording(): Boolean
 }
-

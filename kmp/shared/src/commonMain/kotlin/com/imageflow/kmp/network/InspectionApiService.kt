@@ -2,6 +2,7 @@ package com.imageflow.kmp.network
 
 import com.imageflow.kmp.models.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 // Inspection API Service interface for AI processing and inspection management
 // Based on F-022, F-023, F-024 requirements
@@ -176,7 +177,7 @@ data class InspectionReport(
     val reportId: String,
     val type: ReportType,
     val generatedAt: Long,
-    val data: Map<String, Any>,
+    val data: Map<String, JsonElement>,
     val downloadUrl: String? = null
 )
 

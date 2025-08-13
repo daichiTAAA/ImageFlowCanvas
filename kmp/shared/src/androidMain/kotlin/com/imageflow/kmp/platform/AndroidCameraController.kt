@@ -6,11 +6,15 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.Recorder
+import androidx.camera.video.VideoCapture
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.qr.DefaultBarcodeDecoder
+import com.imageflow.kmp.qr.toProductInfo
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -74,7 +78,7 @@ internal class AndroidCameraController(
         try {
             stopQrScanning()
             if (isRecordingVideo) {
-                stopVideoRecording()
+                runBlocking { stopVideoRecording() }
             }
             cameraProvider?.unbindAll()
             cameraExecutor.shutdown()
@@ -322,4 +326,3 @@ actual fun provideCameraController(): CameraController {
 fun provideCameraController(context: Context, lifecycleOwner: LifecycleOwner): CameraController {
     return AndroidCameraController(context, lifecycleOwner)
 }
-

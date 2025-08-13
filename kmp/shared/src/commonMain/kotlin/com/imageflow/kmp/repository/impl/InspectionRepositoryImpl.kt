@@ -3,6 +3,10 @@ package com.imageflow.kmp.repository.impl
 import com.imageflow.kmp.database.DatabaseProvider
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.repository.InspectionRepository
+import com.imageflow.kmp.repository.InspectionUpdate
+import com.imageflow.kmp.repository.InspectionStats
+import com.imageflow.kmp.repository.DefectStatistics
+import com.imageflow.kmp.repository.InspectorStats
 import com.imageflow.kmp.state.InspectionState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -163,7 +167,7 @@ class InspectionRepositoryImpl : InspectionRepository {
     override suspend fun updateSyncStatus(inspectionId: String, synced: Boolean, attempts: Int): Boolean {
         return try {
             val now = System.currentTimeMillis()
-            db.inspectionQueries.updateSyncStatus(if (synced) 1 else 0, now, inspectionId)
+            db.inspectionQueries.updateSyncStatus(if (synced) 1L else 0L, now, now, inspectionId)
             true
         } catch (e: Exception) {
             false
@@ -279,4 +283,3 @@ class InspectionRepositoryImpl : InspectionRepository {
         }
     }
 }
-

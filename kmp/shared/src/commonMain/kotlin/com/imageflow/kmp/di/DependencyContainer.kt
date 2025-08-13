@@ -54,11 +54,11 @@ object DependencyContainer {
         )
     }
     
-    fun getProductRepository(): ProductRepository = productRepository
-    fun getInspectionRepository(): InspectionRepository = inspectionRepository
-    fun getScanProductUseCase(): ScanProductUseCase = scanProductUseCase
-    fun getSearchProductUseCase(): SearchProductUseCase = searchProductUseCase
-    fun getInspectionWorkflowUseCase(): InspectionWorkflowUseCase = inspectionWorkflowUseCase
+    fun provideProductRepository(): ProductRepository = productRepository
+    fun provideInspectionRepository(): InspectionRepository = inspectionRepository
+    fun provideScanProductUseCase(): ScanProductUseCase = scanProductUseCase
+    fun provideSearchProductUseCase(): SearchProductUseCase = searchProductUseCase
+    fun provideInspectionWorkflowUseCase(): InspectionWorkflowUseCase = inspectionWorkflowUseCase
 }
 
 // Mock implementations for testing and development

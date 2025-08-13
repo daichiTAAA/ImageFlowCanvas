@@ -2,9 +2,14 @@ package com.imageflow.kmp.usecase
 
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.qr.BarcodeDecoder
+import com.imageflow.kmp.qr.toProductInfo
 import com.imageflow.kmp.repository.ProductRepository
 import com.imageflow.kmp.network.ProductApiService
 import com.imageflow.kmp.network.ApiResult
+import com.imageflow.kmp.network.ProductSearchResponse
+import com.imageflow.kmp.network.ProductSuggestion
+import com.imageflow.kmp.workflow.ProductSearchQuery
+import com.imageflow.kmp.workflow.ProductSearchResult
 
 // Use case for QR code scanning and product identification based on F-021-1 requirements
 class ScanProductUseCase(

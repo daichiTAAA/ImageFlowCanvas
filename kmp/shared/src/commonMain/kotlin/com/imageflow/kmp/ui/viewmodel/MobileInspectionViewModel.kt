@@ -4,6 +4,7 @@ import com.imageflow.kmp.models.*
 import com.imageflow.kmp.state.InspectionState
 import com.imageflow.kmp.usecase.*
 import com.imageflow.kmp.workflow.InspectionProgress
+import com.imageflow.kmp.workflow.ProductSearchResult
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch

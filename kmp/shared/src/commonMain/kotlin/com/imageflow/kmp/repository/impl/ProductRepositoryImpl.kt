@@ -3,6 +3,8 @@ package com.imageflow.kmp.repository.impl
 import com.imageflow.kmp.database.DatabaseProvider
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.repository.ProductRepository
+import com.imageflow.kmp.repository.ProductUpdate
+import com.imageflow.kmp.repository.ProductAccessStats
 import com.imageflow.kmp.workflow.ProductSearchQuery
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -202,4 +204,3 @@ class ProductRepositoryImpl : ProductRepository {
         )
     }
 }
-

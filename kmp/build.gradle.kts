@@ -8,6 +8,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") apply false
     id("org.jetbrains.compose") apply false
     id("app.cash.sqldelight") apply false
+    kotlin("plugin.serialization") apply false
 }
 
 // (Optional) common repositories for all subprojects if needed

@@ -9,5 +9,3 @@ data class Product(
     val status: ProductStatus = ProductStatus.ACTIVE,
 )
 
-enum class ProductStatus { ACTIVE, INACTIVE, OBSOLETE }
-

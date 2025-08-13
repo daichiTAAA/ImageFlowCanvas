@@ -3,10 +3,14 @@ package com.imageflow.kmp.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.imageflow.kmp.database.AndroidDbContextHolder
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
@@ -112,33 +116,45 @@ fun ImageFlowMobileApp() {
             }
             
             AppScreen.PRODUCT_SEARCH -> {
-                // TODO: Implement product search screen
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Text("Product Search Screen - Coming Soon")
+                ScreenWithTopBar(title = "製品検索", onBack = { currentScreen = AppScreen.MAIN }) {
+                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Product Search Screen - Coming Soon")
+                    }
                 }
             }
             
             AppScreen.INSPECTION_DETAIL -> {
-                // TODO: Implement inspection detail screen
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Text("Inspection Detail Screen - Coming Soon")
+                ScreenWithTopBar(title = "検査詳細", onBack = { currentScreen = AppScreen.MAIN }) {
+                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Inspection Detail Screen - Coming Soon")
+                    }
                 }
             }
             
             AppScreen.HISTORY -> {
-                // TODO: Implement history screen
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Text("History Screen - Coming Soon")
+                ScreenWithTopBar(title = "履歴", onBack = { currentScreen = AppScreen.MAIN }) {
+                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("History Screen - Coming Soon")
+                    }
                 }
             }
             
             AppScreen.SETTINGS -> {
-                // TODO: Implement settings screen
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Text("Settings Screen - Coming Soon")
+                ScreenWithTopBar(title = "設定", onBack = { currentScreen = AppScreen.MAIN }) {
+                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Settings Screen - Coming Soon")
+                    }
                 }
             }
         }
+    }
+
+    // Handle system back press to navigate within app
+    BackHandler(enabled = currentScreen != AppScreen.MAIN) {
+        if (currentScreen == AppScreen.QR_SCAN) {
+            viewModel.stopQrScanning()
+        }
+        currentScreen = AppScreen.MAIN
     }
     
     // Simulate QR scan result for demo purposes
@@ -156,6 +172,34 @@ fun ImageFlowMobileApp() {
     if (uiState.isLoading) {
         Box(modifier = Modifier.fillMaxSize()) {
             CircularProgressIndicator()
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScreenWithTopBar(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "戻る"
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding)) {
+            content()
         }
     }
 }
