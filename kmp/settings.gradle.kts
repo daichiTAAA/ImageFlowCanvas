@@ -6,8 +6,8 @@ pluginManagement {
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
     }
     plugins {
-        id("com.android.application") version "8.5.1"
-        id("com.android.library") version "8.5.1"
+        id("com.android.application") version "8.12.0"
+        id("com.android.library") version "8.12.0"
         kotlin("android") version "2.0.21"
         kotlin("multiplatform") version "2.0.21"
         id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"

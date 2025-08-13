@@ -7,6 +7,13 @@ plugins {
     id("app.cash.sqldelight")
 }
 
+// Resolve versions from gradle.properties
+val coroutinesVersion = findProperty("coroutines.version") as String
+val ktorVersion = findProperty("ktor.version") as String
+val sqldelightVersion = findProperty("sqldelight.version") as String
+val androidCompileSdk = (findProperty("android.compileSdk") as String).toInt()
+val androidMinSdk = (findProperty("android.minSdk") as String).toInt()
+
 kotlin {
     // Targets
     jvm("desktop")
@@ -24,17 +31,17 @@ kotlin {
                 implementation(compose.foundation)
 
                 // Coroutines
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${'$'}{property("coroutines.version")}")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
 
                 // Ktor client
-                implementation("io.ktor:ktor-client-core:${'$'}{property("ktor.version")}")
-                implementation("io.ktor:ktor-client-websockets:${'$'}{property("ktor.version")}")
-                implementation("io.ktor:ktor-client-content-negotiation:${'$'}{property("ktor.version")}")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:${'$'}{property("ktor.version")}")
+                implementation("io.ktor:ktor-client-core:$ktorVersion")
+                implementation("io.ktor:ktor-client-websockets:$ktorVersion")
+                implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 
                 // SQLDelight runtime (optional to wire driver per platform)
-                implementation("app.cash.sqldelight:runtime:${'$'}{property("sqldelight.version")}")
-                implementation("app.cash.sqldelight:coroutines-extensions:${'$'}{property("sqldelight.version")}")
+                implementation("app.cash.sqldelight:runtime:$sqldelightVersion")
+                implementation("app.cash.sqldelight:coroutines-extensions:$sqldelightVersion")
 
                 // Kotlin test API for common tests
                 implementation(kotlin("test"))
@@ -44,15 +51,15 @@ kotlin {
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${'$'}{property("coroutines.version")}")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
             }
         }
 
         val androidMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-okhttp:${'$'}{property("ktor.version")}")
+                implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
                 // SQLDelight Android driver can be added when DB schema is defined
-                // implementation("app.cash.sqldelight:android-driver:${'$'}{property("sqldelight.version")}")
+                // implementation("app.cash.sqldelight:android-driver:$sqldelightVersion")
             }
         }
         val androidUnitTest by getting {
@@ -63,12 +70,12 @@ kotlin {
 
         val desktopMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-java:${'$'}{property("ktor.version")}")
+                implementation("io.ktor:ktor-client-java:$ktorVersion")
                 // SQLDelight JDBC driver example
-                // implementation("app.cash.sqldelight:sqlite-driver:${'$'}{property("sqldelight.version")}")
+                // implementation("app.cash.sqldelight:sqlite-driver:$sqldelightVersion")
                 implementation(compose.desktop.currentOs)
                 implementation(compose.ui)
-                implementation("app.cash.sqldelight:sqlite-driver:${'$'}{property("sqldelight.version")}")
+                implementation("app.cash.sqldelight:sqlite-driver:$sqldelightVersion")
             }
         }
 
@@ -82,8 +89,8 @@ kotlin {
             iosArm64Main.dependsOn(this)
             iosSimulatorArm64Main.dependsOn(this)
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:${'$'}{property("ktor.version")}")
-                implementation("app.cash.sqldelight:native-driver:${'$'}{property("sqldelight.version")}")
+                implementation("io.ktor:ktor-client-darwin:$ktorVersion")
+                implementation("app.cash.sqldelight:native-driver:$sqldelightVersion")
             }
         }
 
@@ -104,9 +111,9 @@ kotlin {
 
 android {
     namespace = "com.imageflow.kmp"
-    compileSdk = (property("android.compileSdk") as String).toInt()
+    compileSdk = androidCompileSdk
     defaultConfig {
-        minSdk = (property("android.minSdk") as String).toInt()
+        minSdk = androidMinSdk
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

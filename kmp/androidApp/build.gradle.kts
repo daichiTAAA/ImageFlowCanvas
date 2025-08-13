@@ -5,14 +5,18 @@ plugins {
     id("org.jetbrains.compose")
 }
 
+// Resolve Android SDK levels from gradle.properties
+val androidCompileSdk = (findProperty("android.compileSdk") as String).toInt()
+val androidMinSdk = (findProperty("android.minSdk") as String).toInt()
+
 android {
     namespace = "com.imageflow.kmp.app"
-    compileSdk = (property("android.compileSdk") as String).toInt()
+    compileSdk = androidCompileSdk
 
     defaultConfig {
         applicationId = "com.imageflow.kmp.app"
-        minSdk = (property("android.minSdk") as String).toInt()
-        targetSdk = (property("android.compileSdk") as String).toInt()
+        minSdk = androidMinSdk
+        targetSdk = androidCompileSdk
         versionCode = 1
         versionName = "0.1.0"
     }

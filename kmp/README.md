@@ -39,7 +39,7 @@ kmp/
 
 ## 必要環境
 - JDK: 17
-- Kotlin: 2.0 以降 / Gradle 8.x / AGP 8.x
+- Kotlin: 2.0 以降 / Gradle 8.x / AGP 8.x（本モジュールは Gradle Wrapper 8.14 を同梱）
 - Android SDK: compileSdk 34 / minSdk 24
 - Xcode: 15 以降（iOS ビルド）
 - IDE: Android Studio または IntelliJ IDEA（Compose Multi 対応版）
@@ -53,11 +53,7 @@ kmp/
   - JDK 17 をインストールし、`java -version` で確認
   - Android Studio または Android SDK/Platform-Tools をインストール（`adb`, `emulator` が使えること）
   - AVD（エミュレーター）を作成しておく（Android Studio の Device Manager から作成）
-  - Gradle Wrapper 生成（初回のみ、`kmp/` で実行）:
-    ```bash
-    cd kmp
-    gradle wrapper --gradle-version 8.14 || true   # gradle が無ければ Android Studio で Wrapper を作成
-    ```
+  - 備考: 本リポジトリは `kmp/` 配下に Gradle Wrapper（8.14）を同梱しています
 
 2) エミュレーターを起動
   ```bash
@@ -74,14 +70,13 @@ kmp/
 
 4) 依存を解決してビルド
   ```bash
-  # いずれか使える方でOK（ラッパーが無い場合は gradle を使用）
-  ./gradlew :shared:build   || gradle :shared:build
-  ./gradlew :androidApp:assembleDebug || gradle :androidApp:assembleDebug
+  ./gradlew :shared:build
+  ./gradlew :androidApp:assembleDebug
   ```
 
 5) エミュレーターへインストール
   ```bash
-  ./gradlew :androidApp:installDebug  || gradle :androidApp:installDebug
+  ./gradlew :androidApp:installDebug
   ```
 
 6) アプリを起動
@@ -101,18 +96,11 @@ kmp/
 - 依存解決エラー: `kmp/gradle.properties` のバージョン値（`compose.version`, `ktor.version` など）やネットワーク環境を確認してください。
 
 ### よくあるエラーと対処
-- `[ERROR] Gradle が見つかりません。Android Studio で 'gradle wrapper' を実行するか、Gradle を導入してください。`
-  - 原因: `./gradlew`（Gradle Wrapper）がレポジトリに無く、ローカルに `gradle` も入っていない。
-  - 対処（いずれか）:
-    - Android Studio を使って Wrapper を生成（推奨）
-      1. Android Studio で `ImageFlowCanvas/kmp` を開く
-      2. Sync を完了させる
-      3. Gradle ツールウィンドウで Tasks > build > `wrapper` を実行
-      4. 以後は `./gradlew` が使えます（例: `./gradlew :androidApp:installDebug`）
-    - コマンドで Wrapper を生成
-      - `cd kmp && brew install gradle && gradle wrapper --gradle-version 8.14`
-    - Android Studio から直接実行
-      - Gradle ツールウィンドウで `:androidApp > installDebug` を実行 → エミュレーターから起動
+- `[ERROR] Gradle が見つかりません。…` が出る
+  - 原因: `./gradlew` が見えていないディレクトリでコマンドを実行した可能性があります。
+  - 対処:
+    - `cd kmp` の上で `./gradlew ...` を実行
+    - あるいはプロジェクトルートから `bash kmp/scripts/run-android.sh` を実行
 
 - Compose Compiler プラグイン関連（Kotlin 2.0 以降）
   - エラー例:
@@ -126,19 +114,25 @@ kmp/
   - それでも解決しない場合:
     - Android Studio を再起動し、`File > Invalidate Caches / Restart` を実行
     - Gradle を `./gradlew --stop && ./gradlew clean build` でクリーン
-    - Kotlin/Compose/AGP のバージョン整合: Kotlin 2.0.21 / Compose 1.8.2 / AGP 8.5.1 を前提に同期
+    - Kotlin/Compose/AGP のバージョン整合: Kotlin 2.0.21 / Compose 1.8.2 / AGP 8.5.2 を前提に同期
 
 - Gradle と Compose の不整合（Gradle 9.x milestone 使用時）
   - 症状例:
     - `An exception occurred applying plugin request [id: 'org.jetbrains.compose', version: '1.6.11']`
     - `Shared build service ... ConfigurationProblemReporterService parameters have unexpected type: org.gradle.api.services.BuildServiceParameters`
   - 原因: `org.jetbrains.compose` 1.6.11 は Gradle 9.0-milestone 系と互換性が不十分。Gradle 8.x の安定版で実行する必要があります。
-  - 対処（推奨: Gradle 8.7 に固定）:
+  - 対処（推奨: Gradle 8.14 に固定）:
     1. Wrapper を作成（未作成の場合）: Android Studio の Gradle タスク `wrapper`、または `cd kmp && gradle wrapper --gradle-version 8.14`
     2. Android Studio 設定: Gradle > Use Gradle from: Gradle Wrapper、Gradle JDK: 17
     3. 既存 Wrapper の場合は `kmp/gradle/wrapper/gradle-wrapper.properties` を編集:
        `distributionUrl=https\://services.gradle.org/distributions/gradle-8.14-bin.zip`
     4. 再同期後に `./gradlew :androidApp:installDebug` で確認
+
+### Android Studio の「Updates available（AGPを8.12.0へ）」表示について
+- これはIDEの推奨でありエラーではありません。本モジュールはKotlin Multiplatformの互換性の都合により、AGPを8.5.2に固定しています。
+- 理由: Kotlin 2.0.21時点のKotlin Gradle Pluginがテスト済みとしているAGPの上限は8.5系のため、それ以上に上げると未検証領域となり不具合の可能性があります。
+- 対応: この提案は無視してください。将来Kotlin/Composeの対応が進んだ段階でAGPを更新します。
+- どうしても警告を抑止したい場合は `kotlin.mpp.androidGradlePluginCompatibility.nowarn=true` を `kmp/gradle.properties` に追加できます（推奨はしません）。
   - 代替案: Compose を 1.7.x に上げる（Gradle 9 系との互換性向上）
     - `kmp/settings.gradle.kts` の pluginManagement で `id("org.jetbrains.compose") version "1.7.0"`
     - `kmp/gradle.properties` の `compose.version=1.7.0`
@@ -189,7 +183,6 @@ kmp/
   ```bash
   bash kmp/scripts/run-android.sh
   ```
-- Gradle Wrapper が未生成の場合は、先に `cd kmp && gradle wrapper --gradle-version 8.14` を実行してください（または Android Studio で Wrapper を作成）。
 
 ## 提供 API/抽象（抜粋）
 - ネットワーク IF: `com.imageflow.kmp.network.ApiClient`（`GrpcClient`/`RestClient`/`WebSocketClient`）
