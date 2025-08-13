@@ -38,55 +38,145 @@ kmp/
 ```
 
 ## 必要環境
-- JDK: 17
+- **JDK: 17以上（必須）** - SQLDelight 2.0.2 がJava 17を要求します
 - Kotlin: 2.0 以降 / Gradle 8.x / AGP 8.x（本モジュールは Gradle Wrapper 8.14 を同梱）
-- Android SDK: compileSdk 34 / minSdk 24
+- Android SDK: compileSdk 35 / minSdk 24
 - Xcode: 15 以降（iOS ビルド）
 - IDE: Android Studio または IntelliJ IDEA（Compose Multi 対応版）
 
+### Java 17 のセットアップ（重要）
+
+#### macOS
+```bash
+# Homebrewでインストール
+brew install openjdk@17
+
+# システムJavaとして認識させる（管理者権限が必要）
+sudo ln -sfn /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-17.jdk
+
+# インストール確認
+/usr/libexec/java_home -V
+java -version
+```
+
+現在のセッションでJava 17を使用する場合：
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+#### Windows
+1. **手動インストール**
+   - [Eclipse Temurin](https://adoptium.net/temurin/releases/?version=17) からJDK 17をダウンロード
+   - インストーラーを実行し、「Set JAVA_HOME environment variable」をチェック
+   - 環境変数PATHにJavaのbinディレクトリを追加
+
+2. **Chocolateyを使用**
+   ```powershell
+   # Chocolateyでインストール
+   choco install openjdk17
+
+   # インストール確認
+   java -version
+   ```
+
+3. **Scoopを使用**
+   ```powershell
+   # Scoopでインストール
+   scoop bucket add java
+   scoop install openjdk17
+
+   # インストール確認
+   java -version
+   ```
+
+#### Linux (Ubuntu/Debian)
+```bash
+# APTでインストール
+sudo apt update
+sudo apt install openjdk-17-jdk
+
+# インストール確認
+java -version
+
+# 複数のJavaがインストールされている場合の切り替え
+sudo update-alternatives --config java
+```
+
+#### Linux (CentOS/RHEL/Fedora)
+```bash
+# DNF/YUMでインストール
+sudo dnf install java-17-openjdk-devel
+# または
+sudo yum install java-17-openjdk-devel
+
+# インストール確認
+java -version
+
+# 複数のJavaがインストールされている場合の切り替え
+sudo alternatives --config java
+```
+
+#### SDKMAN（全プラットフォーム共通）
+```bash
+# SDKMANをインストール
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Java 17をインストール
+sdk list java                    # 利用可能なJavaバージョンを確認
+sdk install java 17.0.16-tem    # Eclipse Temurin 17をインストール
+sdk use java 17.0.16-tem        # Java 17を使用
+
+# インストール確認
+java -version
+```
+
 ## 開発フロー（順番）
-1) 初回セットアップ
-- Android Studio を使う場合（推奨）
-  - Android Studio を起動（埋め込み JDK 17/SDK は自動セットアップ）
-  - SDK Manager で「Android SDK Platform-Tools」をインストール（`adb` 確認: `adb version`）
-  - Device Manager で AVD を作成（初回はシステムイメージDL）
-- CLI も使う場合の補足
-  - 本リポジトリは `kmp/` に Gradle Wrapper（8.14）を同梱（`kmp/gradlew`）
-  - もし `kmp/gradle/wrapper/gradle-wrapper.jar` が無い場合は、以下のいずれかで生成
-    - Android Studio: Gradle ツールウィンドウ > Tasks > build > `wrapper`
-    - CLI: `brew install gradle` → `cd kmp && gradle wrapper --gradle-version 8.14`
-  - `chmod +x kmp/gradlew` を実行して実行権限を付与
 
-2) Android Studio で実行（最も簡単）
-- Android Studio で `ImageFlowCanvas/kmp` を開く
-- Gradle 設定: Use Gradle from = Gradle Wrapper、Gradle JDK = 17（通常は自動）
-- AVD を起動（Device Manager）
-- 実行方法（いずれか）
-  - Gradle タスク: `:androidApp > installDebug` を実行 → エミュレータで `com.imageflow.kmp.app` を起動
-  - もしくは Run 構成で `androidApp` を選び起動
+### クイックスタート（Android Studio使用 - 推奨）
+1. **Java 17の確認**
+   ```bash
+   java -version  # "17.0.x" が表示されることを確認
+   ```
 
-3) CLI で実行（ワンコマンド）
-- プロジェクトルートから実行
-  - `bash kmp/scripts/run-android.sh`
+2. **Android Studioでプロジェクトを開く**
+   - Android Studio を起動
+   - 「Open」を選択して `/Users/YOUR_USERNAME/ImageFlowCanvas/kmp` を開く
+   - Gradle 設定: Use Gradle from = Gradle Wrapper、Gradle JDK = 17（通常は自動）
 
-4) CLI で実行（手動）
-- エミュレータ起動 → `adb devices` で接続確認
-- ビルド〜起動
-  - `cd kmp`
-  - `./gradlew :shared:build`
-  - `./gradlew :androidApp:assembleDebug`
-  - `./gradlew :androidApp:installDebug`
-  - `adb shell am start -n com.imageflow.kmp.app/.MainActivity`
+3. **エミュレーターの起動**
+   - Device Manager でAVDを作成・起動
 
-5) 開発サイクルの目安
-- 変更する主な場所
-  - 共有ロジック/UI: `shared/src/commonMain/...`（例: `ui/placeholder/RootUI.kt`）
-  - Android固有: `shared/src/androidMain/...`（例: カメラやセンサー実装）
-- 反映
-  - Studio: 再ビルド/再実行（または `installDebug`）
-  - CLI: `./gradlew :androidApp:installDebug` → 既存アプリを上書きインストール
-- ログ確認
-  - `adb logcat | grep -i imageflow`（例: `AndroidCameraController` のログ）
+4. **アプリの実行**
+   - Run Configuration で「androidApp」を選択
+   - 緑の再生ボタンでビルド＆実行
+
+### コマンドライン実行
+
+#### ワンコマンド実行（最も簡単）
+```bash
+# プロジェクトルートから
+bash kmp/scripts/run-android.sh
+```
+
+#### 手動実行
+```bash
+# 1. エミュレーター起動確認
+adb devices
+
+# 2. プロジェクトフォルダに移動
+cd kmp
+
+# 3. ビルド（Java 17環境で実行）
+./gradlew :androidApp:assembleDebug
+
+# 4. インストール
+./gradlew :androidApp:installDebug
+
+# 5. アプリ起動
+adb shell am start -n com.imageflow.kmp.app/.MainActivity
+```
 
 ## ビルドとテスト（何をしているか）
 - 目的: `:shared` はKMPライブラリ（共通コード）です。この節はライブラリ単体のビルド/テストをまとめています。Androidアプリ（`:androidApp`）のAPKは次の節で扱います。
@@ -97,19 +187,186 @@ kmp/
   - 実行されるもの: `shared/src/commonTest` 等のユニットテスト（現状はプレースホルダ）
   - 成果物: テストレポート（`shared/build/reports/tests` など）
 
-### Androidエミュレーターで試す（順番に実行）
-1) 前提（初回のみ）
-  - JDK 17: Android Studio の埋め込み JDK（17）を利用するのが最も簡単です（Studio が自動設定）。CLI のみで使う場合に限り、別途 JDK 17 をインストールして `java -version` で確認してください。
-  - SDK/Platform-Tools: Android Studio 初回セットアップで SDK/Platform-Tools（adb, emulator）がインストールされます。run-android.sh を使う場合は `adb` が PATH にある必要があります。SDK Manager で「Android SDK Platform-Tools」を入れ、必要なら `export PATH=$ANDROID_HOME/platform-tools:$PATH` を設定（確認: `adb version`）。
-  - AVD（エミュレーター）: Android Studio の Device Manager で作成（初回はシステムイメージのダウンロードが走ります）。
-  - Gradle Wrapper の準備（重要）
-    - 通常は `kmp/` に Wrapper（8.14）を同梱していますが、`kmp/gradle/wrapper/gradle-wrapper.jar` が無い場合は次のいずれかで生成してください。
-      - Android Studio: `ImageFlowCanvas/kmp` を開き、Gradle ツールウィンドウ > Tasks > build > `wrapper` を実行
-      - CLI: `brew install gradle` → `cd kmp && gradle wrapper --gradle-version 8.14`
-    - 念のため `chmod +x kmp/gradlew` を実行して実行権限を付与
-  - 補足: AndroidX は `kmp/gradle.properties` にて有効化済み（`android.useAndroidX=true`）
+### Android Studioでの実行（詳細手順）
 
-2) エミュレーターを起動
+#### 手順1: プロジェクトを開く
+1. Android Studioを起動
+2. 「Open」を選択
+3. `/Users/YOUR_USERNAME/ImageFlowCanvas/kmp` フォルダを選択
+4. 「Open」をクリック
+
+#### 手順2: Gradle設定の確認
+1. `File` > `Settings` (macOSでは `Android Studio` > `Preferences`)
+2. `Build, Execution, Deployment` > `Build Tools` > `Gradle`
+3. 設定を確認:
+   - Use Gradle from: **Gradle Wrapper**
+   - Gradle JDK: **17** （通常は自動選択）
+
+#### 手順3: エミュレーターの起動
+1. `Tools` > `Device Manager`
+2. 既存のAVDを起動、または「Create Device」で新規作成
+3. エミュレーターが起動するまで待機
+
+#### 手順4: アプリの実行
+1. 上部のRun Configurationで「androidApp」を選択
+2. 緑の再生ボタン（▶️）をクリック
+3. エミュレーターが選択されていることを確認して「OK」
+
+#### 手順5: ビルド成功の確認
+- **Build** ウィンドウでビルドログを確認
+- **Run** ウィンドウでインストールログを確認
+- エミュレーターでアプリが自動起動
+
+### エミュレーターを手動で起動する場合
+### 初回セットアップ（詳細）
+
+#### Android Studio使用の場合（推奨）
+
+##### 全プラットフォーム共通
+1. **Android Studio のダウンロード・インストール**
+   - [Android Studio公式サイト](https://developer.android.com/studio) からダウンロード
+   - 各OS用のインストーラーを実行
+
+2. **初回セットアップ**
+   - Android Studio を起動
+   - セットアップウィザードに従ってSDKをインストール
+   - 埋め込みJDK 17/SDK は自動セットアップされます
+
+3. **SDK Manager で「Android SDK Platform-Tools」をインストール**
+   - `Tools` → `SDK Manager`
+   - `SDK Tools` タブで「Android SDK Platform-Tools」をチェック
+   - `Apply` をクリックしてインストール
+
+4. **Device Manager で AVD を作成**
+   - `Tools` → `Device Manager`
+   - `Create Device` で新しいAVDを作成
+   - 初回はシステムイメージのダウンロードが実行されます
+
+5. **プロジェクトを開く**: `ImageFlowCanvas/kmp` フォルダを選択
+
+6. **Gradle同期**: 初回は依存関係のダウンロードに時間がかかります
+
+##### プラットフォーム固有の注意事項
+
+**Windows**
+- Windows Defenderやウイルス対策ソフトが Gradle ビルドを遅延させる可能性があります
+- `%USERPROFILE%\.gradle` フォルダをウイルススキャンの除外に追加することを推奨
+- Android SDKのパスにスペースや日本語文字が含まれないように注意
+
+**Linux**
+- KVM (Kernel Virtual Machine) の有効化が推奨されます（エミュレーター高速化）:
+  ```bash
+  # KVMサポートの確認
+  egrep -c '(vmx|svm)' /proc/cpuinfo
+  
+  # KVMのインストール（Ubuntu/Debian）
+  sudo apt install qemu-kvm libvirt-daemon-system
+  sudo usermod -a -G kvm $USER
+  ```
+- `ANDROID_HOME` 環境変数の設定が必要な場合があります:
+  ```bash
+  export ANDROID_HOME=$HOME/Android/Sdk
+  export PATH=$PATH:$ANDROID_HOME/platform-tools
+  ```
+
+#### CLI使用の場合
+
+##### 1. Gradle Wrapper の準備
+- 通常は `kmp/` に Wrapper（8.14）を同梱
+- `kmp/gradle/wrapper/gradle-wrapper.jar` が無い場合：
+  - Android Studio: Gradle ツールウィンドウ > Tasks > build > `wrapper`
+  - CLI: `gradle wrapper --gradle-version 8.14`（要：Gradle事前インストール）
+
+**実行権限の付与**
+```bash
+# macOS/Linux
+chmod +x kmp/gradlew
+
+# Windows（不要、.batファイルを使用）
+# kmp/gradlew.bat が使用されます
+```
+
+##### 2. Android SDK/Platform-Tools の設定
+
+**macOS/Linux**
+```bash
+# Android SDKのパス確認（Android Studio経由でインストールした場合）
+echo $ANDROID_HOME
+# 通常: $HOME/Library/Android/sdk (macOS) または $HOME/Android/Sdk (Linux)
+
+# PATHに追加（必要な場合）
+export PATH=$ANDROID_HOME/platform-tools:$PATH
+
+# 確認
+adb version
+```
+
+**Windows**
+```powershell
+# Android SDKのパス確認
+echo $env:ANDROID_HOME
+# 通常: C:\Users\%USERNAME%\AppData\Local\Android\Sdk
+
+# PATHに追加（PowerShell）
+$env:PATH += ";$env:ANDROID_HOME\platform-tools"
+
+# 確認
+adb version
+```
+
+##### 3. エミュレーターのコマンドライン起動
+
+**全プラットフォーム共通**
+```bash
+# 利用可能なAVD一覧
+emulator -list-avds
+
+# エミュレーター起動
+emulator -avd <AVD名>
+
+# 接続確認
+adb devices
+```
+
+#### 補足事項
+- **AndroidX**: `kmp/gradle.properties` にて有効化済み（`android.useAndroidX=true`）
+- **コンパイルSDK**: 35に更新（Android SDK Platform 35が自動ダウンロードされます）
+
+### ビルド成功の確認
+
+ビルドが正常に完了すると、以下の場所にAPKファイルが生成されます：
+```
+kmp/androidApp/build/outputs/apk/debug/androidApp-debug.apk
+```
+
+エミュレーターでアプリを確認するには：
+1. **エミュレーターのホーム画面でアプリアイコンを探す**
+2. **アプリ名**: 「ImageFlow KMP」または「AndroidApp」として表示
+3. **タップして起動**
+
+### 開発サイクル
+
+日常的な開発では以下のコマンドが便利です：
+
+```bash
+# ビルドしてエミュレーターにインストール
+./gradlew :androidApp:installDebug
+
+# クリーン＆リビルド＆インストール
+./gradlew clean :androidApp:installDebug
+
+# ログを確認
+adb logcat | grep -i imageflow
+```
+
+#### 主な変更箇所
+- **共有ロジック/UI**: `shared/src/commonMain/...`（例: `ui/placeholder/RootUI.kt`）
+- **Android固有実装**: `shared/src/androidMain/...`（例: カメラやセンサー実装）
+- **SQLスキーマ**: `shared/src/commonMain/sqldelight/com/imageflow/kmp/db/`
+
+#### 変更の反映
+- **Android Studio**: 再ビルド/再実行（または `installDebug` タスク）
+- **CLI**: `./gradlew :androidApp:installDebug` → 既存アプリを上書きインストール
   ```bash
   # いずれか（Android Studio から起動でもOK）
   emulator -list-avds
@@ -150,13 +407,52 @@ kmp/
 - 依存解決エラー: `kmp/gradle.properties` のバージョン値（`compose.version`, `ktor.version` など）やネットワーク環境を確認してください。
 
 ### よくあるエラーと対処
-- `[ERROR] Gradle が見つかりません。…` が出る
-  - 原因: `./gradlew` が見えていないディレクトリでコマンドを実行した可能性があります。
-  - 対処:
-    - `cd kmp` の上で `./gradlew ...` を実行
-    - あるいはプロジェクトルートから `bash kmp/scripts/run-android.sh` を実行
 
-- Compose Compiler プラグイン関連（Kotlin 2.0 以降）
+#### Java 17関連のエラー
+- **エラー**: `Dependency requires at least JVM runtime version 17. This build uses a Java 11 JVM.`
+- **原因**: SQLDelight 2.0.2がJava 17以上を要求するが、Java 11を使用している
+- **対処**: 
+  1. Java 17をインストール（上記「Java 17のセットアップ」参照）
+  2. 環境変数の設定：
+     ```bash
+     export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+     export PATH="$JAVA_HOME/bin:$PATH"
+     ```
+  3. 確認：`java -version` で "17.0.x" が表示されることを確認
+
+#### SQLDelight関連のエラー
+- **エラー**: `Unresolved reference 'AndroidSqliteDriver'`
+- **原因**: SQLDelightのAndroidドライバーが依存関係に含まれていない
+- **対処**: `shared/build.gradle.kts`の`androidMain`セクションに以下を追加
+  ```kotlin
+  implementation("app.cash.sqldelight:android-driver:$sqldelightVersion")
+  ```
+
+#### Ktor関連のエラー
+- **エラー**: `Unresolved reference 'ContentNegotiation'`
+- **原因**: Ktorのプラグインインポートパスが間違っている
+- **対処**: 正しいインポートパスを使用
+  ```kotlin
+  import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+  import io.ktor.client.plugins.logging.Logging
+  ```
+
+#### 型の不一致エラー
+- **エラー**: `Operator '==' cannot be applied to 'kotlin.Long' and 'kotlin.Int'`
+- **原因**: SQLiteの数値型（Long）とKotlinのInt型の比較
+- **対処**: Long型リテラルを使用
+  ```kotlin
+  synced = row.synced == 1L  // 1 ではなく 1L
+  ```
+
+#### Gradle関連のエラー
+- **エラー**: `[ERROR] Gradle が見つかりません。…`
+- **原因**: `./gradlew` が見えていないディレクトリでコマンドを実行
+- **対処**:
+  - `cd kmp` の上で `./gradlew ...` を実行
+  - あるいはプロジェクトルートから `bash kmp/scripts/run-android.sh` を実行
+
+#### Compose Compiler プラグイン関連のエラー
   - エラー例:
     - `Starting in Kotlin 2.0, the Compose Compiler Gradle plugin is required when compose is enabled.`
     - `Configuration problem: ... you must apply "org.jetbrains.kotlin.plugin.compose" plugin.`
@@ -257,9 +553,76 @@ kmp/
 - Desktop: IDE で `PreviewApp.main()` を実行して開発中 UI を確認。
 
 ## トラブルシューティング
-- Gradle JDK は 17 を使用（IDE の Gradle JVM 設定を確認）
-- 依存解決エラー時は `gradle.properties` のバージョン値（`ktor.version`/`coroutines.version`/`sqldelight.version` 等）を確認
-- iOS Framework 出力で失敗する場合は Xcode のコマンドラインツール設定やターゲットの選択を確認
+
+### 環境関連
+- **Java バージョン**: JDK 17以上が必須（`java -version` で確認）
+- **Gradle JDK**: IDE の Gradle JVM 設定を17に設定
+- **Android SDK**: SDK Manager で Platform-Tools をインストール済みか確認
+
+#### プラットフォーム固有のトラブル
+
+**Windows固有**
+- **長いパス名エラー**: Windows の260文字パス制限に注意
+  - プロジェクトをCドライブ直下など短いパスに配置
+  - または長いパス名を有効化: `gpedit.msc` → コンピューターの構成 → 管理用テンプレート → システム → ファイルシステム
+- **ウイルス対策ソフト**: Gradleビルドが遅い場合
+  - `%USERPROFILE%\.gradle` をスキャン除外に追加
+  - `%USERPROFILE%\.android` をスキャン除外に追加
+- **PowerShell実行ポリシー**: スクリプト実行が拒否される場合
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+
+**Linux固有**
+- **KVM未対応**: エミュレーターが非常に遅い場合
+  ```bash
+  # CPU仮想化サポートの確認
+  egrep -c '(vmx|svm)' /proc/cpuinfo
+  
+  # KVMインストール（Ubuntu/Debian）
+  sudo apt install qemu-kvm libvirt-daemon-system
+  sudo usermod -a -G kvm $USER
+  # 再ログインまたは再起動が必要
+  ```
+- **32bit ライブラリ**: Android SDKツールに必要（64bit Linux）
+  ```bash
+  # Ubuntu/Debian
+  sudo apt install libc6:i386 libncurses5:i386 libstdc++6:i386 lib32z1
+  
+  # CentOS/RHEL/Fedora
+  sudo dnf install glibc.i686 ncurses-libs.i686 libstdc++.i686
+  ```
+- **権限エラー**: `/dev/kvm` へのアクセス拒否
+  ```bash
+  # ユーザーをkvmグループに追加
+  sudo usermod -a -G kvm $USER
+  # 再ログインが必要
+  ```
+
+**macOS固有**
+- **Rosetta 2**: Apple Silicon Mac で Intel バイナリを実行する場合
+  ```bash
+  /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+  ```
+- **Gatekeeper**: 未署名のアプリケーション実行時
+  - システム環境設定 → セキュリティとプライバシー → 一般 → 「このまま開く」
+
+### 依存関係エラー
+- **ネットワーク**: インターネット接続とプロキシ設定を確認
+- **バージョン整合性**: `gradle.properties` の各バージョン値を確認
+  - `ktor.version=2.3.12`
+  - `coroutines.version=1.8.1`
+  - `sqldelight.version=2.0.2`
+
+### エミュレーター関連
+- **デバイス未接続**: `adb devices` で接続を確認
+- **AVD起動失敗**: Android Studio の Device Manager で別のAVDを試す
+- **アプリが見つからない**: エミュレーターのアプリ一覧で「ImageFlow KMP」または「AndroidApp」を探す
+
+### ビルド関連
+- **クリーンビルド**: `./gradlew clean` 後に再ビルド
+- **Gradle Daemon**: `./gradlew --stop` でDaemonを停止後に再実行
+- **キャッシュクリア**: Android Studio で `File` > `Invalidate Caches / Restart`
 
 ## 今後の拡張（TODO）
 - gRPC/REST/WS クライアントの実装（現在は IF のみ）
