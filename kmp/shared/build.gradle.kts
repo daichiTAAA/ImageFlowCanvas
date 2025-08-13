@@ -23,6 +23,9 @@ kotlin {
     iosArm64()
     iosSimulatorArm64()
 
+    // Use JDK 17 toolchain to match Android's Java target
+    jvmToolchain(17)
+
     sourceSets {
         val commonMain by getting {
             dependencies {
@@ -38,6 +41,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-websockets:$ktorVersion")
                 implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
+                implementation("io.ktor:ktor-client-logging:$ktorVersion")
 
                 // SQLDelight runtime (optional to wire driver per platform)
                 implementation("app.cash.sqldelight:runtime:$sqldelightVersion")
@@ -58,8 +62,8 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
-                // SQLDelight Android driver can be added when DB schema is defined
-                // implementation("app.cash.sqldelight:android-driver:$sqldelightVersion")
+                // SQLDelight Android driver
+                implementation("app.cash.sqldelight:android-driver:$sqldelightVersion")
             }
         }
         val androidUnitTest by getting {
@@ -116,8 +120,8 @@ android {
         minSdk = androidMinSdk
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 

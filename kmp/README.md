@@ -44,16 +44,70 @@ kmp/
 - Xcode: 15 以降（iOS ビルド）
 - IDE: Android Studio または IntelliJ IDEA（Compose Multi 対応版）
 
-## ビルドとテスト
-- 共通ビルド: `./gradlew :shared:build`
-- 共通テスト: `./gradlew :shared:check`
+## 開発フロー（順番）
+1) 初回セットアップ
+- Android Studio を使う場合（推奨）
+  - Android Studio を起動（埋め込み JDK 17/SDK は自動セットアップ）
+  - SDK Manager で「Android SDK Platform-Tools」をインストール（`adb` 確認: `adb version`）
+  - Device Manager で AVD を作成（初回はシステムイメージDL）
+- CLI も使う場合の補足
+  - 本リポジトリは `kmp/` に Gradle Wrapper（8.14）を同梱（`kmp/gradlew`）
+  - もし `kmp/gradle/wrapper/gradle-wrapper.jar` が無い場合は、以下のいずれかで生成
+    - Android Studio: Gradle ツールウィンドウ > Tasks > build > `wrapper`
+    - CLI: `brew install gradle` → `cd kmp && gradle wrapper --gradle-version 8.14`
+  - `chmod +x kmp/gradlew` を実行して実行権限を付与
+
+2) Android Studio で実行（最も簡単）
+- Android Studio で `ImageFlowCanvas/kmp` を開く
+- Gradle 設定: Use Gradle from = Gradle Wrapper、Gradle JDK = 17（通常は自動）
+- AVD を起動（Device Manager）
+- 実行方法（いずれか）
+  - Gradle タスク: `:androidApp > installDebug` を実行 → エミュレータで `com.imageflow.kmp.app` を起動
+  - もしくは Run 構成で `androidApp` を選び起動
+
+3) CLI で実行（ワンコマンド）
+- プロジェクトルートから実行
+  - `bash kmp/scripts/run-android.sh`
+
+4) CLI で実行（手動）
+- エミュレータ起動 → `adb devices` で接続確認
+- ビルド〜起動
+  - `cd kmp`
+  - `./gradlew :shared:build`
+  - `./gradlew :androidApp:assembleDebug`
+  - `./gradlew :androidApp:installDebug`
+  - `adb shell am start -n com.imageflow.kmp.app/.MainActivity`
+
+5) 開発サイクルの目安
+- 変更する主な場所
+  - 共有ロジック/UI: `shared/src/commonMain/...`（例: `ui/placeholder/RootUI.kt`）
+  - Android固有: `shared/src/androidMain/...`（例: カメラやセンサー実装）
+- 反映
+  - Studio: 再ビルド/再実行（または `installDebug`）
+  - CLI: `./gradlew :androidApp:installDebug` → 既存アプリを上書きインストール
+- ログ確認
+  - `adb logcat | grep -i imageflow`（例: `AndroidCameraController` のログ）
+
+## ビルドとテスト（何をしているか）
+- 目的: `:shared` はKMPライブラリ（共通コード）です。この節はライブラリ単体のビルド/テストをまとめています。Androidアプリ（`:androidApp`）のAPKは次の節で扱います。
+- 共通ビルド（ライブラリのビルド）: `./gradlew :shared:build`
+  - 生成物の例: `shared/build/` 配下（ターゲット別にKLIB/JVMクラス/JARなど）
+  - 備考: Androidアプリをビルドするときは、Gradleが依存として自動ビルドするため省略可です。
+- 共通テスト（ライブラリのテスト）: `./gradlew :shared:check`
+  - 実行されるもの: `shared/src/commonTest` 等のユニットテスト（現状はプレースホルダ）
+  - 成果物: テストレポート（`shared/build/reports/tests` など）
 
 ### Androidエミュレーターで試す（順番に実行）
 1) 前提（初回のみ）
-  - JDK 17 をインストールし、`java -version` で確認
-  - Android Studio または Android SDK/Platform-Tools をインストール（`adb`, `emulator` が使えること）
-  - AVD（エミュレーター）を作成しておく（Android Studio の Device Manager から作成）
-  - 備考: 本リポジトリは `kmp/` 配下に Gradle Wrapper（8.14）を同梱しています
+  - JDK 17: Android Studio の埋め込み JDK（17）を利用するのが最も簡単です（Studio が自動設定）。CLI のみで使う場合に限り、別途 JDK 17 をインストールして `java -version` で確認してください。
+  - SDK/Platform-Tools: Android Studio 初回セットアップで SDK/Platform-Tools（adb, emulator）がインストールされます。run-android.sh を使う場合は `adb` が PATH にある必要があります。SDK Manager で「Android SDK Platform-Tools」を入れ、必要なら `export PATH=$ANDROID_HOME/platform-tools:$PATH` を設定（確認: `adb version`）。
+  - AVD（エミュレーター）: Android Studio の Device Manager で作成（初回はシステムイメージのダウンロードが走ります）。
+  - Gradle Wrapper の準備（重要）
+    - 通常は `kmp/` に Wrapper（8.14）を同梱していますが、`kmp/gradle/wrapper/gradle-wrapper.jar` が無い場合は次のいずれかで生成してください。
+      - Android Studio: `ImageFlowCanvas/kmp` を開き、Gradle ツールウィンドウ > Tasks > build > `wrapper` を実行
+      - CLI: `brew install gradle` → `cd kmp && gradle wrapper --gradle-version 8.14`
+    - 念のため `chmod +x kmp/gradlew` を実行して実行権限を付与
+  - 補足: AndroidX は `kmp/gradle.properties` にて有効化済み（`android.useAndroidX=true`）
 
 2) エミュレーターを起動
   ```bash
@@ -133,10 +187,12 @@ kmp/
 - 理由: Kotlin 2.0.21時点のKotlin Gradle Pluginがテスト済みとしているAGPの上限は8.5系のため、それ以上に上げると未検証領域となり不具合の可能性があります。
 - 対応: この提案は無視してください。将来Kotlin/Composeの対応が進んだ段階でAGPを更新します。
 - どうしても警告を抑止したい場合は `kotlin.mpp.androidGradlePluginCompatibility.nowarn=true` を `kmp/gradle.properties` に追加できます（推奨はしません）。
-  - 代替案: Compose を 1.7.x に上げる（Gradle 9 系との互換性向上）
+- 代替案: Compose を 1.7.x に上げる（Gradle 9 系との互換性向上）
     - `kmp/settings.gradle.kts` の pluginManagement で `id("org.jetbrains.compose") version "1.7.0"`
     - `kmp/gradle.properties` の `compose.version=1.7.0`
     - 周辺バージョンの整合確認が必要
+
+ 
 
 
 ### Android（ライブラリとして利用）

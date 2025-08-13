@@ -24,7 +24,7 @@ class InspectionRepositoryImpl : InspectionRepository {
                 productId = row.product_id,
                 result = row.result,
                 timestamp = row.timestamp,
-                synced = row.synced == 1
+                synced = row.synced == 1L
             )
         }
 
@@ -35,7 +35,7 @@ class InspectionRepositoryImpl : InspectionRepository {
                 productId = row.product_id,
                 result = row.result,
                 timestamp = row.timestamp,
-                synced = row.synced == 1
+                synced = row.synced == 1L
             )
         }
 }

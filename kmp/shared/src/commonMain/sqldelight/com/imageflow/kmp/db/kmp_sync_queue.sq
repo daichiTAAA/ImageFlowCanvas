@@ -19,7 +19,7 @@ insertItem:
 INSERT INTO kmp_sync_queue(
   device_id, device_type, app_version, entity_type, entity_id, operation, data, priority
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (:device_id, :device_type, :app_version, :entity_type, :entity_id, :operation, :data, :priority);
 
 selectUnprocessed:
 SELECT *

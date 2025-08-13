@@ -30,14 +30,24 @@ android {
     buildFeatures {
         compose = true
     }
-    // Compose Compiler は Kotlin 2.0 の compose plugin により管理されます
 
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 }
+
+kotlin {
+    jvmToolchain(17)
+}
+
+// Kotlin toolchain: use JDK 17 to match shared module
 
 dependencies {
     implementation(project(":shared"))
@@ -45,6 +55,7 @@ dependencies {
     // Compose（JetBrains Composeを利用）
     implementation(compose.ui)
     implementation(compose.foundation)
+    implementation(compose.material3)
 
     // Android 用セットアップ
     implementation("androidx.activity:activity-compose:1.9.1")
