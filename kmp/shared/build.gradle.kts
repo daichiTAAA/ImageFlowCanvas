@@ -32,6 +32,7 @@ kotlin {
                 // Compose core (runtime/foundation)
                 implementation(compose.runtime)
                 implementation(compose.foundation)
+                implementation(compose.material3)
 
                 // Coroutines
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
