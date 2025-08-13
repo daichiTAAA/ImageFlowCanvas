@@ -90,7 +90,7 @@ fun ImageFlowMobileApp() {
             }
             
             AppScreen.QR_SCAN -> {
-                QrScanningScreen(
+                QrScanningScreenAndroid(
                     isScanning = uiState.isQrScanningActive,
                     torchEnabled = uiState.torchEnabled,
                     lastScanResult = qrScanResult,
@@ -98,19 +98,22 @@ fun ImageFlowMobileApp() {
                         currentScreen = AppScreen.MAIN
                         viewModel.stopQrScanning()
                     },
+                    onTorchToggle = {
+                        viewModel.setTorchEnabled(!uiState.torchEnabled)
+                    },
+                    onManualEntryClick = {
+                        // TODO: Manual input
+                        currentScreen = AppScreen.PRODUCT_SEARCH
+                    },
+                    onRawScanned = { raw ->
+                        viewModel.processQrScan(raw)
+                    },
                     onAcceptResult = { result ->
                         viewModel.acceptQrResult(result)
                         currentScreen = AppScreen.MAIN
                     },
                     onRetryClick = {
                         viewModel.retryQrScan()
-                    },
-                    onTorchToggle = {
-                        viewModel.setTorchEnabled(!uiState.torchEnabled)
-                    },
-                    onManualEntryClick = {
-                        // TODO: Implement manual product entry
-                        currentScreen = AppScreen.PRODUCT_SEARCH
                     }
                 )
             }

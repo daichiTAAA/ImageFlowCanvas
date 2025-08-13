@@ -1,0 +1,12 @@
+# Requirements for QR Code Test Data Generation
+# ImageFlowCanvas QRコードテストデータ生成用Pythonライブラリ
+
+# QRコード生成ライブラリ
+qrcode[pil]==8.2
+
+# 画像処理ライブラリ（PILライブラリ）
+Pillow==11.3.0
+
+# 標準ライブラリ（参考用、pipでのインストール不要）
+# json - JSONデータ処理
+# os - ファイル・ディレクトリ操作
