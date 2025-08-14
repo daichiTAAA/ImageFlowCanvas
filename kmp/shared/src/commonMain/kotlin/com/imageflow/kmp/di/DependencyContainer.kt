@@ -70,6 +70,7 @@ object DependencyContainer {
     fun provideSearchProductUseCase(): SearchProductUseCase = searchProductUseCase
     fun provideInspectionWorkflowUseCase(): InspectionWorkflowUseCase = inspectionWorkflowUseCase
     fun provideProductApiService(): ProductApiService = productApiService
+    fun provideRestClient(): com.imageflow.kmp.network.RestClient = restClient
 
     // Configuration hook for overriding API base URL at runtime
     fun configureApiBase(url: String) {

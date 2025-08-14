@@ -17,6 +17,7 @@ fun SettingsScreen(
     onApply: (String) -> Unit,
     onTest: suspend (String) -> com.imageflow.kmp.ui.viewmodel.ConnectionTestResult,
     onResetDefault: () -> Unit,
+    onDiagnose: suspend (String) -> com.imageflow.kmp.ui.viewmodel.NetworkDiagnosisResult,
     onBack: () -> Unit,
 ) {
     var url by remember { mutableStateOf(initialBaseUrl) }
@@ -25,6 +26,7 @@ fun SettingsScreen(
     var testResult by remember { mutableStateOf<String?>(null) }
     var testError by remember { mutableStateOf<String?>(null) }
     var validationError by remember { mutableStateOf<String?>(null) }
+    var diag by remember { mutableStateOf<com.imageflow.kmp.ui.viewmodel.NetworkDiagnosisResult?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -87,6 +89,7 @@ fun SettingsScreen(
                         testing = true
                         testResult = null
                         testError = null
+                        diag = null
                         scope.launch {
                             val res = try { onTest(url.trim()) } catch (e: Exception) { com.imageflow.kmp.ui.viewmodel.ConnectionTestResult(false, e.message) }
                             testResult = if (res.ok) "OK" else "NG"
@@ -97,19 +100,38 @@ fun SettingsScreen(
                 ) { Text(if (testing) "テスト中..." else "接続テスト") }
                 if (testResult != null) {
                     val color = if (testResult == "OK") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    Text("結果: ${'$'}testResult", color = color)
+                    Text("結果: $testResult", color = color)
                 }
             }
             if (!testing && testResult == "NG" && testError != null) {
                 Text(
-                    text = "理由: ${'$'}testError",
+                    text = "理由: $testError",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    scope.launch {
+                        diag = onDiagnose(url.trim())
+                    }
+                }) { Text("詳細診断") }
+            }
+            diag?.let { d ->
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Normalized Base: ${d.normalizedBase}")
+                        Text("Test Path: ${d.testPath}")
+                        Text("Final URL: ${d.finalUrl}")
+                        val okColor = if (d.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        Text("OK: ${d.ok}", color = okColor)
+                        d.message?.let { Text("Message: $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
             Divider()
             Text(
-                text = "ヒント: エミュレータは 10.0.2.2、実機はPCのLAN IPを使用。ポートと /api/v1 を忘れずに。",
+                text = "ヒント: エミュレータは 10.0.2.2、実機はPCのLAN IPを使用。ベースURLは /api/v1 まで（/products は含めない）。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

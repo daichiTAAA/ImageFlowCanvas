@@ -173,6 +173,9 @@ fun ImageFlowMobileApp() {
                         settingsVm.apply()
                         settingsVm.testConnection()
                     },
+                    onDiagnose = { newUrl ->
+                        settingsVm.diagnose(newUrl)
+                    },
                     onResetDefault = {
                         settingsVm.resetToDefault()
                     },
