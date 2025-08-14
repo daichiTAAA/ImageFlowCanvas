@@ -10,6 +10,7 @@ import com.imageflow.kmp.network.PlatformNetworkDiagnostics
 import com.imageflow.kmp.platform.PlatformDefaults
 import com.imageflow.kmp.util.UrlUtils
 import com.imageflow.kmp.util.NetworkDebugUtils
+import com.imageflow.kmp.util.ConnectionTroubleshootingGuide
 import com.imageflow.kmp.network.RestClient
 
 data class ConnectionTestResult(val ok: Boolean, val message: String? = null)
@@ -19,6 +20,7 @@ data class NetworkDiagnosisResult(
     val finalUrl: String,
     val ok: Boolean,
     val message: String? = null,
+    val troubleshootingGuide: String? = null,
 )
 
 class SettingsViewModel {
@@ -106,6 +108,7 @@ class SettingsViewModel {
                     finalUrl = finalUrl,
                     ok = true,
                     message = "Success (${duration}ms, ${response.length} chars)",
+                    troubleshootingGuide = null,
                 )
             } catch (e: Throwable) {
                 println("SettingsViewModel: Connection failed: ${e.message}")
@@ -130,7 +133,8 @@ class SettingsViewModel {
                     testPath = "/products",
                     finalUrl = finalUrl,
                     ok = false,
-                    message = errorMessage
+                    message = errorMessage,
+                    troubleshootingGuide = ConnectionTroubleshootingGuide.getGuidanceForError(e.message),
                 )
             }
         } finally {
@@ -147,6 +151,7 @@ class SettingsViewModel {
                 finalUrl = tempUrl,
                 ok = false,
                 message = err ?: "Invalid URL",
+                troubleshootingGuide = ConnectionTroubleshootingGuide.getGuidanceForError(err),
             )
         }
         
@@ -164,7 +169,8 @@ class SettingsViewModel {
             testPath = "/products",
             finalUrl = finalUrl,
             ok = platformResult.success,
-            message = platformResult.message + if (platformResult.details != null) " | Preview: ${platformResult.details}" else ""
+            message = platformResult.message + if (platformResult.details != null) " | Preview: ${platformResult.details}" else "",
+            troubleshootingGuide = if (!platformResult.success) ConnectionTroubleshootingGuide.getGuidanceForError(platformResult.message) else null,
         )
     }
 }
