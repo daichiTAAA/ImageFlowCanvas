@@ -30,3 +30,4 @@ rootProject.name = "imageflow-kmp"
 
 include(":shared")
 include(":androidApp")
+include(":desktopApp")

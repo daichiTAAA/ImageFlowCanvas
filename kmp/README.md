@@ -148,7 +148,7 @@ data class Inspection(
 - **JDK 17** (required for SQLDelight)
 
 ## リポジトリ内の実体
-本プロジェクトは 2 モジュール構成（`:shared`, `:androidApp`）です。
+本プロジェクトは 3 モジュール構成（`:shared`, `:androidApp`, `:desktopApp`）です。
 
 ### モジュール構成の詳細
 
@@ -169,6 +169,13 @@ data class Inspection(
   - `AndroidManifest.xml`: アプリの権限・設定
   - `:shared`への依存関係
 
+#### `:desktopApp` - Desktop実行可能アプリ（Compose Desktop）
+- **役割**: `:shared`を使用するWindows/macOS/Linux向けデスクトップアプリ
+- **出力**: 実行可能アプリ（開発時は `run`、配布時は DMG/MSI/DEB）
+- **内容**:
+  - `Main.kt`: アプリのエントリーポイント（Compose Desktop）
+  - `:shared`への依存関係（UI/ロジック共通化）
+
 ### 依存関係の流れ
 ```
 :androidApp ─depends on─> :shared
@@ -179,7 +186,7 @@ data class Inspection(
 
 ```
 kmp/
-├─ settings.gradle.kts         # `:shared`, `:androidApp` を含む
+├─ settings.gradle.kts         # `:shared`, `:androidApp`, `:desktopApp` を含む
 ├─ build.gradle.kts            # ルート（必要最低限）
 ├─ gradle.properties           # バージョン/Android 設定
 ├─ scripts/                    # 補助スクリプト
@@ -190,6 +197,9 @@ kmp/
 │     └─ main/
 │        ├─ AndroidManifest.xml
 │        └─ kotlin/com/imageflow/kmp/app/MainActivity.kt
+├─ desktopApp/                 # Desktop 実行アプリ（Compose Desktop）
+│  ├─ build.gradle.kts
+│  └─ src/jvmMain/kotlin/com/imageflow/kmp/desktop/Main.kt
 └─ shared/                     # KMP ライブラリ本体
    ├─ build.gradle.kts         # ターゲット/依存の定義
    └─ src/
@@ -201,6 +211,42 @@ kmp/
       ├─ thinkletMain/         # THINKLET 向け補助ソースセット
       └─ commonTest/           # 共通テスト
 ```
+
+## Desktop アプリ（Compose Multiplatform）
+
+### 特長（Android版との共通化）
+- **UI/ロジック共通**: `:shared` の `MobileInspectionScreen` / `ProductSearchScreen` / `SettingsScreen` と各種 ViewModel/UseCase をそのまま利用
+- **画面構成**: Android版と同一。トップ、QRスキャン、順序情報検索、設定など
+- **QRスキャン**: デスクトップは現状プレースホルダUI（3秒後にサンプルQRを擬似入力）。将来的にUSB/ネットワークカメラ連携を `shared/desktopMain` の `CameraController` 実装に接続可能
+
+### 事前準備
+- JDK 17 必須（`java -version` が 17.x であること）
+- 初回は依存取得のためインターネット接続が必要
+
+### 起動（開発）
+```bash
+cd kmp
+./gradlew :desktopApp:run
+```
+
+### パッケージ作成（配布物）
+```bash
+cd kmp
+./gradlew :desktopApp:package
+# 出力先: kmp/desktopApp/build/compose/binaries/main/{dmg,msi,deb}/
+```
+
+### 設定（API ベースURL）
+- アプリ右上の「設定」から API ベースURLを入力・保存
+- 例:
+  - ローカルPCでバックエンドが `8000` で起動: `http://127.0.0.1:8000/api/v1`
+  - 別端末へ接続: `http://<サーバーIP>:8000/api/v1`
+- Android向けの `10.0.2.2` はエミュレーター専用のため、デスクトップでは使用しません
+
+### よくあるエラー
+- 依存解決エラー: ネットワーク/プロキシ設定を確認（初回は依存取得が走ります）
+- Javaバージョン不一致: `JAVA_HOME` が 17 になっているか確認
+- API接続失敗: 設定画面の「接続テスト」/「詳細診断」で原因を確認し、`docs/NETWORK_TROUBLESHOOTING.md` を参照
 
 ## 必要環境
 - **JDK: 17以上（必須）** - SQLDelight 2.0.2 がJava 17を要求します
@@ -861,7 +907,7 @@ adb logcat | grep -i imageflow
 ## 実装メモ（プラットフォーム別）
 - Android: `AndroidDbContextHolder` を初期化してから DB を使用。カメラ/センサー/通知は `androidMain` 実装を利用。
 - iOS: SQLDelight の Native ドライバを使用。生成 Framework を Xcode に追加して呼び出し。
-- Desktop: IDE で `PreviewApp.main()` を実行して開発中 UI を確認。
+- Desktop: `./gradlew :desktopApp:run` で実行、または IDE で `PreviewApp.main()` を実行して開発中 UI を確認。
 
 ## トラブルシューティング
 
@@ -938,7 +984,7 @@ adb logcat | grep -i imageflow
 ## 今後の拡張（TODO）
 - gRPC/REST/WS クライアントの実装（現在は IF のみ）
 - CocoaPods/SwiftPM 統合の公式化
-- Desktop 実行用 Gradle タスク（`compose.desktop.application`）の追加
+- Desktop カメラ連携（USB/Network）実装
 - DB スキーマとマイグレーション定義
 
 本モジュールは ImageFlowCanvas 全体の「端末/エッジ側」コンポーネントです。Web/Backend とあわせて利用することで、高速な画像処理パイプラインやリアルタイム監視を端末側で活用できます。
