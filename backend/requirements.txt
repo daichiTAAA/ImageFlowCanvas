@@ -17,8 +17,8 @@ requests==2.31.0
 asyncpg==0.29.0
 sqlalchemy==2.0.23
 alembic==1.13.1
-grpcio>=1.73.1
-grpcio-health-checking>=1.73.1
+grpcio>=1.74.0
+grpcio-health-checking>=1.74.0
 kubernetes==28.1.0
 protobuf>=5.26.0
 Pillow==10.1.0

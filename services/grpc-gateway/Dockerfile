@@ -1,5 +1,9 @@
 FROM python:3.12-slim
 
+# プロキシ設定を引き継ぎ
+ARG PROXY
+ENV PROXY=$PROXY
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
@@ -10,7 +14,7 @@ WORKDIR /app
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --proxy=$PROXY --no-cache-dir -r requirements.txt
 
 # Copy generated protobuf files
 COPY generated/python /app/generated/python
@@ -30,6 +34,9 @@ ENV HOST=0.0.0.0
 ENV RESIZE_GRPC_ENDPOINT=resize-grpc-service:9090
 ENV AI_DETECTION_GRPC_ENDPOINT=ai-detection-grpc-service:9090
 ENV FILTER_GRPC_ENDPOINT=filter-grpc-service:9090
+
+ENV no_proxy="localhost,0.0.0.0"
+ENV NO_PROXY=${no_proxy}
 
 # Run the gateway
 CMD ["python", "grpc_gateway.py"]

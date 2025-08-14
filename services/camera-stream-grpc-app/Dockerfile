@@ -1,29 +1,22 @@
-FROM python:3.12-slim
+# ベースイメージを使用（事前にビルドしておく）
+FROM imageflow-base:latest
 
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+# プロキシ設定を引き継ぎ
+ARG PROXY
+ENV PROXY=$PROXY
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --proxy=$PROXY --no-cache-dir -r requirements.txt
 
-# Copy generated proto files
-COPY ../../generated/python /app/generated/python
-
-# Set Python path to include generated code
-ENV PYTHONPATH="/app/generated/python"
+# Copy generated protobuf files
+COPY generated/python /app/generated/python
 
 # Copy source code
 COPY src/ .
+
+# Set Python path to include generated code
+ENV PYTHONPATH="/app/generated/python"
 
 # Install grpc health probe with architecture detection
 RUN apt-get update && apt-get install -y wget && \
@@ -37,11 +30,14 @@ RUN apt-get update && apt-get install -y wget && \
     fi && \
     wget -qO /bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.34/grpc_health_probe-${GRPC_HEALTH_PROBE_ARCH} && \
     chmod +x /bin/grpc_health_probe && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    /bin/grpc_health_probe --version && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Expose gRPC port
 EXPOSE 9090
+
+ENV no_proxy="localhost,0.0.0.0"
+ENV NO_PROXY=${no_proxy}
 
 # Run the server
 CMD ["python", "camera_stream_grpc_server.py"]

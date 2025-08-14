@@ -118,10 +118,14 @@ conda create -n imageflowcanvas python=3.12 -y
 conda activate imageflowcanvas
 
 # 必要なパッケージをインストール
-pip install requests ultralytics grpcio grpcio-tools
+pip install requests ultralytics grpcio==1.74.0 grpcio-tools==1.74.0
+
+# YOLOモデルをダウンロード
+python scripts/setup-yolo11.py
 
 # Protocol Buffersとサービスをビルド
 ./scripts/generate_protos.sh
+./scripts/build_base_image.sh
 ./scripts/build_services.sh
 ```
 
@@ -189,6 +193,7 @@ sudo ./scripts/setup-k3s.sh
 **アクセス:**
 - Web UI: http://localhost:3000
 - Backend API: http://localhost:8000/docs
+  - products/seedエンドポイントを実行するとテスト用の順序情報が作成されます。
 - MinIO Console: http://localhost:9001
 - Nomad UI: http://localhost:4646/ui
 - Consul UI: http://localhost:8500/ui

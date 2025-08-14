@@ -1,29 +1,17 @@
-FROM python:3.12-slim
+# ベースイメージを使用（事前にビルドしておく）
+FROM imageflow-base:latest
 
-# Install system dependencies including JPEG support
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    libjpeg62-turbo-dev \
-    libpng-dev \
-    libavcodec-dev \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /app
+# プロキシ設定を引き継ぎ
+ARG PROXY
+ENV PROXY=$PROXY
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --proxy=$PROXY --no-cache-dir -r requirements.txt
 
-# Reinstall OpenCV with JPEG support
-RUN pip uninstall -y opencv-python opencv-contrib-python && \
-    pip install --no-cache-dir opencv-contrib-python==4.10.0.84
+# Force reinstall OpenCV with proper JPEG support
+RUN pip uninstall -y opencv-python opencv-python-headless && \
+    pip install --proxy=$PROXY --no-cache-dir opencv-contrib-python
 
 # Copy generated protobuf files
 COPY generated/python /app/generated/python
@@ -57,6 +45,9 @@ ENV GRPC_PORT=9090
 ENV MINIO_ENDPOINT=minio-service:9000
 ENV MINIO_ACCESS_KEY=minioadmin
 ENV MINIO_SECRET_KEY=minioadmin
+
+ENV no_proxy="localhost,0.0.0.0"
+ENV NO_PROXY=${no_proxy}
 
 # Run the gRPC server
 CMD ["python", "filter_grpc_server.py"]

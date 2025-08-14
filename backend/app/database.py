@@ -63,6 +63,7 @@ async def init_db():
     try:
         # Import all models to ensure they are registered with Base
         from app.models import pipeline, execution, pipeline_db
+        from app.models import product  # ensure product models are registered
         from app.models.inspection import (
             InspectionTarget, InspectionItem, InspectionCriteria,
             InspectionExecution, InspectionItemExecution, InspectionResult

@@ -1,0 +1,32 @@
+FROM ubuntu:22.04
+
+ARG PROXY
+ENV PROXY=$PROXY
+ENV http_proxy=$PROXY
+ENV https_proxy=$PROXY
+
+# Install python3
+# プロキシが設定されている場合はapt用の設定も追加
+RUN if [ -n "$PROXY" ]; then \
+    echo "Acquire::http::proxy \"$PROXY\";" > /etc/apt/apt.conf.d/01proxy && \
+    echo "Acquire::https::proxy \"$PROXY\";" >> /etc/apt/apt.conf.d/01proxy; \
+    fi && \
+    apt-get clean && \
+    apt-get update -y && \
+    apt-get install -y python3.10 && \
+    apt-get install -y python3-pip && \
+    ln -s /usr/bin/python3 /usr/bin/python
+
+# 対話をしない
+ENV DEBIAN_FRONTEND=noninteractiv
+# タイムゾーン
+ENV TZ=Asia/Tokyo
+RUN apt-get install -y tzdata && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone && \
+    dpkg-reconfigure --frontend noninteractive tzdata && \
+    apt-get install -y libopencv-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* 
+
+# Set working directory
+WORKDIR /app

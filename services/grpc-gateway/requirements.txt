@@ -1,6 +1,6 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-grpcio==1.73.1
-grpcio-tools==1.73.1
+grpcio==1.74.0
+grpcio-tools==1.74.0
 protobuf
 pydantic==2.5.0
