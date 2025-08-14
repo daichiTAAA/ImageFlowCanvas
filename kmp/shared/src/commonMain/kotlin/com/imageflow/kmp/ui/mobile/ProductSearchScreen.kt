@@ -31,7 +31,7 @@ fun ProductSearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("製品検索", fontWeight = FontWeight.Bold) },
+                title = { Text("順序情報取得", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")

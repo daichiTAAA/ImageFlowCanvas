@@ -238,7 +238,7 @@ private fun QuickActionButtons(
                 QuickActionButton(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.Search,
-                    text = "製品検索",
+                    text = "順序情報取得",
                     enabled = inspectionState == InspectionState.ProductScanning,
                     onClick = onSearchProductClick
                 )
