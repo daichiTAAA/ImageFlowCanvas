@@ -21,9 +21,11 @@ fun createHttpClient(): HttpClient = HttpClient {
 
 class BasicRestClient(
     private val httpClient: HttpClient,
-    private val baseUrl: String,
+    private val baseSupplier: () -> String,
 ) : RestClient {
-    override suspend fun get(urlPath: String): String =
-        httpClient.get("${'$'}baseUrl/${'$'}urlPath").body()
+    override suspend fun get(urlPath: String): String {
+        val base = baseSupplier().trimEnd('/')
+        val path = urlPath.trimStart('/')
+        return httpClient.get("${'$'}base/${'$'}path").body()
+    }
 }
-

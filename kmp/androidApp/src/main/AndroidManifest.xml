@@ -5,7 +5,8 @@
 
     <application
         android:label="ImageFlow KMP App"
-        android:allowBackup="true">
+        android:allowBackup="true"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true">

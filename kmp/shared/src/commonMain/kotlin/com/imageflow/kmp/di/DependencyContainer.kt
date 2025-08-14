@@ -15,6 +15,8 @@ import com.imageflow.kmp.qr.DefaultBarcodeDecoder
 import com.imageflow.kmp.usecase.*
 import com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel
 import kotlinx.coroutines.CoroutineScope
+import com.imageflow.kmp.settings.AppSettings
+import com.imageflow.kmp.platform.PlatformDefaults
 
 // Simple dependency injection container for the KMP application
 object DependencyContainer {
@@ -24,9 +26,10 @@ object DependencyContainer {
     private val inspectionRepository: InspectionRepository by lazy { InspectionRepositoryImpl() }
     
     // Network clients and services
-    private var apiBaseUrl: String = "http://localhost:8080/api/v1"
+    private var apiBaseUrl: String = AppSettings.getBaseUrl() ?: PlatformDefaults.defaultApiBase()
     private val httpClient by lazy { createHttpClient() }
-    private val restClient by lazy { BasicRestClient(httpClient, apiBaseUrl) }
+    // Rest client uses dynamic base supplier so changes reflect immediately
+    private val restClient by lazy { BasicRestClient(httpClient) { apiBaseUrl } }
     private val productApiService: ProductApiService by lazy { KtorProductApiService(restClient) }
     private val inspectionApiService: InspectionApiService by lazy { KtorInspectionApiService(restClient) }
     
@@ -66,11 +69,16 @@ object DependencyContainer {
     fun provideScanProductUseCase(): ScanProductUseCase = scanProductUseCase
     fun provideSearchProductUseCase(): SearchProductUseCase = searchProductUseCase
     fun provideInspectionWorkflowUseCase(): InspectionWorkflowUseCase = inspectionWorkflowUseCase
+    fun provideProductApiService(): ProductApiService = productApiService
 
     // Configuration hook for overriding API base URL at runtime
     fun configureApiBase(url: String) {
         apiBaseUrl = url
+        // persist for next launch where supported
+        try { AppSettings.setBaseUrl(url) } catch (_: Exception) { }
     }
+
+    fun currentApiBase(): String = apiBaseUrl
 }
 
 // Note: mock implementations were removed in favor of real Ktor-based services.

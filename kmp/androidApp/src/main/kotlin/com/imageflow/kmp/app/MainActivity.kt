@@ -19,6 +19,8 @@ import com.imageflow.kmp.ui.mobile.ProductSearchScreen
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.state.InspectionState
 import com.imageflow.kmp.di.DependencyContainer
+import com.imageflow.kmp.ui.mobile.SettingsScreen
+import com.imageflow.kmp.ui.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -55,6 +57,7 @@ fun ImageFlowMobileApp() {
     val searchResults by viewModel.searchResults.collectAsState()
     
     MaterialTheme {
+        val settingsVm = remember { SettingsViewModel() }
         when (currentScreen) {
             AppScreen.MAIN -> {
                 MobileInspectionScreen(
@@ -157,11 +160,24 @@ fun ImageFlowMobileApp() {
             }
             
             AppScreen.SETTINGS -> {
-                ScreenWithTopBar(title = "設定", onBack = { currentScreen = AppScreen.MAIN }) {
-                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("Settings Screen - Coming Soon")
-                    }
-                }
+                val currentUrl by settingsVm.baseUrl.collectAsState()
+                SettingsScreen(
+                    initialBaseUrl = currentUrl,
+                    onApply = { newUrl ->
+                        settingsVm.setBaseUrl(newUrl)
+                        settingsVm.apply()
+                    },
+                    onTest = { newUrl ->
+                        // Temporarily apply and test
+                        settingsVm.setBaseUrl(newUrl)
+                        settingsVm.apply()
+                        settingsVm.testConnection()
+                    },
+                    onResetDefault = {
+                        settingsVm.resetToDefault()
+                    },
+                    onBack = { currentScreen = AppScreen.MAIN }
+                )
             }
         }
     }
