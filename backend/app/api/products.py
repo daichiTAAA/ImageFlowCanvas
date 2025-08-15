@@ -71,43 +71,7 @@ def _apply_update(p: ProductMaster, upd: ProductUpdate) -> None:
         )
 
 
-@router.get("/{product_id}", response_model=ProductInfo)
-async def get_product_info(
-    product_id: str, db: AsyncSession = Depends(get_db)
-) -> ProductInfo:
-    from uuid import UUID
-
-    row = None
-    try:
-        uid = UUID(product_id)
-        res = await db.execute(select(ProductMaster).where(ProductMaster.id == uid))
-        row = res.scalar_one_or_none()
-    except Exception:
-        # Not a valid UUID; attempt alternative lookup by composite key encoded id
-        # Expecting format: WORK_INST_MACHINE_SEQ
-        parts = product_id.split("_")
-        if len(parts) >= 4:
-            work, inst, machine, seq = parts[0], parts[1], parts[2], parts[3]
-            try:
-                res = await db.execute(
-                    select(ProductMaster).where(
-                        ProductMaster.work_order_id == work,
-                        ProductMaster.instruction_id == inst,
-                        ProductMaster.machine_number == machine,
-                        ProductMaster.monthly_sequence == int(seq),
-                    )
-                )
-                row = res.scalar_one_or_none()
-            except Exception:
-                pass
-    if not row:
-        raise HTTPException(status_code=404, detail="Product not found")
-    # update access info
-    row.access_count = (row.access_count or 0) + 1
-    row.last_accessed_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(row)
-    return _to_schema(row)
+## moved GET /{product_id} below static routes to avoid path collisions
 
 
 @router.get("/search", response_model=ProductSearchResponse)
@@ -132,7 +96,7 @@ async def search_products(
 
     try:
         logger.info(
-            f"Search request - work_order_id: {work_order_id}, instruction_id: {instruction_id}, product_type: {product_type}"
+            f"Search request - work_order_id: {work_order_id}, instruction_id: {instruction_id}, product_type: {product_type}, machine_number: {machine_number}, start_date: {start_date}, end_date: {end_date}, limit: {limit}"
         )
 
         stmt = select(ProductMaster)
@@ -158,17 +122,17 @@ async def search_products(
             except Exception:
                 pass
         # Order by production order (latest first): production_date desc, monthly_sequence desc
-        stmt = stmt.order_by(
+        ordered_stmt = stmt.order_by(
             ProductMaster.production_date.desc(), ProductMaster.monthly_sequence.desc()
         )
 
-        # Count total first
-        total = (await db.execute(stmt.with_only_columns(func.count()))).scalar() or 0
+        # Count total first (use separate count query to avoid ORDER BY / dialect issues)
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await db.execute(count_stmt)).scalar() or 0
         logger.info(f"Total count query result: {total}")
 
         # Get actual rows
-        stmt = stmt.limit(limit)
-        rows = (await db.execute(stmt)).scalars().all()
+        rows = (await db.execute(ordered_stmt.limit(limit))).scalars().all()
         logger.info(f"Retrieved {len(rows)} rows from database")
 
         # Convert to schema
@@ -193,7 +157,8 @@ async def search_products(
 
     except Exception as e:
         logger.error(f"Search error: {e}")
-        raise HTTPException(status_code=404, detail="Product not found")
+        # Return empty result on search errors instead of 404 to avoid confusing UX
+        return ProductSearchResponse(products=[], totalCount=0, hasMore=False, nextPageToken=None)
 
 
 @router.get("/by-qr", response_model=ProductInfo)
@@ -463,3 +428,43 @@ async def seed_products(db: AsyncSession = Depends(get_db)) -> List[ProductInfo]
             continue
     await db.commit()
     return created
+
+
+# GET product info by ID – defined after static routes to prevent '/search' or '/suggestions' matching this
+@router.get("/{product_id}", response_model=ProductInfo)
+async def get_product_info(
+    product_id: str, db: AsyncSession = Depends(get_db)
+) -> ProductInfo:
+    from uuid import UUID
+
+    row = None
+    try:
+        uid = UUID(product_id)
+        res = await db.execute(select(ProductMaster).where(ProductMaster.id == uid))
+        row = res.scalar_one_or_none()
+    except Exception:
+        # Not a valid UUID; attempt alternative lookup by composite key encoded id
+        # Expecting format: WORK_INST_MACHINE_SEQ
+        parts = product_id.split("_")
+        if len(parts) >= 4:
+            work, inst, machine, seq = parts[0], parts[1], parts[2], parts[3]
+            try:
+                res = await db.execute(
+                    select(ProductMaster).where(
+                        ProductMaster.work_order_id == work,
+                        ProductMaster.instruction_id == inst,
+                        ProductMaster.machine_number == machine,
+                        ProductMaster.monthly_sequence == int(seq),
+                    )
+                )
+                row = res.scalar_one_or_none()
+            except Exception:
+                pass
+    if not row:
+        raise HTTPException(status_code=404, detail="Product not found")
+    # update access info
+    row.access_count = (row.access_count or 0) + 1
+    row.last_accessed_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(row)
+    return _to_schema(row)
