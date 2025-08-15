@@ -94,18 +94,19 @@ app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["executions"])
 app.include_router(components.router, prefix="/v1/components", tags=["components"])
 app.include_router(files.router, prefix="/v1/files", tags=["files"])
-app.include_router(products.router, prefix="/v1", tags=["products"])
+app.include_router(products.router, prefix="/v1/products", tags=["products"])
 app.include_router(
     grpc_services.router, prefix="/v1/grpc-services", tags=["grpc-services"]
 )
 # Inspection APIs
-app.include_router(inspection_masters.router, prefix="/v1/inspection", tags=["inspection"])
-app.include_router(inspection_execution.router, prefix="/v1/inspection", tags=["inspection"])
+app.include_router(
+    inspection_masters.router, prefix="/v1/inspection", tags=["inspection"]
+)
+app.include_router(
+    inspection_execution.router, prefix="/v1/inspection", tags=["inspection"]
+)
 # Health monitoring endpoints (no auth required)
 app.include_router(grpc_services.router, prefix="/v1/monitoring", tags=["monitoring"])
-
-# Mirror products API under /api/v1 for KMP client default base URL
-app.include_router(products.router, prefix="/api/v1", tags=["products"])
 
 
 @app.on_event("startup")

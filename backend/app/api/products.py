@@ -26,13 +26,19 @@ def _to_schema(p: ProductMaster) -> ProductInfo:
         instructionId=p.instruction_id,
         productType=p.product_type,
         machineNumber=p.machine_number,
-        productionDate=p.production_date.isoformat() if isinstance(p.production_date, (date, datetime)) else str(p.production_date),
+        productionDate=(
+            p.production_date.isoformat()
+            if isinstance(p.production_date, (date, datetime))
+            else str(p.production_date)
+        ),
         monthlySequence=p.monthly_sequence,
         qrRawData=p.qr_raw_data,
         status=p.status,
         createdAt=int(p.created_at.timestamp() * 1000) if p.created_at else None,
         updatedAt=int(p.updated_at.timestamp() * 1000) if p.updated_at else None,
-        lastAccessedAt=int(p.last_accessed_at.timestamp() * 1000) if p.last_accessed_at else None,
+        lastAccessedAt=(
+            int(p.last_accessed_at.timestamp() * 1000) if p.last_accessed_at else None
+        ),
         accessCount=p.access_count or 0,
         isCached=p.is_cached,
         serverSyncStatus=p.server_sync_status,
@@ -66,8 +72,11 @@ def _apply_update(p: ProductMaster, upd: ProductUpdate) -> None:
 
 
 @router.get("/products/{product_id}", response_model=ProductInfo)
-async def get_product_info(product_id: str, db: AsyncSession = Depends(get_db)) -> ProductInfo:
+async def get_product_info(
+    product_id: str, db: AsyncSession = Depends(get_db)
+) -> ProductInfo:
     from uuid import UUID
+
     row = None
     try:
         uid = UUID(product_id)
@@ -112,35 +121,79 @@ async def search_products(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(ProductMaster)
-    if work_order_id:
-        stmt = stmt.where(ProductMaster.work_order_id == work_order_id)
-    if instruction_id:
-        stmt = stmt.where(ProductMaster.instruction_id == instruction_id)
-    if product_type:
-        stmt = stmt.where(ProductMaster.product_type.ilike(f"%{product_type}%"))
-    if machine_number:
-        # allow partial match for machine number to improve usability
-        stmt = stmt.where(ProductMaster.machine_number.ilike(f"%{machine_number}%"))
-    if start_date:
-        try:
-            sd = datetime.fromisoformat(start_date).date()
-            stmt = stmt.where(ProductMaster.production_date >= sd)
-        except Exception:
-            pass
-    if end_date:
-        try:
-            ed = datetime.fromisoformat(end_date).date()
-            stmt = stmt.where(ProductMaster.production_date <= ed)
-        except Exception:
-            pass
-    # Order by production order (latest first): production_date desc, monthly_sequence desc
-    stmt = stmt.order_by(ProductMaster.production_date.desc(), ProductMaster.monthly_sequence.desc())
-    total = (await db.execute(stmt.with_only_columns(func.count()))).scalar() or 0
-    stmt = stmt.limit(limit)
-    rows = (await db.execute(stmt)).scalars().all()
-    products = [_to_schema(r) for r in rows]
-    return ProductSearchResponse(products=products, totalCount=total, hasMore=total > len(products), nextPageToken=None)
+    import logging
+
+    print(f"=== SEARCH ENDPOINT CALLED ===")
+    print(f"work_order_id: {work_order_id}")
+    print(f"instruction_id: {instruction_id}")
+    print(f"product_type: {product_type}")
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        logger.info(
+            f"Search request - work_order_id: {work_order_id}, instruction_id: {instruction_id}, product_type: {product_type}"
+        )
+
+        stmt = select(ProductMaster)
+        if work_order_id:
+            stmt = stmt.where(ProductMaster.work_order_id == work_order_id)
+        if instruction_id:
+            stmt = stmt.where(ProductMaster.instruction_id == instruction_id)
+        if product_type:
+            stmt = stmt.where(ProductMaster.product_type.ilike(f"%{product_type}%"))
+        if machine_number:
+            # allow partial match for machine number to improve usability
+            stmt = stmt.where(ProductMaster.machine_number.ilike(f"%{machine_number}%"))
+        if start_date:
+            try:
+                sd = datetime.fromisoformat(start_date).date()
+                stmt = stmt.where(ProductMaster.production_date >= sd)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                ed = datetime.fromisoformat(end_date).date()
+                stmt = stmt.where(ProductMaster.production_date <= ed)
+            except Exception:
+                pass
+        # Order by production order (latest first): production_date desc, monthly_sequence desc
+        stmt = stmt.order_by(
+            ProductMaster.production_date.desc(), ProductMaster.monthly_sequence.desc()
+        )
+
+        # Count total first
+        total = (await db.execute(stmt.with_only_columns(func.count()))).scalar() or 0
+        logger.info(f"Total count query result: {total}")
+
+        # Get actual rows
+        stmt = stmt.limit(limit)
+        rows = (await db.execute(stmt)).scalars().all()
+        logger.info(f"Retrieved {len(rows)} rows from database")
+
+        # Convert to schema
+        products = []
+        for i, r in enumerate(rows):
+            try:
+                product = _to_schema(r)
+                products.append(product)
+                logger.info(f"Successfully converted row {i}: {r.work_order_id}")
+            except Exception as e:
+                logger.error(f"Error converting row {i} ({r.work_order_id}): {e}")
+                raise
+
+        result = ProductSearchResponse(
+            products=products,
+            totalCount=total,
+            hasMore=total > len(products),
+            nextPageToken=None,
+        )
+        logger.info(f"Returning response with {len(products)} products")
+        return result
+
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+        raise HTTPException(status_code=404, detail="Product not found")
 
 
 @router.get("/products/by-qr", response_model=ProductInfo)
@@ -158,7 +211,9 @@ async def get_product_by_qr(
 
 
 @router.get("/products/suggestions", response_model=List[ProductSuggestion])
-async def get_suggestions(q: str = Query(""), db: AsyncSession = Depends(get_db)) -> List[ProductSuggestion]:
+async def get_suggestions(
+    q: str = Query(""), db: AsyncSession = Depends(get_db)
+) -> List[ProductSuggestion]:
     stmt = select(ProductMaster).limit(50)
     rows = (await db.execute(stmt)).scalars().all()
     out: List[ProductSuggestion] = []
@@ -178,7 +233,9 @@ async def get_suggestions(q: str = Query(""), db: AsyncSession = Depends(get_db)
 
 
 @router.get("/products", response_model=List[ProductInfo])
-async def list_products(product_type: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)) -> List[ProductInfo]:
+async def list_products(
+    product_type: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)
+) -> List[ProductInfo]:
     stmt = select(ProductMaster)
     if product_type:
         stmt = stmt.where(ProductMaster.product_type.ilike(f"%{product_type}%"))
@@ -187,7 +244,10 @@ async def list_products(product_type: Optional[str] = Query(None), db: AsyncSess
 
 
 @router.get("/products:batch", response_model=List[ProductInfo])
-async def get_products_batch(ids: str = Query(..., description="comma separated IDs"), db: AsyncSession = Depends(get_db)) -> List[ProductInfo]:
+async def get_products_batch(
+    ids: str = Query(..., description="comma separated IDs"),
+    db: AsyncSession = Depends(get_db),
+) -> List[ProductInfo]:
     wanted = [i.strip() for i in ids.split(",") if i.strip()]
     if not wanted:
         return []
@@ -198,7 +258,9 @@ async def get_products_batch(ids: str = Query(..., description="comma separated 
 
 
 @router.get("/products/sync", response_model=ProductSyncResponse)
-async def sync_products(last_sync: int = Query(0), db: AsyncSession = Depends(get_db)) -> ProductSyncResponse:
+async def sync_products(
+    last_sync: int = Query(0), db: AsyncSession = Depends(get_db)
+) -> ProductSyncResponse:
     rows = (await db.execute(select(ProductMaster))).scalars().all()
     updates = [_to_schema(r) for r in rows]
     now = int(datetime.utcnow().timestamp() * 1000)
@@ -213,11 +275,16 @@ async def sync_products(last_sync: int = Query(0), db: AsyncSession = Depends(ge
 
 # Admin: create product
 @router.post("/products", response_model=ProductInfo)
-async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_db)) -> ProductInfo:
+async def create_product(
+    payload: ProductCreate, db: AsyncSession = Depends(get_db)
+) -> ProductInfo:
     try:
         prod_date = datetime.fromisoformat(payload.production_date).date()
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid productionDate format (expected ISO-8601 YYYY-MM-DD)")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid productionDate format (expected ISO-8601 YYYY-MM-DD)",
+        )
 
     # Check unique composite key
     exists_stmt = select(ProductMaster).where(
@@ -227,7 +294,9 @@ async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_
         ProductMaster.monthly_sequence == payload.monthly_sequence,
     )
     if (await db.execute(exists_stmt)).scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Product with same key already exists")
+        raise HTTPException(
+            status_code=400, detail="Product with same key already exists"
+        )
 
     row = ProductMaster(
         work_order_id=payload.work_order_id,
@@ -237,7 +306,11 @@ async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_
         production_date=prod_date,
         monthly_sequence=payload.monthly_sequence,
         qr_raw_data=payload.qr_raw_data,
-        status=payload.status.value if hasattr(payload.status, "value") else str(payload.status),
+        status=(
+            payload.status.value
+            if hasattr(payload.status, "value")
+            else str(payload.status)
+        ),
         is_cached=payload.is_cached,
         server_sync_status=(
             payload.server_sync_status.value
@@ -255,13 +328,18 @@ async def create_product(payload: ProductCreate, db: AsyncSession = Depends(get_
 
 # Admin: update product
 @router.put("/products/{product_id}", response_model=ProductInfo)
-async def update_product(product_id: str, payload: ProductUpdate, db: AsyncSession = Depends(get_db)) -> ProductInfo:
+async def update_product(
+    product_id: str, payload: ProductUpdate, db: AsyncSession = Depends(get_db)
+) -> ProductInfo:
     # Resolve row
     from uuid import UUID
+
     row = None
     try:
         uid = UUID(product_id)
-        row = (await db.execute(select(ProductMaster).where(ProductMaster.id == uid))).scalar_one_or_none()
+        row = (
+            await db.execute(select(ProductMaster).where(ProductMaster.id == uid))
+        ).scalar_one_or_none()
     except Exception:
         parts = product_id.split("_")
         if len(parts) >= 4:
@@ -289,10 +367,13 @@ async def update_product(product_id: str, payload: ProductUpdate, db: AsyncSessi
 @router.delete("/products/{product_id}", status_code=204)
 async def delete_product(product_id: str, db: AsyncSession = Depends(get_db)) -> None:
     from uuid import UUID
+
     row = None
     try:
         uid = UUID(product_id)
-        row = (await db.execute(select(ProductMaster).where(ProductMaster.id == uid))).scalar_one_or_none()
+        row = (
+            await db.execute(select(ProductMaster).where(ProductMaster.id == uid))
+        ).scalar_one_or_none()
     except Exception:
         parts = product_id.split("_")
         if len(parts) >= 4:
@@ -319,9 +400,30 @@ async def delete_product(product_id: str, db: AsyncSession = Depends(get_db)) ->
 @router.post("/products/seed", response_model=List[ProductInfo])
 async def seed_products(db: AsyncSession = Depends(get_db)) -> List[ProductInfo]:
     demo = [
-        dict(workOrderId="WORK-1001", instructionId="INST-01", productType="MODEL-A", machineNumber="MACHINE-001", productionDate="2025-08-01", monthlySequence=1),
-        dict(workOrderId="WORK-1002", instructionId="INST-03", productType="MODEL-B", machineNumber="MACHINE-002", productionDate="2025-08-02", monthlySequence=12),
-        dict(workOrderId="WORK-2001", instructionId="INST-02", productType="MODEL-C", machineNumber="MACHINE-010", productionDate="2025-08-10", monthlySequence=5),
+        dict(
+            workOrderId="WORK-1001",
+            instructionId="INST-01",
+            productType="MODEL-A",
+            machineNumber="MACHINE-001",
+            productionDate="2025-08-01",
+            monthlySequence=1,
+        ),
+        dict(
+            workOrderId="WORK-1002",
+            instructionId="INST-03",
+            productType="MODEL-B",
+            machineNumber="MACHINE-002",
+            productionDate="2025-08-02",
+            monthlySequence=12,
+        ),
+        dict(
+            workOrderId="WORK-2001",
+            instructionId="INST-02",
+            productType="MODEL-C",
+            machineNumber="MACHINE-010",
+            productionDate="2025-08-10",
+            monthlySequence=5,
+        ),
     ]
 
     created = []
