@@ -1,6 +1,8 @@
 package com.imageflow.kmp.ui.mobile
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -47,12 +49,17 @@ fun MobileInspectionScreen(
                     }
                 )
             }
+        },
+        bottomBar = {
+            BottomActionBar(onSettingsClick = onSettingsClick)
         }
     ) { innerPadding ->
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(scrollState)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -80,18 +87,15 @@ fun MobileInspectionScreen(
             onStartInspectionClick = onStartInspectionClick
         )
         
-        // Recent inspections
-        RecentInspectionsSection(
-            inspections = recentInspections,
-            onViewHistoryClick = onViewHistoryClick
-        )
+        // Recent inspections (show only when available to save vertical space)
+        if (recentInspections.isNotEmpty()) {
+            RecentInspectionsSection(
+                inspections = recentInspections,
+                onViewHistoryClick = onViewHistoryClick
+            )
+        }
         
-        Spacer(modifier = Modifier.weight(1f))
-        
-        // Bottom navigation/settings
-        BottomActionBar(
-            onSettingsClick = onSettingsClick
-        )
+        // bottomBar handles settings button; no spacer needed when scrollable
         }
     }
 }

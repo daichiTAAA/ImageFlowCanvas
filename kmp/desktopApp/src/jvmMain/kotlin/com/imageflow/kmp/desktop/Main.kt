@@ -9,7 +9,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.rememberWindowState
+import java.awt.Dimension
 import androidx.compose.ui.window.application
 import com.imageflow.kmp.di.DependencyContainer
 import com.imageflow.kmp.models.InspectionType
@@ -24,7 +28,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "ImageFlow Desktop") {
+    val windowState = rememberWindowState(size = DpSize(1280.dp, 880.dp))
+    Window(onCloseRequest = ::exitApplication, title = "ImageFlow Desktop", state = windowState) {
+        // Set a reasonable minimum size to avoid layout clipping
+        this.window.minimumSize = Dimension(1100, 720)
         MaterialTheme {
             Surface(modifier = Modifier.fillMaxSize()) {
                 ImageFlowDesktopApp()
