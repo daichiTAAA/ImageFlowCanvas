@@ -31,6 +31,15 @@ fun ProductSearchScreen(
     var productType by remember { mutableStateOf("") }
     var machineNumber by remember { mutableStateOf("") }
 
+    // Load latest list by default (productionDate, monthlySequence desc)
+    var initialLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!initialLoaded) {
+            onAdvancedSearch("", "")
+            initialLoaded = true
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
