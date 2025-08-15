@@ -73,7 +73,7 @@ class KtorProductApiService(
     override suspend fun getProductsBatch(productIds: List<String>): ApiResult<List<com.imageflow.kmp.models.ProductInfo>> =
         runCatching {
             val ids = productIds.joinToString(",") { encode(it) }
-            val body = rest.get("products:batch?ids=$ids")
+            val body = rest.get("products/batch?ids=$ids")
             val list = json.decodeFromString<List<com.imageflow.kmp.models.ProductInfo>>(body)
             ApiResult.Success(list)
         }.getOrElse { e -> networkError(e) }

@@ -58,7 +58,7 @@ fun SettingsScreen(
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("http://10.0.2.2:8000/api/v1") }
+                placeholder = { Text("http://10.0.2.2:8000/v1") }
             )
             if (validationError != null) {
                 Text(
@@ -131,7 +131,7 @@ fun SettingsScreen(
             }
             Divider()
             Text(
-                text = "ヒント: エミュレータは 10.0.2.2、実機はPCのLAN IPを使用。ベースURLは /api/v1 まで（/products は含めない）。",
+                text = "ヒント: エミュレータは 10.0.2.2、実機はPCのLAN IPを使用。ベースURLは /v1 まで（/products は含めない）。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

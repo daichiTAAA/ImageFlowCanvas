@@ -78,11 +78,11 @@ object ConnectionTroubleshootingGuide {
                 1. Ensure both devices are on the same Wi-Fi network
                 2. Test the URL in device browser first
                 3. Check server is running: backend should show "Server started on 0.0.0.0:8000"
-                4. Verify URL format: http://IP:8000/api/v1 (no extra paths)
+                4. Verify URL format: http://IP:8000/v1 (no extra paths)
                 
                 NETWORK SETUP:
-                - Real device: Use PC's IP address (e.g., http://192.168.0.9:8000/api/v1)
-                - Emulator: Use http://10.0.2.2:8000/api/v1
+                - Real device: Use PC's IP address (e.g., http://192.168.0.9:8000/v1)
+                - Emulator: Use http://10.0.2.2:8000/v1
                 - Always use HTTP (not HTTPS) for local development
                 """.trimIndent()
             }
@@ -93,9 +93,9 @@ object ConnectionTroubleshootingGuide {
         return listOf(
             "Check PC IP: ipconfig getifaddr en0 (Mac) or ipconfig (Windows)",
             "Start backend: cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000",
-            "Test in browser: http://YOUR_PC_IP:8000/api/v1/products",
-            "Emulator URL: http://10.0.2.2:8000/api/v1",
-            "Real device URL: http://YOUR_PC_IP:8000/api/v1"
+            "Test in browser: http://YOUR_PC_IP:8000/v1/products",
+            "Emulator URL: http://10.0.2.2:8000/v1",
+            "Real device URL: http://YOUR_PC_IP:8000/v1"
         )
     }
     
@@ -105,13 +105,13 @@ object ConnectionTroubleshootingGuide {
         if (isEmulator) {
             guidance.add("📱 ANDROID EMULATOR SETUP:")
             guidance.add("- Use 10.0.2.2 to reach host machine")
-            guidance.add("- URL format: http://10.0.2.2:8000/api/v1")
+            guidance.add("- URL format: http://10.0.2.2:8000/v1")
             guidance.add("- Backend must run with --host 0.0.0.0")
         } else {
             guidance.add("📱 REAL DEVICE SETUP:")
             guidance.add("- Use PC's actual IP address")
             guidance.add("- Find IP: Settings > Network or ipconfig command")
-            guidance.add("- URL format: http://192.168.X.X:8000/api/v1")
+            guidance.add("- URL format: http://192.168.X.X:8000/v1")
             guidance.add("- Ensure same Wi-Fi network")
         }
         

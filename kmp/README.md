@@ -241,8 +241,8 @@ cd kmp && ./desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app/Cont
 ### 設定（API ベースURL）
 - アプリ右上の「設定」から API ベースURLを入力・保存
 - 例:
-  - ローカルPCでバックエンドが `8000` で起動: `http://127.0.0.1:8000/api/v1`
-  - 別端末へ接続: `http://<サーバーIP>:8000/api/v1`
+  - ローカルPCでバックエンドが `8000` で起動: `http://127.0.0.1:8000/v1`
+  - 別端末へ接続: `http://<サーバーIP>:8000/v1`
 - Android向けの `10.0.2.2` はエミュレーター専用のため、デスクトップでは使用しません
 
 ### よくあるエラー

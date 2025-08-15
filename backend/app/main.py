@@ -94,7 +94,10 @@ app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["executions"])
 app.include_router(components.router, prefix="/v1/components", tags=["components"])
 app.include_router(files.router, prefix="/v1/files", tags=["files"])
+# Products API aligned with others: mount under /v1/products
 app.include_router(products.router, prefix="/v1/products", tags=["products"])
+# Mirror under /api/v1/products for KMP client default base URL
+app.include_router(products.router, prefix="/api/v1/products", tags=["products"])
 app.include_router(
     grpc_services.router, prefix="/v1/grpc-services", tags=["grpc-services"]
 )

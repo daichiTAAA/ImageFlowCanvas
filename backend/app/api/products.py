@@ -71,7 +71,7 @@ def _apply_update(p: ProductMaster, upd: ProductUpdate) -> None:
         )
 
 
-@router.get("/products/{product_id}", response_model=ProductInfo)
+@router.get("/{product_id}", response_model=ProductInfo)
 async def get_product_info(
     product_id: str, db: AsyncSession = Depends(get_db)
 ) -> ProductInfo:
@@ -110,7 +110,7 @@ async def get_product_info(
     return _to_schema(row)
 
 
-@router.get("/products/search", response_model=ProductSearchResponse)
+@router.get("/search", response_model=ProductSearchResponse)
 async def search_products(
     work_order_id: Optional[str] = Query(None),
     instruction_id: Optional[str] = Query(None),
@@ -196,7 +196,7 @@ async def search_products(
         raise HTTPException(status_code=404, detail="Product not found")
 
 
-@router.get("/products/by-qr", response_model=ProductInfo)
+@router.get("/by-qr", response_model=ProductInfo)
 async def get_product_by_qr(
     data: str = Query(..., description="raw QR data"),
     db: AsyncSession = Depends(get_db),
@@ -210,7 +210,7 @@ async def get_product_by_qr(
     raise HTTPException(status_code=404, detail="Product not found for QR data")
 
 
-@router.get("/products/suggestions", response_model=List[ProductSuggestion])
+@router.get("/suggestions", response_model=List[ProductSuggestion])
 async def get_suggestions(
     q: str = Query(""), db: AsyncSession = Depends(get_db)
 ) -> List[ProductSuggestion]:
@@ -232,7 +232,7 @@ async def get_suggestions(
     return out[:10]
 
 
-@router.get("/products", response_model=List[ProductInfo])
+@router.get("/", response_model=List[ProductInfo])
 async def list_products(
     product_type: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)
 ) -> List[ProductInfo]:
@@ -243,7 +243,7 @@ async def list_products(
     return [_to_schema(r) for r in rows]
 
 
-@router.get("/products:batch", response_model=List[ProductInfo])
+@router.get("/batch", response_model=List[ProductInfo])
 async def get_products_batch(
     ids: str = Query(..., description="comma separated IDs"),
     db: AsyncSession = Depends(get_db),
@@ -257,7 +257,7 @@ async def get_products_batch(
     return [_to_schema(r) for r in pick]
 
 
-@router.get("/products/sync", response_model=ProductSyncResponse)
+@router.get("/sync", response_model=ProductSyncResponse)
 async def sync_products(
     last_sync: int = Query(0), db: AsyncSession = Depends(get_db)
 ) -> ProductSyncResponse:
@@ -274,7 +274,7 @@ async def sync_products(
 
 
 # Admin: create product
-@router.post("/products", response_model=ProductInfo)
+@router.post("/", response_model=ProductInfo)
 async def create_product(
     payload: ProductCreate, db: AsyncSession = Depends(get_db)
 ) -> ProductInfo:
@@ -327,7 +327,7 @@ async def create_product(
 
 
 # Admin: update product
-@router.put("/products/{product_id}", response_model=ProductInfo)
+@router.put("/{product_id}", response_model=ProductInfo)
 async def update_product(
     product_id: str, payload: ProductUpdate, db: AsyncSession = Depends(get_db)
 ) -> ProductInfo:
@@ -364,7 +364,7 @@ async def update_product(
 
 
 # Admin: delete product
-@router.delete("/products/{product_id}", status_code=204)
+@router.delete("/{product_id}", status_code=204)
 async def delete_product(product_id: str, db: AsyncSession = Depends(get_db)) -> None:
     from uuid import UUID
 
@@ -397,7 +397,7 @@ async def delete_product(product_id: str, db: AsyncSession = Depends(get_db)) ->
 
 
 # Admin: seed demo data
-@router.post("/products/seed", response_model=List[ProductInfo])
+@router.post("/seed", response_model=List[ProductInfo])
 async def seed_products(db: AsyncSession = Depends(get_db)) -> List[ProductInfo]:
     demo = [
         dict(

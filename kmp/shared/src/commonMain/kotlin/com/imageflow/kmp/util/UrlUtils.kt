@@ -1,7 +1,7 @@
 package com.imageflow.kmp.util
 
 object UrlUtils {
-    // Validate and normalize base URL. Ensures scheme and appends "/api/v1" if missing.
+    // Validate and normalize base URL. Ensures scheme and appends "/v1" if missing.
     // Returns Pair(normalizedUrl, errorMessage). If errorMessage != null, url is invalid.
     fun validateAndNormalizeBaseUrl(input: String): Pair<String?, String?> {
         val raw = input.trim()
@@ -20,16 +20,16 @@ object UrlUtils {
         val path = if (slashIdx >= 0) noScheme.substring(slashIdx) else ""
         if (hostPort.isBlank()) return null to "ホスト名が不正です"
 
-        // Reject when path includes endpoint segments beyond /api/v1
+        // Reject when path includes endpoint segments beyond /v1
         val pathTrim = path.trimEnd('/')
-        if (pathTrim.isNotEmpty() && pathTrim != "/api/v1") {
-            return null to "ベースURLにはエンドポイントを含めないでください（例: http://HOST:PORT/api/v1）"
+        if (pathTrim.isNotEmpty() && pathTrim != "/v1") {
+            return null to "ベースURLにはエンドポイントを含めないでください（例: http://HOST:PORT/v1）"
         }
 
         // Normalize trailing/leading slashes
         var normalized = (withScheme.substring(0, withScheme.indexOf(hostPort)) + hostPort).trimEnd('/')
-        if (!normalized.endsWith("/api/v1")) {
-            normalized = "$normalized/api/v1"
+        if (!normalized.endsWith("/v1")) {
+            normalized = "$normalized/v1"
         }
         return normalized to null
     }
