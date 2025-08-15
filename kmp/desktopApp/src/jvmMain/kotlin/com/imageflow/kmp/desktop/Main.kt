@@ -75,6 +75,9 @@ private fun ImageFlowDesktopApp() {
                     },
                     onSettingsClick = {
                         currentScreen = AppScreen.SETTINGS
+                    },
+                    onBack = {
+                        currentScreen = AppScreen.PRODUCT_SEARCH
                     }
                 )
 

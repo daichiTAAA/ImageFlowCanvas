@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,14 +29,33 @@ fun MobileInspectionScreen(
     onSearchProductClick: () -> Unit = {},
     onStartInspectionClick: () -> Unit = {},
     onViewHistoryClick: () -> Unit = {},
-    onSettingsClick: () -> Unit = {}
+    onSettingsClick: () -> Unit = {},
+    onBack: (() -> Unit)? = null
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Scaffold(
+        topBar = {
+            if (onBack != null && currentProduct != null) {
+                TopAppBar(
+                    title = { Text("検査") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "戻る"
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
         // Header with app title and status
         InspectionHeader(
             inspectionState = inspectionState,
@@ -72,6 +92,7 @@ fun MobileInspectionScreen(
         BottomActionBar(
             onSettingsClick = onSettingsClick
         )
+        }
     }
 }
 

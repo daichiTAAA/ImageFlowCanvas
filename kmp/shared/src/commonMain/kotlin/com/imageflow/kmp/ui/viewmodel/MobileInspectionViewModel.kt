@@ -52,7 +52,11 @@ class MobileInspectionViewModel(
         
         viewModelScope.launch {
             currentInspection.collect { inspection ->
-                updateUiState { it.copy(currentProduct = getProductInfoFromInspection(inspection)) }
+                updateUiState { prev ->
+                    val derived = getProductInfoFromInspection(inspection)
+                    // Do not overwrite with null; keep previously selected product if available
+                    prev.copy(currentProduct = derived ?: prev.currentProduct)
+                }
             }
         }
     }
@@ -318,8 +322,11 @@ class MobileInspectionViewModel(
     }
     
     private fun getProductInfoFromInspection(inspection: Inspection?): ProductInfo? {
-        // In real implementation, would fetch product info from repository
-        return null
+        // If needed, reconstruct minimal info from inspection to avoid clearing UI
+        return if (inspection != null) {
+            // Keep existing UI product unless we can enrich; for now return null to preserve previous via caller
+            null
+        } else null
     }
 
     private fun sortByProductionOrder(list: List<ProductInfo>): List<ProductInfo> {

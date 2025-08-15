@@ -82,6 +82,9 @@ fun ImageFlowMobileApp() {
                     onSettingsClick = {
                         // TODO: Implement settings screen
                         currentScreen = AppScreen.SETTINGS
+                    },
+                    onBack = {
+                        currentScreen = AppScreen.PRODUCT_SEARCH
                     }
                 )
                 
