@@ -11,6 +11,15 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 actual fun createHttpClient(): HttpClient = HttpClient(CIO) {
+    // Avoid OS/JVM proxy interference on desktop
+    try {
+        System.setProperty("java.net.useSystemProxies", "false")
+        System.setProperty("http.proxyHost", "")
+        System.setProperty("http.proxyPort", "")
+        System.setProperty("https.proxyHost", "")
+        System.setProperty("https.proxyPort", "")
+        System.setProperty("http.nonProxyHosts", "*")
+    } catch (_: Exception) {}
     install(WebSockets)
     install(ContentNegotiation) {
         json(Json { ignoreUnknownKeys = true; isLenient = true })
@@ -18,9 +27,8 @@ actual fun createHttpClient(): HttpClient = HttpClient(CIO) {
     install(Logging) { level = LogLevel.INFO }
     
     install(HttpTimeout) {
-        requestTimeoutMillis = 30000
-        connectTimeoutMillis = 30000
-        socketTimeoutMillis = 30000
+        requestTimeoutMillis = 7000
+        connectTimeoutMillis = 3000
+        socketTimeoutMillis = 7000
     }
 }
-

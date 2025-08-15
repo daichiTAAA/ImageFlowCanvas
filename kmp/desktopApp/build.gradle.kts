@@ -41,6 +41,11 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "ImageFlowDesktop"
             packageVersion = "1.0.0"
+            // Ensure required JDK modules are present in runtime image
+            modules("java.sql", "java.net.http")
         }
+
+        // Ensure modules are enabled at runtime as well
+        jvmArgs += listOf("--add-modules", "java.sql,java.net.http")
     }
 }

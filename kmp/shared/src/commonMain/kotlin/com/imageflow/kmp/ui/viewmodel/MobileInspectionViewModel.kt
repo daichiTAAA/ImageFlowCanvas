@@ -110,15 +110,15 @@ class MobileInspectionViewModel(
                 _searchResults.value = result.copy(
                     products = sortByProductionOrder(result.products)
                 )
-            } catch (e: Exception) {
-                updateUiState { 
+            } catch (e: Throwable) {
+                updateUiState {
                     it.copy(
-                        isLoading = false,
-                        errorMessage = "検索エラー: ${e.message}"
+                        errorMessage = "検索エラー: ${e.message ?: e::class.simpleName}"
                     )
                 }
+            } finally {
+                updateUiState { it.copy(isLoading = false) }
             }
-            updateUiState { it.copy(isLoading = false) }
         }
     }
 
@@ -136,15 +136,15 @@ class MobileInspectionViewModel(
                 _searchResults.value = result.copy(
                     products = sortByProductionOrder(result.products)
                 )
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 updateUiState {
                     it.copy(
-                        isLoading = false,
-                        errorMessage = "検索エラー: ${e.message}"
+                        errorMessage = "検索エラー: ${e.message ?: e::class.simpleName}"
                     )
                 }
+            } finally {
+                updateUiState { it.copy(isLoading = false) }
             }
-            updateUiState { it.copy(isLoading = false) }
         }
     }
 
