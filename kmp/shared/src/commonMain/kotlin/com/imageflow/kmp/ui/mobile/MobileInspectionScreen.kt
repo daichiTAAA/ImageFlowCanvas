@@ -86,7 +86,7 @@ fun MobileInspectionScreen(
             onSearchProductClick = onSearchProductClick,
             onStartInspectionClick = onStartInspectionClick
         )
-        
+
         // Recent inspections (show only when available to save vertical space)
         if (recentInspections.isNotEmpty()) {
             RecentInspectionsSection(
@@ -246,44 +246,67 @@ private fun QuickActionButtons(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
             
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // QR Scan Button
-                QuickActionButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.QrCodeScanner,
-                    text = "QRスキャン",
-                    enabled = inspectionState == InspectionState.ProductScanning,
-                    onClick = onQrScanClick
-                )
-                
-                // Search Product Button
-                QuickActionButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Search,
-                    text = "順序情報取得",
-                    enabled = inspectionState == InspectionState.ProductScanning,
-                    onClick = onSearchProductClick
-                )
+            if (inspectionState == InspectionState.ProductScanning) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // QR Scan Button
+                    QuickActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.QrCodeScanner,
+                        text = "QRスキャン",
+                        enabled = true,
+                        onClick = onQrScanClick
+                    )
+
+                    // Search Product Button
+                    QuickActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Search,
+                        text = "順序情報取得",
+                        enabled = true,
+                        onClick = onSearchProductClick
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    QuickActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Search,
+                        text = "製品を変更",
+                        enabled = true,
+                        onClick = onSearchProductClick
+                    )
+                    QuickActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.QrCodeScanner,
+                        text = "QR再スキャン",
+                        enabled = true,
+                        onClick = onQrScanClick
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Start Inspection Button
-            Button(
-                onClick = onStartInspectionClick,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = inspectionState == InspectionState.ProductIdentified
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("検査開始")
+            if (inspectionState == InspectionState.ProductIdentified) {
+                // Start Inspection Button
+                Button(
+                    onClick = onStartInspectionClick,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("検査開始")
+                }
             }
         }
     }

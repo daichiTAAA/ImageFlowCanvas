@@ -42,7 +42,14 @@ fun main() = application {
 
 @Composable
 private fun ImageFlowDesktopApp() {
-    var currentScreen by remember { mutableStateOf(AppScreen.MAIN) }
+    val navStack = remember { mutableStateListOf(AppScreen.MAIN) }
+    val currentScreen by remember { derivedStateOf { navStack.last() } }
+    val navigateTo: (AppScreen) -> Unit = { screen ->
+        if (navStack.last() != screen) navStack.add(screen)
+    }
+    val navigateBack: () -> Unit = {
+        if (navStack.size > 1) navStack.removeLast()
+    }
 
     // Create ViewModel instance using dependency injection
     val viewModel = remember {
@@ -63,29 +70,28 @@ private fun ImageFlowDesktopApp() {
         val settingsVm = remember { SettingsViewModel() }
         when (currentScreen) {
             AppScreen.MAIN -> {
+                val canGoBack = navStack.size > 1
                 MobileInspectionScreen(
                     inspectionState = inspectionState,
                     currentProduct = uiState.currentProduct,
                     inspectionProgress = inspectionProgress.completionPercentage,
                     onQrScanClick = {
-                        currentScreen = AppScreen.QR_SCAN
+                        navigateTo(AppScreen.QR_SCAN)
                         viewModel.startQrScanning()
                     },
                     onSearchProductClick = {
-                        currentScreen = AppScreen.PRODUCT_SEARCH
+                        navigateTo(AppScreen.PRODUCT_SEARCH)
                     },
                     onStartInspectionClick = {
                         viewModel.startInspection(InspectionType.STATIC_IMAGE)
                     },
                     onViewHistoryClick = {
-                        currentScreen = AppScreen.HISTORY
+                        navigateTo(AppScreen.HISTORY)
                     },
                     onSettingsClick = {
-                        currentScreen = AppScreen.SETTINGS
+                        navigateTo(AppScreen.SETTINGS)
                     },
-                    onBack = {
-                        currentScreen = AppScreen.PRODUCT_SEARCH
-                    }
+                    onBack = if (canGoBack) ({ navigateBack() }) else null
                 )
 
                 // Show error in logs for now
@@ -104,18 +110,18 @@ private fun ImageFlowDesktopApp() {
                     torchEnabled = uiState.torchEnabled,
                     lastScanResult = qrScanResult,
                     onBackClick = {
-                        currentScreen = AppScreen.MAIN
+                        navigateBack()
                         viewModel.stopQrScanning()
                     },
                     onTorchToggle = {
                         viewModel.setTorchEnabled(!uiState.torchEnabled)
                     },
                     onManualEntryClick = {
-                        currentScreen = AppScreen.PRODUCT_SEARCH
+                        navigateTo(AppScreen.PRODUCT_SEARCH)
                     },
                     onAcceptResult = { result ->
                         viewModel.acceptQrResult(result)
-                        currentScreen = AppScreen.MAIN
+                        navigateBack()
                     },
                     onRetryClick = {
                         viewModel.retryQrScan()
@@ -133,18 +139,20 @@ private fun ImageFlowDesktopApp() {
                     onAdvancedSearch = { pt, mn -> viewModel.searchProductsAdvanced(pt, mn) },
                     onSelectProduct = { p ->
                         viewModel.selectProduct(p)
-                        currentScreen = AppScreen.MAIN
+                        // Keep search screen in the stack so Main's back goes to search
+                        navigateTo(AppScreen.MAIN)
                         viewModel.clearSearchResults()
                     },
                     onBack = {
-                        currentScreen = AppScreen.MAIN
+                        viewModel.resetToScanning()
+                        navigateBack()
                         viewModel.clearSearchResults()
                     }
                 )
             }
 
             AppScreen.INSPECTION_DETAIL -> {
-                ScreenWithTopBar(title = "検査詳細", onBack = { currentScreen = AppScreen.MAIN }) {
+                ScreenWithTopBar(title = "検査詳細", onBack = { navigateBack() }) {
                     Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                         Text("Inspection Detail Screen - Coming Soon")
                     }
@@ -152,7 +160,7 @@ private fun ImageFlowDesktopApp() {
             }
 
             AppScreen.HISTORY -> {
-                ScreenWithTopBar(title = "履歴", onBack = { currentScreen = AppScreen.MAIN }) {
+                ScreenWithTopBar(title = "履歴", onBack = { navigateBack() }) {
                     Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                         Text("History Screen - Coming Soon")
                     }
@@ -170,7 +178,7 @@ private fun ImageFlowDesktopApp() {
                     onTest = { settingsVm.testConnection() },
                     onDiagnose = { newUrl -> settingsVm.diagnose(newUrl) },
                     onResetDefault = { settingsVm.resetToDefault() },
-                    onBack = { currentScreen = AppScreen.MAIN }
+                    onBack = { navigateBack() }
                 )
             }
         }

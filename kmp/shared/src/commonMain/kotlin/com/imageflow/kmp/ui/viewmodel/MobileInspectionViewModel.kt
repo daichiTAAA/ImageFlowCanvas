@@ -187,6 +187,18 @@ class MobileInspectionViewModel(
         _searchResults.value = null
         _suggestions.value = emptyList()
     }
+
+    fun resetToScanning() {
+        viewModelScope.launch {
+            try {
+                // Transition workflow back to scanning and clear current product in UI
+                inspectionWorkflowUseCase.transitionToState(InspectionState.ProductScanning)
+                updateUiState { it.copy(currentProduct = null) }
+            } catch (_: Exception) {
+                // no-op
+            }
+        }
+    }
     
     // Inspection actions
     fun startInspection(inspectionType: InspectionType = InspectionType.STATIC_IMAGE) {
