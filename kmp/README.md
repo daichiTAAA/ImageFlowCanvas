@@ -232,8 +232,10 @@ cd kmp
 ### パッケージ作成（配布物）
 ```bash
 cd kmp
-./gradlew :desktopApp:package
+./gradlew :desktopApp:packageDistributionForCurrentOS
 # 出力先: kmp/desktopApp/build/compose/binaries/main/{dmg,msi,deb}/
+# 実行方法
+cd kmp && ./desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app/Contents/MacOS/ImageFlowDesktop
 ```
 
 ### 設定（API ベースURL）

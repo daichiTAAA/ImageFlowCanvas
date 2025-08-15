@@ -203,6 +203,50 @@ class SearchProductUseCase(
         }
     }
     
+    // Overload: structured search by fields (productType, machineNumber, etc.)
+    suspend fun searchProducts(query: ProductSearchQuery, useServerSearch: Boolean = true): ProductSearchResult {
+        val startTime = System.currentTimeMillis()
+        
+        return try {
+            val localResults = productRepository.searchProducts(query)
+            if (!useServerSearch || localResults.isNotEmpty()) {
+                ProductSearchResult(
+                    products = localResults,
+                    totalCount = localResults.size,
+                    query = query,
+                    searchTimeMs = System.currentTimeMillis() - startTime
+                )
+            } else {
+                when (val serverResult = productApiService.searchProducts(query)) {
+                    is ApiResult.Success -> {
+                        serverResult.data.products.forEach { productRepository.saveProduct(it) }
+                        ProductSearchResult(
+                            products = serverResult.data.products,
+                            totalCount = serverResult.data.totalCount,
+                            query = query,
+                            searchTimeMs = System.currentTimeMillis() - startTime
+                        )
+                    }
+                    is ApiResult.Error, is ApiResult.NetworkError -> {
+                        ProductSearchResult(
+                            products = localResults,
+                            totalCount = localResults.size,
+                            query = query,
+                            searchTimeMs = System.currentTimeMillis() - startTime
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            ProductSearchResult(
+                products = emptyList(),
+                totalCount = 0,
+                query = query,
+                searchTimeMs = System.currentTimeMillis() - startTime
+            )
+        }
+    }
+    
     suspend fun getProductSuggestions(partialQuery: String): List<ProductSuggestion> {
         return try {
             when (val result = productApiService.getProductSuggestions(partialQuery)) {

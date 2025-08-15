@@ -120,7 +120,8 @@ async def search_products(
     if product_type:
         stmt = stmt.where(ProductMaster.product_type.ilike(f"%{product_type}%"))
     if machine_number:
-        stmt = stmt.where(ProductMaster.machine_number == machine_number)
+        # allow partial match for machine number to improve usability
+        stmt = stmt.where(ProductMaster.machine_number.ilike(f"%{machine_number}%"))
     if start_date:
         try:
             sd = datetime.fromisoformat(start_date).date()
@@ -133,6 +134,8 @@ async def search_products(
             stmt = stmt.where(ProductMaster.production_date <= ed)
         except Exception:
             pass
+    # Order by production order (latest first): production_date desc, monthly_sequence desc
+    stmt = stmt.order_by(ProductMaster.production_date.desc(), ProductMaster.monthly_sequence.desc())
     total = (await db.execute(stmt.with_only_columns(func.count()))).scalar() or 0
     stmt = stmt.limit(limit)
     rows = (await db.execute(stmt)).scalars().all()

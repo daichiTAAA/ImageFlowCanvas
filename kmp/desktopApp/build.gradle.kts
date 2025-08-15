@@ -29,6 +29,13 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.imageflow.kmp.desktop.MainKt"
+        
+        // JVMの引数を明示的に設定
+        jvmArgs += listOf(
+            "-Dfile.encoding=UTF-8",
+            "--add-opens", "java.base/java.net=ALL-UNNAMED",
+            "--add-opens", "java.base/java.net.http=ALL-UNNAMED"
+        )
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)

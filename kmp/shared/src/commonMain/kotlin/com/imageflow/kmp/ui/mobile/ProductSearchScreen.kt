@@ -23,10 +23,13 @@ fun ProductSearchScreen(
     searchResults: List<ProductInfo>,
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
+    onAdvancedSearch: (productType: String, machineNumber: String) -> Unit,
     onSelectProduct: (ProductInfo) -> Unit,
     onBack: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
+    var productType by remember { mutableStateOf("") }
+    var machineNumber by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -63,6 +66,31 @@ fun ProductSearchScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Manual filters: productType and machineNumber
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = productType,
+                    onValueChange = { productType = it },
+                    label = { Text("型式コード (productType)") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = machineNumber,
+                    onValueChange = { machineNumber = it },
+                    label = { Text("機番 (machineNumber)") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { onAdvancedSearch(productType, machineNumber) }) {
+                    Icon(Icons.Filled.Search, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("詳細条件で検索")
+                }
+            }
+
             if (isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
@@ -84,7 +112,7 @@ fun ProductSearchScreen(
 
             Divider()
 
-            Text(text = "検索結果", style = MaterialTheme.typography.labelLarge)
+            Text(text = "検索結果 (生産日・月連番の降順)", style = MaterialTheme.typography.labelLarge)
             if (searchResults.isEmpty() && !isLoading) {
                 Text(
                     text = "一致する製品が見つかりません",

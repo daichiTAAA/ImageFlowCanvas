@@ -95,7 +95,7 @@ kotlin {
 
         val desktopMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-java:$ktorVersion")
+                implementation("io.ktor:ktor-client-cio:$ktorVersion")
                 // SQLDelight JDBC driver example
                 // implementation("app.cash.sqldelight:sqlite-driver:$sqldelightVersion")
                 implementation(compose.desktop.currentOs)

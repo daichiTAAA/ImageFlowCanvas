@@ -107,9 +107,37 @@ class MobileInspectionViewModel(
             updateUiState { it.copy(isLoading = true) }
             try {
                 val result = searchProductUseCase.searchProducts(query)
-                _searchResults.value = result
+                _searchResults.value = result.copy(
+                    products = sortByProductionOrder(result.products)
+                )
             } catch (e: Exception) {
                 updateUiState { 
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "検索エラー: ${e.message}"
+                    )
+                }
+            }
+            updateUiState { it.copy(isLoading = false) }
+        }
+    }
+
+    // Advanced search by specific fields
+    fun searchProductsAdvanced(productType: String, machineNumber: String) {
+        viewModelScope.launch {
+            updateUiState { it.copy(isLoading = true) }
+            try {
+                val query = com.imageflow.kmp.workflow.ProductSearchQuery(
+                    productType = productType.ifBlank { null },
+                    machineNumber = machineNumber.ifBlank { null },
+                    limit = 50
+                )
+                val result = searchProductUseCase.searchProducts(query)
+                _searchResults.value = result.copy(
+                    products = sortByProductionOrder(result.products)
+                )
+            } catch (e: Exception) {
+                updateUiState {
                     it.copy(
                         isLoading = false,
                         errorMessage = "検索エラー: ${e.message}"
@@ -292,6 +320,12 @@ class MobileInspectionViewModel(
     private fun getProductInfoFromInspection(inspection: Inspection?): ProductInfo? {
         // In real implementation, would fetch product info from repository
         return null
+    }
+
+    private fun sortByProductionOrder(list: List<ProductInfo>): List<ProductInfo> {
+        // Sort by productionDate (YYYY-MM-DD) and monthlySequence, latest first
+        return list.sortedWith(compareByDescending<ProductInfo> { it.productionDate }
+            .thenByDescending { it.monthlySequence })
     }
 }
 

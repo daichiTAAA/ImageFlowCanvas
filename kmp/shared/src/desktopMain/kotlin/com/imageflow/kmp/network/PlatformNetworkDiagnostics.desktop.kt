@@ -5,11 +5,12 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
+import io.ktor.client.engine.cio.CIO
 
 actual object PlatformNetworkDiagnostics {
     actual suspend fun testConnection(url: String): PlatformDiagnosticResult {
-        // Desktop implementation - similar to iOS, simpler than Android
-        val client = HttpClient()
+        // Desktop implementation - using CIO engine instead of Java engine
+        val client = HttpClient(CIO)
         
         return try {
             val startTime = System.currentTimeMillis()

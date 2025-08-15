@@ -131,6 +131,7 @@ fun ImageFlowMobileApp() {
                     searchResults = searchResults?.products ?: emptyList(),
                     onQueryChange = { q -> viewModel.loadSuggestions(q) },
                     onSearch = { q -> viewModel.searchProducts(q) },
+                    onAdvancedSearch = { pt, mn -> viewModel.searchProductsAdvanced(pt, mn) },
                     onSelectProduct = { p ->
                         viewModel.selectProduct(p)
                         currentScreen = AppScreen.MAIN
