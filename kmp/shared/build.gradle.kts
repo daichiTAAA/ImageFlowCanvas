@@ -101,6 +101,8 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(compose.ui)
                 implementation("app.cash.sqldelight:sqlite-driver:$sqldelightVersion")
+                // Provide Dispatchers.Main for Swing/AWT on desktop
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:$coroutinesVersion")
             }
         }
 

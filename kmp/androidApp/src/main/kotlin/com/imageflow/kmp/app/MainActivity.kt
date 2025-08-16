@@ -214,16 +214,7 @@ fun ImageFlowMobileApp() {
         currentScreen = AppScreen.MAIN
     }
     
-    // Simulate QR scan result for demo purposes
-    LaunchedEffect(currentScreen) {
-        if (currentScreen == AppScreen.QR_SCAN && uiState.isQrScanningActive) {
-            kotlinx.coroutines.delay(3000) // Simulate scan delay
-            
-            // Simulate a successful QR scan
-            val simulatedQrData = "WORK001,INST001,TYPE-A,MACHINE-123,2024-01-15,1"
-            viewModel.processQrScan(simulatedQrData)
-        }
-    }
+    // Removed simulated QR success; use real scanner on Android
     
     // Handle loading states
     if (uiState.isLoading) {
