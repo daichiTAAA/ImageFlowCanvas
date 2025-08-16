@@ -31,9 +31,9 @@ data class ProductInfo(
 // Product status enumeration based on requirements
 @Serializable
 enum class ProductStatus {
-    ACTIVE,     // 検査対象として有効な製品
-    INACTIVE,   // 一時的に検査対象外の製品
-    OBSOLETE    // 廃止された製品
+    ACTIVE,     // 検査対象として有効な型式
+    INACTIVE,   // 一時的に検査対象外の型式
+    OBSOLETE    // 廃止された型式
 }
 
 // Sync status for offline support

@@ -302,7 +302,7 @@ export function InspectionMasters() {
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} gap={1}>
                 <Typography variant="h6">検査対象</Typography>
                 <Box display="flex" gap={1}>
-                  <TextField size="small" placeholder="製品コード/名称で検索" value={targetSearch} onChange={(e)=> setTargetSearch(e.target.value)} />
+                  <TextField size="small" placeholder="型式コード/検査対象名で検索" value={targetSearch} onChange={(e)=> setTargetSearch(e.target.value)} />
                   <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateTarget} disabled={loading}>検査対象を新規作成</Button>
                 </Box>
               </Box>
@@ -311,8 +311,8 @@ export function InspectionMasters() {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>製品コード</TableCell>
-                      <TableCell>名前</TableCell>
+                      <TableCell>型式コード</TableCell>
+                      <TableCell>検査対象名</TableCell>
                       <TableCell>バージョン</TableCell>
                       <TableCell>操作</TableCell>
                     </TableRow>
@@ -454,14 +454,14 @@ export function InspectionMasters() {
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={6}>
                     <TextField
-                      label="製品コード"
+                      label="型式コード"
                       value={selectedTarget.product_code}
                       fullWidth
                       InputProps={{ readOnly: true }}
                       margin="normal"
                     />
                     <TextField
-                      label="名前"
+                      label="検査対象名"
                       value={selectedTarget.name}
                       fullWidth
                       InputProps={{ readOnly: true }}
@@ -619,7 +619,7 @@ export function InspectionMasters() {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                label="名前"
+                label="検査対象名"
                 value={editingTarget?.name || ""}
                 onChange={(e) =>
                   setEditingTarget((prev) =>
@@ -646,7 +646,7 @@ export function InspectionMasters() {
             </Grid>
             <Grid item xs={12}>
               <Alert severity="info">
-                製品コード（product_code）か型式グループ（group_id）のどちらか一方は必須です。
+                型式コード（product_code）か型式グループ（group_id）のどちらか一方は必須です。
               </Alert>
             </Grid>
           </Grid>

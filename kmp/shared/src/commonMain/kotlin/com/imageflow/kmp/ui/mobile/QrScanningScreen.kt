@@ -357,7 +357,7 @@ private fun QrScanResultCard(
                         onClick = onAccept,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("この製品を選択")
+                        Text("この順序情報を選択")
                     }
                 }
             } else {
@@ -386,7 +386,7 @@ private fun ProductInfoDisplay(productInfo: ProductInfo) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ProductInfoRow("製品コード", productInfo.productCode)
+        ProductInfoRow("型式コード", productInfo.productCode)
         ProductInfoRow("機番", productInfo.machineNumber)
         ProductInfoRow("指図番号", productInfo.workOrderId)
         ProductInfoRow("指示番号", productInfo.instructionId)

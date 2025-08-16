@@ -90,7 +90,7 @@ class ScanProductUseCase(
                         scanType = ScanType.QR_CODE,
                         confidence = 0.5f,
                         validationStatus = ValidationStatus.NOT_FOUND,
-                        errorMessage = "製品が見つかりませんでした: ${serverResult.message}"
+                        errorMessage = "順序情報が見つかりませんでした: ${serverResult.message}"
                     )
                 }
                 is ApiResult.NetworkError -> {

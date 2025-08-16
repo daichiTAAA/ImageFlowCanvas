@@ -247,7 +247,7 @@ private fun ResultCard(
             if (result.success && result.productInfo != null) {
                 val p = result.productInfo!!
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("製品コード: ${p.productCode}")
+                    Text("型式コード: ${p.productCode}")
                     Text("機番: ${p.machineNumber}")
                     Text("指図番号: ${p.workOrderId}")
                     Text("指示番号: ${p.instructionId}")
@@ -255,7 +255,7 @@ private fun ResultCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onRetry, modifier = Modifier.weight(1f)) { Text("再スキャン") }
-                    Button(onClick = onAccept, modifier = Modifier.weight(1f)) { Text("この製品を選択") }
+                    Button(onClick = onAccept, modifier = Modifier.weight(1f)) { Text("この順序情報を選択") }
                 }
             } else {
                 Text(

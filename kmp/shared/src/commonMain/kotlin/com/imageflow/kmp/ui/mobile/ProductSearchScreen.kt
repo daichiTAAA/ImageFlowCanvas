@@ -122,7 +122,7 @@ fun ProductSearchScreen(
             Text(text = "検索結果 (生産日・月連番の降順)", style = MaterialTheme.typography.labelLarge)
             if (searchResults.isEmpty() && !isLoading) {
                 Text(
-                    text = "一致する製品が見つかりません",
+                    text = "一致する順序情報が見つかりません",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

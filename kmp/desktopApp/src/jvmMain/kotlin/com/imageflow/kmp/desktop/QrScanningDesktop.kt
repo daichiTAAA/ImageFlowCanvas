@@ -354,7 +354,7 @@ private fun ResultCardDesktop(
             Text("QRコード読み取り成功", color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
             val p = result.productInfo!!
-            Text("製品コード: ${p.productCode}")
+            Text("型式コード: ${p.productCode}")
             Text("機番: ${p.machineNumber}")
             Text("指図番号: ${p.workOrderId}")
             Text("指示番号: ${p.instructionId}")
@@ -363,7 +363,7 @@ private fun ResultCardDesktop(
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onRetry, modifier = Modifier.weight(1f)) { Text("再スキャン") }
-                Button(onClick = onAccept, modifier = Modifier.weight(1f)) { Text("この製品を選択") }
+                Button(onClick = onAccept, modifier = Modifier.weight(1f)) { Text("この順序情報を選択") }
             }
         }
     }

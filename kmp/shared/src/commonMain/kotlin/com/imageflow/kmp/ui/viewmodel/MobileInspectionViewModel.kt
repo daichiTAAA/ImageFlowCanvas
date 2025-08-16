@@ -182,7 +182,7 @@ class MobileInspectionViewModel(
                 }
             } catch (e: Exception) {
                 updateUiState { 
-                    it.copy(errorMessage = "製品選択エラー: ${e.message}")
+                    it.copy(errorMessage = "型式選択エラー: ${e.message}")
                 }
             }
         }
@@ -197,14 +197,14 @@ class MobileInspectionViewModel(
                         selectProduct(res.data)
                     }
                     is com.imageflow.kmp.network.ApiResult.Error -> {
-                        updateUiState { it.copy(errorMessage = "製品取得エラー: ${res.message}") }
+                        updateUiState { it.copy(errorMessage = "型式取得エラー: ${res.message}") }
                     }
                     is com.imageflow.kmp.network.ApiResult.NetworkError -> {
                         updateUiState { it.copy(errorMessage = "ネットワークエラー: ${res.message}") }
                     }
                 }
             } catch (e: Exception) {
-                updateUiState { it.copy(errorMessage = "製品取得エラー: ${e.message}") }
+                updateUiState { it.copy(errorMessage = "型式取得エラー: ${e.message}") }
             } finally {
                 updateUiState { it.copy(isLoading = false) }
             }

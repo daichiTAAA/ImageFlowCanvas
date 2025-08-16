@@ -36,11 +36,11 @@ fun InspectionDetailScreen(
                 Text("検査詳細", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 if (currentProduct != null) {
-                    Text("製品: ${currentProduct.productCode} - ${currentProduct.machineNumber}", fontWeight = FontWeight.SemiBold)
+                    Text("型式コード: ${currentProduct.productCode} - ${currentProduct.machineNumber}", fontWeight = FontWeight.SemiBold)
                     Text("指図: ${currentProduct.workOrderId} / 指示: ${currentProduct.instructionId}")
                     Text("生産日: ${currentProduct.productionDate} / 連番: ${currentProduct.monthlySequence}")
                 } else {
-                    Text("製品が選択されていません", color = MaterialTheme.colorScheme.error)
+                    Text("順序情報が選択されていません", color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -124,12 +124,12 @@ fun InspectionDetailScreen(
 
 private fun stateLabel(state: InspectionState): String = when (state) {
     InspectionState.ProductScanning -> "スキャン待ち"
-    InspectionState.ProductIdentified -> "製品特定済み"
+    InspectionState.ProductIdentified -> "型式特定済み"
     InspectionState.InProgress -> "検査実行中"
     InspectionState.AiCompleted -> "AI判定完了"
     InspectionState.HumanReview -> "人手確認中"
     InspectionState.Completed -> "完了"
-    InspectionState.ProductNotFound -> "製品未検出"
+    InspectionState.ProductNotFound -> "型式未検出"
     InspectionState.QrDecodeFailed -> "QR失敗"
     InspectionState.Failed -> "失敗"
     InspectionState.Cancelled -> "キャンセル"

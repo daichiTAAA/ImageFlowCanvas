@@ -146,7 +146,7 @@ private fun InspectionHeader(
                         modifier = Modifier.padding(12.dp)
                     ) {
                         Text(
-                            text = "選択中の製品",
+                            text = "選択中の順序情報",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -277,7 +277,7 @@ private fun QuickActionButtons(
                     QuickActionButton(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Search,
-                        text = "製品を変更",
+                        text = "順序情報を変更",
                         enabled = true,
                         onClick = onSearchProductClick
                     )
@@ -450,13 +450,13 @@ private fun BottomActionBar(
 
 // Utility functions
 private fun getStateDisplayText(state: InspectionState): String = when (state) {
-    is InspectionState.ProductScanning -> "製品情報を選択してください"
-    is InspectionState.ProductIdentified -> "製品が特定されました"
+    is InspectionState.ProductScanning -> "順序情報を選択してください"
+    is InspectionState.ProductIdentified -> "順序情報が特定されました"
     is InspectionState.InProgress -> "検査実行中..."
     is InspectionState.AiCompleted -> "AI検査完了"
     is InspectionState.HumanReview -> "人による確認中"
     is InspectionState.Completed -> "検査完了"
-    is InspectionState.ProductNotFound -> "製品が見つかりません"
+    is InspectionState.ProductNotFound -> "順序情報が見つかりません"
     is InspectionState.QrDecodeFailed -> "QRコードの読み取りに失敗"
     is InspectionState.Failed -> "検査に失敗しました"
     is InspectionState.Cancelled -> "検査がキャンセルされました"
