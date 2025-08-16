@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.awt.SwingPanel
+import java.awt.Desktop
+import java.net.URI
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import imageflow.v1.CameraStreamProcessorGrpcKt
@@ -21,10 +23,13 @@ import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 import org.bytedeco.javacv.FFmpegFrameGrabber
+import org.bytedeco.javacv.FFmpegFrameFilter
 import org.bytedeco.javacv.Java2DFrameConverter
 import org.bytedeco.javacv.Frame
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_0RGB
+import org.slf4j.LoggerFactory
 import javax.swing.SwingUtilities
+private val LOG = LoggerFactory.getLogger("RealtimeInspection")
 
 @Composable
 fun RealtimeInspectionDesktop(
@@ -33,11 +38,20 @@ fun RealtimeInspectionDesktop(
     pipelineId: String = "default",
     modifier: Modifier = Modifier
 ) {
+    val log = remember { LOG }
     var grabber by remember { mutableStateOf<FFmpegFrameGrabber?>(null) }
-    var imagePanel by remember { mutableStateOf<RtImagePanel?>(null) }
+    var imagePanel by remember { mutableStateOf<RtPreviewPanel?>(null) }
     var channel by remember { mutableStateOf<ManagedChannel?>(null) }
     var running by remember { mutableStateOf(true) } // 自動開始
     var stats by remember { mutableStateOf(Stats()) }
+    var frameCount by remember { mutableStateOf(0) }
+    var startAt by remember { mutableStateOf(0L) }
+    var configVersion by remember { mutableStateOf(0) }
+    // Simple camera controls
+    var deviceIndex by remember { mutableStateOf(0) }
+    var pixelFmt by remember { mutableStateOf(PixelFmt.BGR0) }
+    var resolution by remember { mutableStateOf(Res(1280, 720)) }
+    var fps by remember { mutableStateOf(30) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -53,19 +67,64 @@ fun RealtimeInspectionDesktop(
             Spacer(Modifier.width(16.dp))
             Text("Frames: ${stats.frames} / Detections: ${stats.lastDetections}", color = Color.LightGray)
             Spacer(Modifier.weight(1f))
+            // Minimal camera control chips
+            AssistChip(label = { Text("Dev ${deviceIndex}") }, onClick = { deviceIndex = if (deviceIndex == 0) 1 else 0 })
+            Spacer(Modifier.width(8.dp))
+            AssistChip(label = { Text(pixelFmt.label) }, onClick = { pixelFmt = if (pixelFmt == PixelFmt.BGR0) PixelFmt.RGB0 else PixelFmt.BGR0 })
+            Spacer(Modifier.width(8.dp))
+            AssistChip(label = { Text("${resolution.w}x${resolution.h}") }, onClick = {
+                resolution = if (resolution.w == 1280) Res(640, 480) else Res(1280, 720)
+            })
+            Spacer(Modifier.width(8.dp))
+            AssistChip(label = { Text("${fps}fps") }, onClick = { fps = if (fps == 30) 10 else 30 })
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = {
+                // trigger clean restart via state key; LaunchedEffect will cancel and re-init safely
+                frameCount = 0
+                startAt = 0L
+                configVersion++
+            }) { Text("適用") }
+            Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = { running = !running }) { Text(if (running) "停止" else "開始") }
         }
 
         Box(Modifier.fillMaxWidth().height(360.dp).background(Color.Black)) {
-            SwingPanel(factory = {
-                RtImagePanel().also { imagePanel = it }
-            }, update = { panel ->
-                // no-op
-            })
+            if (imagePanel == null) imagePanel = RtPreviewPanel()
+            SwingPanelHost(imagePanel)
+
+            // Help overlay if frames are not coming in (likely camera permission issue)
+            val now = remember { mutableStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    now.value = System.currentTimeMillis()
+                    delay(500)
+                }
+            }
+            val showOverlay = running && frameCount == 0 && startAt != 0L && (now.value - startAt) > 4000
+            if (showOverlay) {
+                PermissionHelpOverlay(
+                    onOpenSettings = { openPrivacyCameraSettings() },
+                    onRetryInit = {
+                        // Re-init grabber
+                        try { grabber?.stop() } catch (_: Throwable) {}
+                        try { grabber?.release() } catch (_: Throwable) {}
+                        grabber = null
+                        frameCount = 0
+                        startAt = 0L
+                        // Best-effort re-probe on background
+                        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                            val g2 = openBestAvFoundationGrabber()
+                            withContext(Dispatchers.Main) {
+                                grabber = g2
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
 
-    LaunchedEffect(running) {
+    LaunchedEffect(running, deviceIndex, resolution, fps, pixelFmt, configVersion) {
         if (!running) return@LaunchedEffect
         // 重い処理はIOに退避（UIブロック回避）
         withContext(Dispatchers.IO) {
@@ -74,19 +133,23 @@ fun RealtimeInspectionDesktop(
                 .build()
             val stub = CameraStreamProcessorGrpcKt.CameraStreamProcessorCoroutineStub(channel!!)
 
+            // Print device list to logs (helps on macOS to pick the right index)
+            try { listAvFoundationDevices() } catch (_: Throwable) {}
+
             val g = openBestAvFoundationGrabber() ?: FFmpegFrameGrabber("0").apply {
                 format = "avfoundation"
-                imageWidth = 1280; imageHeight = 720
-                audioChannels = 0; pixelFormat = AV_PIX_FMT_0RGB
-                setOption("probesize", "5000000")
-                setOption("analyzeduration", "5000000")
+                frameRate = 30.0
+                imageWidth = 1280
+                imageHeight = 720
+                pixelFormat = AV_PIX_FMT_0RGB
+                audioChannels = 0
                 try { start() } catch (_: Throwable) {}
             }
             grabber = g
             val converter = Java2DFrameConverter()
             // Warm-up: drop initial frames to stabilize timebase
             try {
-                repeat(10) { _ -> g?.grabImage() }
+                repeat(10) { _ -> g?.grab() }
             } catch (_: Throwable) {}
 
             val requests = kotlinx.coroutines.flow.MutableSharedFlow<CameraStream.VideoFrame>(extraBufferCapacity = 2)
@@ -99,10 +162,16 @@ fun RealtimeInspectionDesktop(
             }
 
             try {
+                withContext(Dispatchers.Main) { startAt = System.currentTimeMillis(); frameCount = 0 }
                 while (isActive && running) {
-                    val frame: Frame? = try { g?.grabImage() } catch (_: Throwable) { null }
-                    val img = frame?.let { converter.convert(it) } ?: continue
+                    val frame: Frame? = try { g?.grab() } catch (t: Throwable) {
+                        log.warn("grab failed: {}", t.message)
+                        null
+                    }
+                    val img0 = frame?.let { converter.convert(it) }
+                    val img = img0?.let { ensureRgb(it) } ?: continue
                     SwingUtilities.invokeLater { imagePanel?.setImage(img) }
+                    withContext(Dispatchers.Main) { frameCount += 1 }
                     val bytes = encodeJpeg(img)
                     val meta = CameraStream.VideoMetadata.newBuilder()
                         .setSourceId("desktop-usb-0")
@@ -117,7 +186,8 @@ fun RealtimeInspectionDesktop(
                         .build()
                     requests.tryEmit(vf)
                     withContext(Dispatchers.Main) { stats = stats.copy(frames = stats.frames + 1) }
-                    delay(1000)
+                    // Preview/send at ~4 FPS to keep load modest
+                    delay(250)
                 }
             } finally {
                 recvJob.cancel()
@@ -135,7 +205,27 @@ private fun encodeJpeg(img: BufferedImage): ByteArray {
     return baos.toByteArray()
 }
 
-private class RtImagePanel : JPanel(BorderLayout()) {
+@Composable
+private fun SwingPanelHost(panel: JPanel?) {
+    androidx.compose.ui.awt.SwingPanel(
+        modifier = Modifier.fillMaxSize(),
+        factory = {
+            JPanel(BorderLayout()).apply {
+                background = java.awt.Color.BLACK
+                if (panel != null) add(panel, BorderLayout.CENTER)
+            }
+        },
+        update = { container ->
+            val root = container as JPanel
+            root.removeAll()
+            root.add(panel ?: JPanel().apply { background = java.awt.Color.BLACK }, BorderLayout.CENTER)
+            root.revalidate()
+            root.repaint()
+        }
+    )
+}
+
+private class RtPreviewPanel : JPanel() {
     @Volatile private var image: BufferedImage? = null
     fun setImage(img: BufferedImage) { image = img; repaint() }
     override fun paintComponent(g: java.awt.Graphics) {
@@ -149,9 +239,9 @@ private class RtImagePanel : JPanel(BorderLayout()) {
         val scale = kotlin.math.min(panelW / imgW, panelH / imgH)
         val drawW = (imgW * scale).toInt()
         val drawH = (imgH * scale).toInt()
-        val x = ((panelW - drawW) / 2.0).toInt()
-        val y = ((panelH - drawH) / 2.0).toInt()
-        g2.drawImage(img, x, y, drawW, drawH, null)
+        val x = (panelW - drawW) / 2.0
+        val y = (panelH - drawH) / 2.0
+        g2.drawImage(img, x.toInt(), y.toInt(), drawW, drawH, null)
     }
 }
 
@@ -161,39 +251,127 @@ private data class Stats(
 )
 
 private fun openBestAvFoundationGrabber(): FFmpegFrameGrabber? {
-    val devices = listOf("0", "1", "0:0", "1:0")
-    // Try common supported resolutions and exact fps values seen in the log
-    val resolutions = listOf(1280 to 720, 640 to 480, 800 to 600, 1024 to 576)
-    val fpsCandidates = listOf(30.000030, 60.000240, 25.0, 15.000015, 10.0, 5.0)
-    for (dev in devices) {
-        for ((w, h) in resolutions) {
-            for (fps in fpsCandidates) {
-                try {
-                    val g = FFmpegFrameGrabber(dev)
-                    g.format = "avfoundation"
-                    g.imageWidth = w
-                    g.imageHeight = h
-                    g.audioChannels = 0
-                    g.pixelFormat = AV_PIX_FMT_0RGB
-                    // Hint both via option and property to avoid 29.97選択
-                    g.setOption("framerate", String.format(java.util.Locale.US, "%.6f", fps))
-                    g.frameRate = fps
-                    g.setOption("probesize", "5000000")
-                    g.setOption("analyzeduration", "5000000")
-                    g.start()
-                    // Grab a couple frames to stabilize
-                    var ok = false
-                    repeat(3) {
-                        val fr = try { g.grabImage() } catch (_: Throwable) { null }
-                        if (fr != null) ok = true
-                    }
-                    if (ok) return g
-                    g.stop(); g.release()
-                } catch (_: Throwable) {
-                    // try next mode
-                }
-            }
+    val candidates = listOf("0", "1", "0:0", "1:0")
+    for (dev in candidates) {
+        try {
+            val g = FFmpegFrameGrabber(dev)
+            g.format = "avfoundation"
+            g.frameRate = 30.0
+            g.imageWidth = 1280
+            g.imageHeight = 720
+            g.pixelFormat = AV_PIX_FMT_0RGB
+            g.audioChannels = 0
+            g.start()
+            val frame = g.grab()
+            if (frame != null) return g
+            g.stop(); g.release()
+        } catch (_: Throwable) {
+            // try next device string
         }
     }
     return null
+}
+
+// Make RGB normalization available to this file
+private fun ensureRgb(src: BufferedImage): BufferedImage {
+    if (src.type == BufferedImage.TYPE_INT_RGB) return src
+    val converted = BufferedImage(src.width, src.height, BufferedImage.TYPE_INT_RGB)
+    val g = converted.createGraphics()
+    try {
+        g.drawImage(src, 0, 0, null)
+    } finally {
+        g.dispose()
+    }
+    return converted
+}
+
+private enum class PixelFmt(val label: String, val ffmpegOpt: String) { RGB0("0rgb", "0rgb"), BGR0("bgr0", "bgr0");
+    fun flip() = if (this == RGB0) BGR0 else RGB0
+}
+
+private data class Res(val w: Int, val h: Int)
+
+private fun initGrabber(deviceIndex: Int, res: Res, fps: Int?, fmt: PixelFmt): FFmpegFrameGrabber? {
+    return try {
+        val g = FFmpegFrameGrabber(deviceIndex.toString())
+        g.format = "avfoundation"
+        g.imageWidth = res.w
+        g.imageHeight = res.h
+        g.audioChannels = 0
+        // Do not force pixel_format; let device choose and convert later via filter
+        // g.setOption("pixel_format", fmt.ffmpegOpt)
+        g.setOption("video_size", "${res.w}x${res.h}")
+        if (fps != null) {
+            val fpsStr = String.format(java.util.Locale.US, "%.6f", if (fps == 30) 30.000030 else fps.toDouble())
+            g.setOption("framerate", fpsStr)
+            g.frameRate = if (fps == 30) 30.000030 else fps.toDouble()
+        }
+        g.setOption("video_device_index", deviceIndex.toString())
+        g.setOption("audio_device_index", "-1")
+        // Help avfoundation deliver frames sooner
+        g.setOption("probesize", "20000000")
+        g.setOption("analyzeduration", "20000000")
+        g.setOption("use_wallclock_as_timestamps", "1")
+        LOG.info("Init grabber dev={} size={}x{} fps={} fmt={} ...", deviceIndex, res.w, res.h, fps ?: -1, fmt.label)
+        g.start()
+        // Do not pre-grab; let the main loop warm up and display as soon as frames arrive
+        g
+    } catch (t: Throwable) {
+        LOG.warn("Init failed dev={} size={}x{} fps={} fmt={}: {}", deviceIndex, res.w, res.h, fps ?: -1, fmt.label, t.message)
+        null
+    }
+}
+
+// Trigger avfoundation to list devices to the log (JavaCPP/SLF4J)
+private fun listAvFoundationDevices() {
+    try {
+        val lister = FFmpegFrameGrabber("")
+        lister.format = "avfoundation"
+        lister.setOption("list_devices", "true")
+        try { lister.start() } catch (_: Throwable) {}
+        try { lister.stop() } catch (_: Throwable) {}
+        try { lister.release() } catch (_: Throwable) {}
+    } catch (_: Throwable) {
+        // ignore
+    }
+}
+
+@Composable
+private fun PermissionHelpOverlay(
+    onOpenSettings: () -> Unit,
+    onRetryInit: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xCC000000)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("カメラ映像を表示できません", color = Color.White)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "カメラ権限が未許可の可能性があります。システム設定→プライバシーとセキュリティ→カメラで ImageFlowDesktop を許可してください。",
+                color = Color.LightGray
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpenSettings) { Text("カメラ設定を開く") }
+                OutlinedButton(onClick = onRetryInit) { Text("再初期化") }
+            }
+        }
+    }
+}
+
+private fun openPrivacyCameraSettings() {
+    val uri = try { URI("x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") } catch (_: Throwable) { null }
+    try {
+        if (uri != null && Desktop.isDesktopSupported()) {
+            Desktop.getDesktop().browse(uri)
+            return
+        }
+    } catch (_: Throwable) {
+        // ignore
+    }
 }

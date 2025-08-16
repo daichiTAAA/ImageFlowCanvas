@@ -42,7 +42,12 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.imageflow.kmp.desktop.MainKt"
-        jvmArgs += listOf("-Dfile.encoding=UTF-8")
+        jvmArgs += listOf(
+            "-Dfile.encoding=UTF-8",
+            // Enable JavaCPP/FFmpeg logs via SLF4J (shown in console)
+            "-Dorg.bytedeco.javacpp.logger=slf4j",
+            "-Dorg.bytedeco.javacpp.loggerFormat=%m%n"
+        )
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
