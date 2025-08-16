@@ -14,9 +14,12 @@ import androidx.compose.ui.window.application
 import com.imageflow.kmp.di.DependencyContainer
 import com.imageflow.kmp.models.InspectionType
 import com.imageflow.kmp.ui.mobile.InspectionDetailScreen
+import java.awt.FileDialog
+import java.awt.Frame
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
 import com.imageflow.kmp.ui.mobile.ProductSearchScreen
 import com.imageflow.kmp.ui.mobile.SettingsScreen
+import com.imageflow.kmp.ui.viewmodel.SettingsViewModel
 
 fun main() = application {
     val windowState = rememberWindowState(width = 1280.dp, height = 880.dp)
@@ -45,6 +48,7 @@ private fun ImageFlowDesktopApp() {
     val qrScanResult by viewModel.qrScanResult.collectAsState()
     val inspectionState by viewModel.inspectionState.collectAsState()
     val inspectionProgress by viewModel.inspectionProgress.collectAsState()
+    val currentInspection by viewModel.currentInspection.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
 
@@ -128,6 +132,12 @@ private fun ImageFlowDesktopApp() {
 
         AppScreen.INSPECTION_DETAIL -> {
             ScreenWithTopBar(title = "検査詳細", onBack = { currentScreen = AppScreen.MAIN }) {
+                val settingsVm = remember { SettingsViewModel() }
+                val baseUrl by settingsVm.baseUrl.collectAsState()
+                val (grpcHost, grpcPort) = remember(baseUrl) { parseGrpcEndpoint(baseUrl) }
+                // Realtime preview + streaming to backend via gRPC
+                Column(Modifier.fillMaxSize()) {
+                    RealtimeInspectionDesktop(grpcHost = grpcHost, grpcPort = grpcPort, modifier = Modifier.fillMaxWidth())
                 InspectionDetailScreen(
                     currentProduct = uiState.currentProduct,
                     inspectionState = inspectionState,
@@ -135,11 +145,17 @@ private fun ImageFlowDesktopApp() {
                     lastAiResult = uiState.lastAiResult,
                     isLoading = uiState.isLoading,
                     errorMessage = uiState.errorMessage,
-                    onAddImage = { path -> viewModel.captureImage(path) },
+                    addedImages = currentInspection?.imagePaths ?: emptyList(),
+                    onAddImage = { _ ->
+                        pickImageFile()?.let { selected ->
+                            viewModel.captureImage(selected)
+                        }
+                    },
                     onRunAi = { viewModel.processAiInspection() },
                     onHumanReview = { result -> viewModel.submitHumanReview(result) },
                     onBack = { currentScreen = AppScreen.MAIN }
                 )
+                }
             }
         }
 
@@ -174,6 +190,34 @@ private fun ImageFlowDesktopApp() {
                 onBack = { currentScreen = AppScreen.MAIN }
             )
         }
+    }
+}
+
+// Simple native file picker for images (macOS/Windows/Linux)
+private fun pickImageFile(): String? {
+    return try {
+        val dialog = FileDialog(null as Frame?, "画像を選択", FileDialog.LOAD)
+        dialog.isMultipleMode = false
+        dialog.setFilenameFilter { _, name ->
+            val lower = name.lowercase()
+            lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".bmp") || lower.endsWith(".webp")
+        }
+        dialog.isVisible = true
+        val file = dialog.files?.firstOrNull()
+        file?.absolutePath
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun parseGrpcEndpoint(baseUrl: String?): Pair<String, Int> {
+    return try {
+        val url = java.net.URI(baseUrl ?: "http://127.0.0.1:8000")
+        val host = url.host ?: "127.0.0.1"
+        val port = if (url.port != -1) url.port else 50051
+        host to port
+    } catch (_: Throwable) {
+        "127.0.0.1" to 50051
     }
 }
 

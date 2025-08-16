@@ -20,6 +20,7 @@ fun InspectionDetailScreen(
     lastAiResult: AiInspectionResult?,
     isLoading: Boolean,
     errorMessage: String?,
+    addedImages: List<String> = emptyList(),
     onAddImage: (String) -> Unit,
     onRunAi: () -> Unit,
     onHumanReview: (HumanResult) -> Unit,
@@ -68,6 +69,13 @@ fun InspectionDetailScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { onHumanReview(HumanResult.OK) }, enabled = currentProduct != null) { Text("人手確認: OK") }
                     OutlinedButton(onClick = { onHumanReview(HumanResult.NG) }, enabled = currentProduct != null) { Text("人手確認: NG") }
+                }
+                if (addedImages.isNotEmpty()) {
+                    Divider()
+                    Text("追加済み画像 (${addedImages.size})", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    addedImages.takeLast(5).forEach { p ->
+                        Text("• $p", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onBack) { Text("戻る") }

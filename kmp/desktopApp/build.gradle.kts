@@ -1,18 +1,17 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import com.google.protobuf.gradle.*
 
 plugins {
     kotlin("jvm")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
+    id("com.google.protobuf") version "0.9.4"
 }
 
-kotlin {
-    jvmToolchain(17)
-}
+kotlin { jvmToolchain(17) }
 
 sourceSets {
     val main by getting
-    // Map Compose Desktop JVM sources to jvmMain for consistency with MPP style
     main.apply {
         kotlin.srcDir("src/jvmMain/kotlin")
         resources.srcDir("src/jvmMain/resources")
@@ -24,46 +23,36 @@ dependencies {
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)
     implementation(project(":shared"))
-    // JavaCV (OpenCV/FFmpeg) for cross-platform camera capture (supports macOS arm64)
+
     implementation("org.bytedeco:javacv-platform:1.5.10")
-    // ZXing for QR decoding on desktop
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.zxing:javase:3.5.3")
-    // SLF4J simple backend to avoid NOP logger warnings
     implementation("org.slf4j:slf4j-simple:2.0.13")
+
+    val grpcVersion = "1.65.1"
+    val protobufVersion = "3.25.3"
+    val grpcKotlinVersion = "1.4.1"
+    implementation("io.grpc:grpc-netty-shaded:$grpcVersion")
+    implementation("io.grpc:grpc-protobuf:$grpcVersion")
+    implementation("io.grpc:grpc-stub:$grpcVersion")
+    implementation("com.google.protobuf:protobuf-kotlin:$protobufVersion")
+    implementation("io.grpc:grpc-kotlin-stub:$grpcKotlinVersion")
 }
 
 compose.desktop {
     application {
         mainClass = "com.imageflow.kmp.desktop.MainKt"
-        
-        // JVM args
-        jvmArgs += listOf(
-            "-Dfile.encoding=UTF-8"
-        )
-        // Note: Compose's macOS launcher already manages main-thread startup.
-        // Do not add -XstartOnFirstThread here to avoid startup conflicts.
+        jvmArgs += listOf("-Dfile.encoding=UTF-8")
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "ImageFlowDesktop"
             packageVersion = "1.0.0"
-            // Ensure required JDK modules are present in runtime image
             modules("java.sql", "java.net.http")
-
             macOS {
-                // Note: Compose signing with identity "-" may not be supported in all environments.
-                // We wire a post-packaging ad-hoc codesign task below as a reliable fallback.
-                // Allow overriding bundle ID to retrigger macOS TCC prompts in development builds
                 val overrideBundleId = providers.gradleProperty("bundleIdOverride").orNull
-                if (overrideBundleId != null) {
-                    bundleID = overrideBundleId
-                } else {
-                    bundleID = "com.imageflow.kmp.desktop"
-                }
-                // Add camera usage description and enable Continuity Camera device type
+                bundleID = overrideBundleId ?: "com.imageflow.kmp.desktop"
                 infoPlist {
-                    // Inject raw XML keys compatible with Apple's Info.plist
                     extraKeysRawXml = """
                         <key>NSCameraUsageDescription</key>
                         <string>QRコードの読み取りのためにカメラを使用します。</string>
@@ -72,30 +61,44 @@ compose.desktop {
                         <key>NSCameraUseContinuityCameraDeviceType</key>
                         <true/>
                     """.trimIndent()
+                }
+            }
         }
 
-        // On macOS, perform ad-hoc codesign after the .app is created to improve Gatekeeper/TCC behavior
-        if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
-            val appBundle = layout.buildDirectory.dir("compose/binaries/main/app/ImageFlowDesktop.app")
-            tasks.register("packageAdHocSigned") {
-                dependsOn("packageDistributionForCurrentOS")
-                doLast {
-                    exec {
-                        commandLine(
-                            "/usr/bin/codesign",
-                            "--force",
-                            "--deep",
-                            "-s", "-",
-                            appBundle.get().asFile.absolutePath
-                        )
-                    }
-                }
+        // Ensure modules are enabled at runtime as well
+        jvmArgs += listOf("--add-modules", "java.sql,java.net.http")
+    }
+}
+
+// Place .proto files under src/main/proto for this module (created below)
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:3.25.3" }
+    plugins {
+        create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.65.1" }
+        create("grpckt") { artifact = "io.grpc:protoc-gen-grpc-kotlin:1.4.1:jdk8@jar" }
+    }
+    generateProtoTasks {
+        all().forEach { task ->
+            task.plugins.apply {
+                create("grpc")
+                create("grpckt")
+            }
+            task.builtins {
+                register("kotlin") {}
             }
         }
     }
 }
 
-        // Ensure modules are enabled at runtime as well
-        jvmArgs += listOf("--add-modules", "java.sql,java.net.http")
+// Ad-hoc signing helper (optional)
+if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
+    val appBundle = layout.buildDirectory.dir("compose/binaries/main/app/ImageFlowDesktop.app")
+    tasks.register("packageAdHocSigned") {
+        dependsOn(":desktopApp:packageDistributionForCurrentOS")
+        doLast {
+            exec {
+                commandLine("/usr/bin/codesign", "--force", "--deep", "-s", "-", appBundle.get().asFile.absolutePath)
+            }
+        }
     }
 }

@@ -57,6 +57,7 @@ fun ImageFlowMobileApp() {
     val inspectionProgress by viewModel.inspectionProgress.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
+    val currentInspection by viewModel.currentInspection.collectAsState()
     
     MaterialTheme {
         val settingsVm = remember { SettingsViewModel() }
@@ -164,6 +165,7 @@ fun ImageFlowMobileApp() {
                         lastAiResult = uiState.lastAiResult,
                         isLoading = uiState.isLoading,
                         errorMessage = uiState.errorMessage,
+                        addedImages = currentInspection?.imagePaths ?: emptyList(),
                         onAddImage = { path -> viewModel.captureImage(path) },
                         onRunAi = { viewModel.processAiInspection() },
                         onHumanReview = { result -> viewModel.submitHumanReview(result) },

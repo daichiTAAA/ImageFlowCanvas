@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "imageflow/v1/common.proto";
+
+service AIDetectionService {
+  rpc DetectObjects(DetectionRequest) returns (DetectionResponse);
+}
+
+message DetectionRequest {
+  oneof input {
+    ImageData input_image = 1;
+    ImageBytes input_bytes = 8;
+  }
+  string model_name = 2;
+  float confidence_threshold = 3;
+  float nms_threshold = 4;
+  bool draw_boxes = 5;
+  string execution_id = 6;
+  ImageData resize_metadata_ref = 7;
+}
+
+message DetectionResponse {
+  ProcessingResult result = 1;
+  repeated Detection detections = 2;
+  DetectionMetadata metadata = 3;
+}
+
+message Detection {
+  string class_name = 1;
+  float confidence = 2;
+  BoundingBox bbox = 3;
+  int32 class_id = 4;
+}
+
+message BoundingBox { float x1 = 1; float y1 = 2; float x2 = 3; float y2 = 4; }
+
+message DetectionMetadata {
+  string model_name = 1;
+  string model_version = 2;
+  float confidence_threshold = 3;
+  float nms_threshold = 4;
+  int32 total_detections = 5;
+  double inference_time_ms = 6;
+  double nms_time_ms = 7;
+}

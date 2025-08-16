@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "google/protobuf/timestamp.proto";
+import "imageflow/v1/common.proto";
+import "imageflow/v1/ai_detection.proto";
+
+service CameraStreamProcessor {
+  rpc ProcessVideoStream(stream VideoFrame) returns (stream ProcessedFrame);
+}
+
+message VideoFrame {
+  bytes frame_data = 1;
+  int64 timestamp_ms = 2;
+  VideoMetadata metadata = 3;
+}
+
+message VideoMetadata {
+  string source_id = 1;
+  int32 width = 2;
+  int32 height = 3;
+  string pipeline_id = 4;
+  map<string, string> processing_params = 5;
+}
+
+message ProcessedFrame {
+  bytes processed_data = 1;
+  string source_id = 2;
+  int64 processing_time_ms = 3;
+  repeated Detection detections = 4;
+  StreamProcessingStatus status = 5;
+  string error_message = 6;
+  google.protobuf.Timestamp processed_at = 7;
+}
+
+enum StreamProcessingStatus {
+  STREAM_PROCESSING_STATUS_UNSPECIFIED = 0;
+  STREAM_PROCESSING_STATUS_SUCCESS = 1;
+  STREAM_PROCESSING_STATUS_PARTIAL = 2;
+  STREAM_PROCESSING_STATUS_FAILED = 3;
+  STREAM_PROCESSING_STATUS_SKIPPED = 4;
+}

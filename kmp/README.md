@@ -223,7 +223,13 @@ kmp/
 - JDK 17 必須（`java -version` が 17.x であること）
 - 初回は依存取得のためインターネット接続が必要
 
-### 起動（開発）
+### ビルド（開発）
+```bash
+cd kmp
+./gradlew :desktopApp:build
+```
+
+### ビルド＋起動（開発）
 ```bash
 cd kmp
 ./gradlew :desktopApp:run
@@ -232,8 +238,8 @@ cd kmp
 ### パッケージ作成（配布物）
 ```bash
 cd kmp
-./gradlew :desktopApp:packageAdHocSigned
-./gradlew :desktopApp:packageDistributionForCurrentOS
+./gradlew :desktopApp:packageAdHocSigned # MacOS用。開発向けの ad-hoc 署名付きパッケージを生成
+./gradlew :desktopApp:packageDistributionForCurrentOS # 配布用パッケージを生成(署名なし)
 # 出力先: kmp/desktopApp/build/compose/binaries/main/{dmg,msi,deb}/
 # 実行方法（macOSは .app を Finder から開くか、下記コマンド推奨）
 open desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app
@@ -262,27 +268,6 @@ log stream --predicate 'process == "ImageFlowDesktop"' --info
     ./gradlew :desktopApp:packageAdHocSigned -PbundleIdOverride=com.imageflow.kmp.desktop.dev
     ```
   - 既存バンドルIDで続ける場合は、システム設定で手動許可するか、開発時のみ `tccutil reset Camera com.imageflow.kmp.desktop` 実行後に Finder から起動してください。
-
-### カメラが映らない/権限が表示されない場合の対処
-- `.app` を `open` で起動しているか確認（`.app/Contents/MacOS/...` を直接実行しない）。
-- 初回ダイアログで「許可」したか確認。拒否した場合は「システム設定 > プライバシーとセキュリティ > カメラ」で ImageFlowDesktop を有効化。
-- それでも表示されない場合は `.app` を一度削除し、再度 `:desktopApp:packageDistributionForCurrentOS` で作成し直して `.app` から起動。
-- もし項目が表示されない/うまく切り替わらない場合は、以下でカメラ権限をリセット
-    - `tccutil reset Camera com.imageflow.kmp.desktop`
-
-#### TCCにアプリが登録されない場合の推奨手順（macOS）
-- 最も安定するのは、以下の順で固定パス配置＋隔離解除＋アドホック署名を行い、Finderから起動して権限ダイアログで「許可」する方法です。
-  1) アプリを /Applications へ配置
-     - `mv kmp/desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app /Applications/`
-  2) 隔離属性を解除（Gatekeeperの隔離を外す）
-     - `xattr -dr com.apple.quarantine /Applications/ImageFlowDesktop.app`
-  3) 可能ならアドホック署名（バンドル内のネイティブを含めて深い署名）
-     - `codesign --force --deep -s - "/Applications/ImageFlowDesktop.app"`
-  4) カメラ権限をリセット（必要な場合のみ）
-     - `tccutil reset Camera com.imageflow.kmp.desktop`
-  5) Finderから `/Applications/ImageFlowDesktop.app` を開く → カメラ権限ダイアログで「OK」を選択
-
-配布（ユーザー端末への配布）を想定する場合は、Developer ID 署名＋公証（notarization）の導入をご検討ください。Compose の `nativeDistributions { macOS { signing { … } notarization { … } } }` で設定可能です（本リポジトリの標準ビルドは開発用途の ad-hoc 署名のみを同梱）。
 
 ### ビルドが遅い場合の対処（3分以上かかるなど）
 - 依存のネイティブダウンロード: `org.bytedeco:javacv-platform` は複数OS/CPUのFFmpeg/OpenCVネイティブを含むため、初回取得に時間がかかります。
