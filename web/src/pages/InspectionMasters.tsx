@@ -22,6 +22,13 @@ import {
   IconButton,
   Fab,
   Alert,
+  Tooltip,
+  Switch,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -91,6 +98,7 @@ export function InspectionMasters() {
   const [criterias, setCriterias] = useState<any[]>([]);
   const [openCriteriaDialog, setOpenCriteriaDialog] = useState(false);
   const [editingCriteria, setEditingCriteria] = useState<any | null>(null);
+  const [targetSearch, setTargetSearch] = useState("");
 
   useEffect(() => {
     loadTargets();
@@ -291,21 +299,12 @@ export function InspectionMasters() {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-                mb={2}
-              >
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} gap={1}>
                 <Typography variant="h6">検査対象</Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={handleCreateTarget}
-                  disabled={loading}
-                >
-                  新規作成
-                </Button>
+                <Box display="flex" gap={1}>
+                  <TextField size="small" placeholder="製品コード/名称で検索" value={targetSearch} onChange={(e)=> setTargetSearch(e.target.value)} />
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateTarget} disabled={loading}>検査対象を新規作成</Button>
+                </Box>
               </Box>
 
               <TableContainer component={Paper} variant="outlined">
@@ -319,7 +318,11 @@ export function InspectionMasters() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {targets.map((target) => (
+                    {targets.filter(t => {
+                      const q = targetSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      return (t.product_code || "").toLowerCase().includes(q) || (t.name || "").toLowerCase().includes(q);
+                    }).map((target) => (
                       <TableRow
                         key={target.id}
                         selected={selectedTarget?.id === target.id}
@@ -364,24 +367,15 @@ export function InspectionMasters() {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Box
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-                mb={2}
-              >
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">
                   検査項目 {selectedTarget && `- ${selectedTarget.name}`}
                 </Typography>
-                {selectedTarget && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={handleCreateItem}
-                  >
-                    項目追加
-                  </Button>
-                )}
+                <Tooltip title={selectedTarget ? "" : "左の検査対象を選択してください"}>
+                  <span>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateItem} disabled={!selectedTarget}>検査項目を追加</Button>
+                  </span>
+                </Tooltip>
               </Box>
 
               {selectedTarget ? (
@@ -437,9 +431,13 @@ export function InspectionMasters() {
                   </Table>
                 </TableContainer>
               ) : (
-                <Typography color="textSecondary" textAlign="center" py={4}>
-                  検査対象を選択してください
-                </Typography>
+                <Box py={4}>
+                  <Alert severity="info" sx={{ width: "fit-content", mx: "auto" }}
+                    action={<Button color="inherit" size="small" onClick={handleCreateTarget}>検査対象を作成</Button>}
+                  >
+                    右側の検査項目を追加するには、左の検査対象を選択してください。
+                  </Alert>
+                </Box>
               )}
             </CardContent>
           </Card>
@@ -636,6 +634,11 @@ export function InspectionMasters() {
                 multiline
                 rows={3}
               />
+            </Grid>
+            <Grid item xs={12}>
+              <Alert severity="info">
+                製品コード（product_code）か型式グループ（group_id）のどちらか一方は必須です。
+              </Alert>
             </Grid>
           </Grid>
         </DialogContent>
@@ -1041,17 +1044,31 @@ export function InspectionMasters() {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField
-                label="タイプ"
-                value={editingItem?.type || "VISUAL_INSPECTION"}
-                onChange={(e) =>
-                  setEditingItem((prev) =>
-                    prev ? { ...prev, type: e.target.value } : prev
-                  )
-                }
-                fullWidth
-                placeholder="VISUAL_INSPECTION"
-              />
+              <FormControl fullWidth>
+                <InputLabel id="item-type-label">タイプ</InputLabel>
+                <Select
+                  labelId="item-type-label"
+                  label="タイプ"
+                  value={editingItem?.type || "VISUAL_INSPECTION"}
+                  onChange={(e) =>
+                    setEditingItem((prev) =>
+                      prev ? { ...prev, type: String(e.target.value) } : prev
+                    )
+                  }
+                >
+                  {[
+                    "VISUAL_INSPECTION",
+                    "DIMENSIONAL_INSPECTION",
+                    "FUNCTIONAL_INSPECTION",
+                    "SURFACE_INSPECTION",
+                    "COLOR_INSPECTION",
+                  ].map((t) => (
+                    <MenuItem key={t} value={t}>
+                      {t}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
@@ -1081,21 +1098,49 @@ export function InspectionMasters() {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField
-                label="必須 (true/false)"
-                value={(editingItem?.is_required ?? true).toString()}
-                onChange={(e) =>
-                  setEditingItem((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          is_required: e.target.value.toLowerCase() === "true",
-                        }
-                      : prev
-                  )
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={editingItem?.is_required ?? true}
+                    onChange={(e) =>
+                      setEditingItem((prev) =>
+                        prev ? { ...prev, is_required: e.target.checked } : prev
+                      )
+                    }
+                  />
                 }
-                fullWidth
+                label="必須"
               />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel id="criteria-label">検査基準</InputLabel>
+                <Select
+                  labelId="criteria-label"
+                  label="検査基準"
+                  value={editingItem?.criteria_id || ""}
+                  onChange={(e) =>
+                    setEditingItem((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            criteria_id: String(e.target.value) || undefined,
+                          }
+                        : prev
+                    )
+                  }
+                  displayEmpty
+                >
+                  <MenuItem value="">
+                    <em>未設定</em>
+                  </MenuItem>
+                  {criterias.map((c: any) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </DialogContent>
