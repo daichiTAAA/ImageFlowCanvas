@@ -450,7 +450,7 @@ private fun BottomActionBar(
 
 // Utility functions
 private fun getStateDisplayText(state: InspectionState): String = when (state) {
-    is InspectionState.ProductScanning -> "製品をスキャンしてください"
+    is InspectionState.ProductScanning -> "製品情報を選択してください"
     is InspectionState.ProductIdentified -> "製品が特定されました"
     is InspectionState.InProgress -> "検査実行中..."
     is InspectionState.AiCompleted -> "AI検査完了"

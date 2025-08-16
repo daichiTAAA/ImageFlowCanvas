@@ -15,6 +15,8 @@ import androidx.lifecycle.lifecycleScope
 import com.imageflow.kmp.database.AndroidDbContextHolder
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
 import com.imageflow.kmp.ui.mobile.QrScanningScreen
+import com.imageflow.kmp.ui.mobile.InspectionDetailScreen
+import com.imageflow.kmp.models.HumanResult
 import com.imageflow.kmp.ui.mobile.ProductSearchScreen
 import com.imageflow.kmp.models.*
 import com.imageflow.kmp.state.InspectionState
@@ -74,6 +76,7 @@ fun ImageFlowMobileApp() {
                     },
                     onStartInspectionClick = {
                         viewModel.startInspection(InspectionType.STATIC_IMAGE)
+                        currentScreen = AppScreen.INSPECTION_DETAIL
                     },
                     onViewHistoryClick = {
                         // TODO: Implement inspection history screen
@@ -154,9 +157,18 @@ fun ImageFlowMobileApp() {
             
             AppScreen.INSPECTION_DETAIL -> {
                 ScreenWithTopBar(title = "検査詳細", onBack = { currentScreen = AppScreen.MAIN }) {
-                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("Inspection Detail Screen - Coming Soon")
-                    }
+                    InspectionDetailScreen(
+                        currentProduct = uiState.currentProduct,
+                        inspectionState = inspectionState,
+                        progress = inspectionProgress.completionPercentage,
+                        lastAiResult = uiState.lastAiResult,
+                        isLoading = uiState.isLoading,
+                        errorMessage = uiState.errorMessage,
+                        onAddImage = { path -> viewModel.captureImage(path) },
+                        onRunAi = { viewModel.processAiInspection() },
+                        onHumanReview = { result -> viewModel.submitHumanReview(result) },
+                        onBack = { currentScreen = AppScreen.MAIN }
+                    )
                 }
             }
             

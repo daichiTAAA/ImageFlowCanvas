@@ -19,6 +19,8 @@ import com.imageflow.kmp.di.DependencyContainer
 import com.imageflow.kmp.models.InspectionType
 import com.imageflow.kmp.state.InspectionState
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
+import com.imageflow.kmp.ui.mobile.InspectionDetailScreen
+import com.imageflow.kmp.models.HumanResult
 import com.imageflow.kmp.ui.mobile.ProductSearchScreen
 import com.imageflow.kmp.ui.mobile.QrScanningScreen
 import com.imageflow.kmp.ui.mobile.SettingsScreen
@@ -84,6 +86,7 @@ private fun ImageFlowDesktopApp() {
                     },
                     onStartInspectionClick = {
                         viewModel.startInspection(InspectionType.STATIC_IMAGE)
+                        navigateTo(AppScreen.INSPECTION_DETAIL)
                     },
                     onViewHistoryClick = {
                         navigateTo(AppScreen.HISTORY)
@@ -158,9 +161,18 @@ private fun ImageFlowDesktopApp() {
 
             AppScreen.INSPECTION_DETAIL -> {
                 ScreenWithTopBar(title = "検査詳細", onBack = { navigateBack() }) {
-                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("Inspection Detail Screen - Coming Soon")
-                    }
+                    InspectionDetailScreen(
+                        currentProduct = uiState.currentProduct,
+                        inspectionState = inspectionState,
+                        progress = inspectionProgress.completionPercentage,
+                        lastAiResult = uiState.lastAiResult,
+                        isLoading = uiState.isLoading,
+                        errorMessage = uiState.errorMessage,
+                        onAddImage = { path: String -> viewModel.captureImage(path) },
+                        onRunAi = { viewModel.processAiInspection() },
+                        onHumanReview = { result: HumanResult -> viewModel.submitHumanReview(result) },
+                        onBack = { navigateBack() }
+                    )
                 }
             }
 
