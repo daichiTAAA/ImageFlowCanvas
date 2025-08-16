@@ -417,4 +417,23 @@ class InspectionWorkflowUseCase(
             is ApiResult.NetworkError -> emptyList()
         }
     }
+
+    // Realtime AI updates from desktop streaming (gRPC)
+    suspend fun updateAiResultFromRealtime(ai: AiInspectionResult) {
+        val current = _currentInspection.value ?: return
+        try {
+            inspectionRepository.updateAiResult(current.id, ai)
+            val updated = current.copy(
+                aiResult = ai,
+                aiConfidence = ai.confidence,
+                inspectionState = InspectionState.InProgress,
+                updatedAt = System.currentTimeMillis()
+            )
+            _currentInspection.value = updated
+            _state.value = InspectionState.InProgress
+            updateProgress()
+        } catch (_: Throwable) {
+            // ignore
+        }
+    }
 }

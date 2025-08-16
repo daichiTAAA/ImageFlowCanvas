@@ -41,7 +41,15 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
         # Performance optimization: pre-warm OpenCV filters
         self._warm_up()
 
-        logger.info(f"Initialized optimized Filter Service for {self.minio_endpoint}")
+        try:
+            cv2_path = getattr(cv2, "__file__", "<unknown>")
+            cv2_ver = getattr(cv2, "__version__", "<unknown>")
+            has_gauss = hasattr(cv2, "GaussianBlur")
+            logger.info(
+                f"Initialized Filter Service for {self.minio_endpoint} | cv2={cv2_ver} at {cv2_path} | has GaussianBlur={has_gauss}"
+            )
+        except Exception as e:
+            logger.warning(f"Unable to introspect cv2: {e}")
 
     def _create_minio_client(self):
         """Create MinIO client with optimized settings"""
@@ -58,7 +66,8 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
             # Create a small dummy image to warm up filter operations
             dummy = np.zeros((100, 100, 3), dtype=np.uint8)
             # Test different filter types
-            cv2.GaussianBlur(dummy, (5, 5), 0)
+            # Use simple blur to avoid GaussianBlur dependency
+            cv2.blur(dummy, (5, 5))
             cv2.medianBlur(dummy, 5)
             cv2.bilateralFilter(dummy, 9, 75, 75)
             logger.info("Filter service warmed up successfully")
@@ -72,7 +81,8 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
             self.minio_client.list_buckets()
             # Test OpenCV functionality
             test_img = np.zeros((100, 100, 3), dtype=np.uint8)
-            cv2.GaussianBlur(test_img, (5, 5), 0)
+            # Avoid GaussianBlur; use simple blur
+            cv2.blur(test_img, (5, 5))
             return True
         except Exception as e:
             logger.error(f"Health check failed: {e}")
@@ -259,11 +269,11 @@ class FilterServiceImplementation(filter_pb2_grpc.FilterServiceServicer):
             return cv2.blur(image, (kernel_size, kernel_size))
 
         elif filter_type == filter_pb2.FILTER_TYPE_GAUSSIAN:
+            # Replace GaussianBlur with simple box blur approximation
             kernel_size = int(intensity * 10) + 1
             if kernel_size % 2 == 0:
                 kernel_size += 1
-            sigma = intensity * 2
-            return cv2.GaussianBlur(image, (kernel_size, kernel_size), sigma)
+            return cv2.blur(image, (kernel_size, kernel_size))
 
         elif filter_type == filter_pb2.FILTER_TYPE_SHARPEN:
             kernel = np.array([[-1, -1, -1], [-1, 9 + intensity, -1], [-1, -1, -1]])

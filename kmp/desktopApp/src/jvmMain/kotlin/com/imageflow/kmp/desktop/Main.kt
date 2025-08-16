@@ -9,11 +9,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.application
 import com.imageflow.kmp.di.DependencyContainer
 import com.imageflow.kmp.models.InspectionType
-import com.imageflow.kmp.ui.mobile.InspectionDetailScreen
 import java.awt.FileDialog
 import java.awt.Frame
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
@@ -137,25 +135,23 @@ private fun ImageFlowDesktopApp() {
                 val (grpcHost, grpcPort) = remember(baseUrl) { parseGrpcEndpoint(baseUrl) }
                 // Realtime preview + streaming to backend via gRPC
                 Column(Modifier.fillMaxSize()) {
-                    RealtimeInspectionDesktop(grpcHost = grpcHost, grpcPort = grpcPort, modifier = Modifier.fillMaxWidth())
-                InspectionDetailScreen(
-                    currentProduct = uiState.currentProduct,
-                    inspectionState = inspectionState,
-                    progress = inspectionProgress.completionPercentage,
-                    lastAiResult = uiState.lastAiResult,
-                    isLoading = uiState.isLoading,
-                    errorMessage = uiState.errorMessage,
-                    addedImages = currentInspection?.imagePaths ?: emptyList(),
-                    inspectionItems = uiState.inspectionItems,
-                    onAddImage = { _ ->
-                        pickImageFile()?.let { selected ->
-                            viewModel.captureImage(selected)
+                    RealtimeInspectionDesktop(
+                        grpcHost = grpcHost,
+                        grpcPort = grpcPort,
+                        modifier = Modifier.fillMaxWidth(),
+                        onDetectionsUpdated = { det, ms ->
+                            viewModel.onRealtimeAiUpdate(det, ms)
                         }
-                    },
-                    onRunAi = { viewModel.processAiInspection() },
-                    onHumanReview = { result -> viewModel.submitHumanReview(result) },
-                    onBack = { currentScreen = AppScreen.MAIN }
-                )
+                    )
+                    DesktopInspectionDetailPanel(
+                        currentProduct = uiState.currentProduct,
+                        inspectionState = inspectionState,
+                        progress = inspectionProgress.completionPercentage,
+                        lastAiResult = uiState.lastAiResult,
+                        isLoading = uiState.isLoading,
+                        errorMessage = uiState.errorMessage,
+                        inspectionItems = uiState.inspectionItems,
+                    )
                 }
             }
         }

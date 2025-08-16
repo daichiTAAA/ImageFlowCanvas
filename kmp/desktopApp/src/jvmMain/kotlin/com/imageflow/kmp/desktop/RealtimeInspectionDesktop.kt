@@ -36,7 +36,8 @@ fun RealtimeInspectionDesktop(
     grpcHost: String,
     grpcPort: Int,
     pipelineId: String = "default",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDetectionsUpdated: ((detections: Int, processingTimeMs: Long) -> Unit)? = null
 ) {
     val log = remember { LOG }
     var grabber by remember { mutableStateOf<FFmpegFrameGrabber?>(null) }
@@ -156,7 +157,10 @@ fun RealtimeInspectionDesktop(
             val recvJob = launch(Dispatchers.IO) {
                 try {
                     stub.processVideoStream(requests).collect { resp ->
-                        withContext(Dispatchers.Main) { stats = stats.copy(lastDetections = resp.detectionsCount) }
+                        withContext(Dispatchers.Main) {
+                            stats = stats.copy(lastDetections = resp.detectionsCount)
+                            onDetectionsUpdated?.invoke(resp.detectionsCount, resp.processingTimeMs)
+                        }
                     }
                 } catch (_: Throwable) {}
             }

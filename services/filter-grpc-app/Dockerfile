@@ -10,8 +10,8 @@ COPY requirements.txt .
 RUN pip install --proxy=$PROXY --no-cache-dir -r requirements.txt
 
 # Force reinstall OpenCV with proper JPEG support
-RUN pip uninstall -y opencv-python opencv-python-headless && \
-    pip install --proxy=$PROXY --no-cache-dir opencv-contrib-python
+RUN pip uninstall -y cv2 opencv-python opencv-python-headless opencv-contrib-python || true && \
+    pip install --proxy=$PROXY --no-cache-dir opencv-contrib-python==4.10.0.84
 
 # Copy generated protobuf files
 COPY generated/python /app/generated/python

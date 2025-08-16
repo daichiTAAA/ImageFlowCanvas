@@ -305,6 +305,33 @@ class MobileInspectionViewModel(
             }
         }
     }
+
+    // Desktop realtime streaming -> update AI result + state
+    fun onRealtimeAiUpdate(detections: Int, processingTimeMs: Long, pipelineId: String? = null) {
+        viewModelScope.launch {
+            try {
+                val ai = AiInspectionResult(
+                    overallResult = if (detections == 0) InspectionResult.PASS else InspectionResult.FAIL,
+                    detectedDefects = if (detections <= 0) emptyList() else List(detections) {
+                        DetectedDefect(
+                            type = DefectType.OTHER,
+                            location = BoundingBox(0f, 0f, 0f, 0f),
+                            severity = if (detections == 0) DefectSeverity.INFO else DefectSeverity.MAJOR,
+                            confidence = 0.5f
+                        )
+                    },
+                    measurements = emptyList(),
+                    confidence = if (detections == 0) 0.90f else 0.70f,
+                    processingTimeMs = processingTimeMs,
+                    pipelineId = pipelineId
+                )
+                inspectionWorkflowUseCase.updateAiResultFromRealtime(ai)
+                updateUiState { it.copy(lastAiResult = ai) }
+            } catch (_: Throwable) {
+                // ignore ui update errors
+            }
+        }
+    }
     
     fun cancelInspection() {
         viewModelScope.launch {
