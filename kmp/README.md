@@ -217,7 +217,7 @@ kmp/
 ### 特長（Android版との共通化）
 - **UI/ロジック共通**: `:shared` の `MobileInspectionScreen` / `ProductSearchScreen` / `SettingsScreen` と各種 ViewModel/UseCase をそのまま利用
 - **画面構成**: Android版と同一。トップ、QRスキャン、順序情報検索、設定など
-- **QRスキャン**: デスクトップは現状プレースホルダUI（3秒後にサンプルQRを擬似入力）。将来的にUSB/ネットワークカメラ連携を `shared/desktopMain` の `CameraController` 実装に接続可能
+- **QRスキャン（実装済み）**: USB/Continuity Camera 映像を表示し、ZXing でQR/DataMatrix/Aztec/PDF417をデコード。指定形式と一致しない場合は、生データ／期待フォーマット／解析結果／差分を表示
 
 ### 事前準備
 - JDK 17 必須（`java -version` が 17.x であること）
@@ -234,9 +234,32 @@ cd kmp
 cd kmp
 ./gradlew :desktopApp:packageDistributionForCurrentOS
 # 出力先: kmp/desktopApp/build/compose/binaries/main/{dmg,msi,deb}/
-# 実行方法
-cd kmp && ./desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app/Contents/MacOS/ImageFlowDesktop
+# 実行方法（macOSは .app を Finder から開くか、下記コマンド推奨）
+open desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app
 ```
+
+### カメラが映らない/権限が表示されない場合の対処
+- `.app` を `open` で起動しているか確認（`.app/Contents/MacOS/...` を直接実行しない）。
+- 初回ダイアログで「許可」したか確認。拒否した場合は「システム設定 > プライバシーとセキュリティ > カメラ」で ImageFlowDesktop を有効化。
+- それでも表示されない場合は `.app` を一度削除し、再度 `:desktopApp:packageDistributionForCurrentOS` で作成し直して `.app` から起動。
+- 端末に複数カメラがある場合、内部で `avfoundation` デバイス (`0`, `1`, `0:0`, `1:0`) を自動プローブします。検出失敗時はアプリ内に「カメラ初期化に失敗しました」と表示されます。必要に応じてデバイス選択UIを追加可能です。
+
+### ビルドが遅い場合の対処（3分以上かかるなど）
+- 依存のネイティブダウンロード: `org.bytedeco:javacv-platform` は複数OS/CPUのFFmpeg/OpenCVネイティブを含むため、初回取得に時間がかかります。
+- パッケージ（DMG/MSI/DEB）生成: `packageDistributionForCurrentOS` は jlink/jpackage によるランタイム画像・インストーラ作成を行うため時間がかかります。
+- 開発中は以下が高速です。
+  - アプリバンドルのみ作成: `./gradlew :desktopApp:createDistributable`（数十秒程度）
+  - 直接起動: `./gradlew :desktopApp:run`
+- macOS専用に軽量化する場合は依存をプラットフォーム個別指定に変更してください（ダウンロード容量・時間を削減）。
+  ```kotlin
+  // kmp/desktopApp/build.gradle.kts の依存
+  dependencies {
+      implementation("org.bytedeco:javacv:1.5.10")
+      implementation("org.bytedeco:ffmpeg:6.1.1-1.5.10:macosx-arm64")
+      // ZXing などはそのまま
+  }
+  ```
+- 追加のビルド高速化: `kmp/gradle.properties` に `org.gradle.configuration-cache=true` と `org.gradle.parallel=true` を設定。
 
 ### 設定（API ベースURL）
 - アプリ右上の「設定」から API ベースURLを入力・保存
