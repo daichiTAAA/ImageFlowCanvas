@@ -23,6 +23,7 @@ fun ProductSearchScreen(
     searchResults: List<ProductInfo>,
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
+    onSelectSuggestion: (ProductSuggestion) -> Unit,
     onAdvancedSearch: (productType: String, machineNumber: String) -> Unit,
     onSelectProduct: (ProductInfo) -> Unit,
     onBack: () -> Unit
@@ -111,10 +112,7 @@ fun ProductSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(suggestions) { s ->
-                        SuggestionItem(s) {
-                            query = s.displayText
-                            onSearch(s.displayText)
-                        }
+                        SuggestionItem(s) { onSelectSuggestion(s) }
                     }
                 }
             }

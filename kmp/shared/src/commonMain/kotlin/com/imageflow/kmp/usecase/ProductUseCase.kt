@@ -144,6 +144,10 @@ class SearchProductUseCase(
     private val productApiService: ProductApiService
 ) {
     
+    suspend fun getProductById(productId: String): ApiResult<ProductInfo> {
+        return productApiService.getProductInfo(productId)
+    }
+    
     suspend fun searchProducts(query: String, useServerSearch: Boolean = true): ProductSearchResult {
         val startTime = System.currentTimeMillis()
         

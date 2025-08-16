@@ -183,6 +183,29 @@ class MobileInspectionViewModel(
         }
     }
     
+    fun selectProductById(productId: String) {
+        viewModelScope.launch {
+            updateUiState { it.copy(isLoading = true) }
+            try {
+                when (val res = searchProductUseCase.getProductById(productId)) {
+                    is com.imageflow.kmp.network.ApiResult.Success -> {
+                        selectProduct(res.data)
+                    }
+                    is com.imageflow.kmp.network.ApiResult.Error -> {
+                        updateUiState { it.copy(errorMessage = "製品取得エラー: ${res.message}") }
+                    }
+                    is com.imageflow.kmp.network.ApiResult.NetworkError -> {
+                        updateUiState { it.copy(errorMessage = "ネットワークエラー: ${res.message}") }
+                    }
+                }
+            } catch (e: Exception) {
+                updateUiState { it.copy(errorMessage = "製品取得エラー: ${e.message}") }
+            } finally {
+                updateUiState { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
     fun clearSearchResults() {
         _searchResults.value = null
         _suggestions.value = emptyList()

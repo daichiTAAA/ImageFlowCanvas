@@ -136,6 +136,11 @@ private fun ImageFlowDesktopApp() {
                     searchResults = searchResults?.products ?: emptyList(),
                     onQueryChange = { q -> viewModel.loadSuggestions(q) },
                     onSearch = { q -> viewModel.searchProducts(q) },
+                    onSelectSuggestion = { s ->
+                        viewModel.selectProductById(s.productId)
+                        navigateTo(AppScreen.MAIN)
+                        viewModel.clearSearchResults()
+                    },
                     onAdvancedSearch = { pt, mn -> viewModel.searchProductsAdvanced(pt, mn) },
                     onSelectProduct = { p ->
                         viewModel.selectProduct(p)
