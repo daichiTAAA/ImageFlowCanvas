@@ -548,26 +548,35 @@ export function InspectionMasters() {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField
-                select
-                SelectProps={{ native: true }}
-                label="型式グループ group_id"
-                value={(editingTarget as any)?.group_id || ""}
-                onChange={(e) =>
-                  setEditingTarget((prev) =>
-                    prev ? { ...prev, group_id: e.target.value } : null
-                  )
-                }
-                fullWidth
-                helperText="グループを選択すると group_name は自動で設定できます"
-              >
-                <option value="">（未選択）</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </TextField>
+              <FormControl fullWidth>
+                <InputLabel id="group-select-label">型式グループ group_id</InputLabel>
+                <Select
+                  labelId="group-select-label"
+                  label="型式グループ group_id"
+                  value={(editingTarget as any)?.group_id || ""}
+                  renderValue={(sel) => {
+                    const v = String(sel || "");
+                    if (!v) return ""; // 未選択時は何も表示しない
+                    const found = groups.find((g) => g.id === v);
+                    return found?.name || v;
+                  }}
+                  onChange={(e) =>
+                    setEditingTarget((prev) =>
+                      prev ? { ...prev, group_id: String(e.target.value) } : null
+                    )
+                  }
+                  displayEmpty
+                >
+                  <MenuItem value="">
+                    <em>未選択</em>
+                  </MenuItem>
+                  {groups.map((g) => (
+                    <MenuItem key={g.id} value={g.id}>
+                      {g.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
               <Button
@@ -1119,6 +1128,12 @@ export function InspectionMasters() {
                   labelId="criteria-label"
                   label="検査基準"
                   value={editingItem?.criteria_id || ""}
+                  renderValue={(sel) => {
+                    const v = String(sel || "");
+                    if (!v) return ""; // 未設定時は何も表示しない
+                    const found = criterias.find((c: any) => c.id === v);
+                    return found?.name || v;
+                  }}
                   onChange={(e) =>
                     setEditingItem((prev) =>
                       prev
