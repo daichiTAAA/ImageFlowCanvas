@@ -9,8 +9,9 @@ export default defineConfig({
     strictPort: true, // ポートが使用中の場合はエラーにする
     // ホットリロードの設定
     hmr: {
-      port: 3001,
-      host: '0.0.0.0',
+      // Browser connects via nginx on 3000 (not 3001)
+      clientPort: 3000,
+      host: 'localhost',
     },
     // ファイル変更の監視設定
     watch: {

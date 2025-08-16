@@ -101,9 +101,9 @@ export function InspectionMasters() {
   const loadTargets = async () => {
     try {
       setLoading(true);
-      // Fetch more rows to avoid missing older targets due to pagination (default 20)
+      // Fetch more rows but within backend limit (<= 100)
       const response = await inspectionApi.listInspectionTargets({
-        page_size: 200,
+        page_size: 100,
       });
       setTargets(response.items);
     } catch (error) {
@@ -127,7 +127,7 @@ export function InspectionMasters() {
 
   const loadCriterias = async () => {
     try {
-      const resp = await inspectionApi.listCriterias({ page_size: 200 });
+      const resp = await inspectionApi.listCriterias({ page_size: 100 });
       setCriterias(resp.items);
     } catch (e) {
       console.error("Failed to load criterias", e);
