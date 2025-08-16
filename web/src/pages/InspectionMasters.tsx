@@ -115,7 +115,7 @@ export function InspectionMasters() {
       });
       setTargets(response.items);
     } catch (error) {
-      setError("検査対象の読み込みに失敗しました");
+      setError("検査マスタの読み込みに失敗しました");
       console.error("Failed to load targets:", error);
     } finally {
       setLoading(false);
@@ -256,7 +256,7 @@ export function InspectionMasters() {
       setEditingTarget(null);
       await loadTargets();
     } catch (error) {
-      setError("検査対象の保存に失敗しました");
+      setError("検査マスタの保存に失敗しました");
       console.error("Failed to save target:", error);
     } finally {
       setLoading(false);
@@ -264,7 +264,7 @@ export function InspectionMasters() {
   };
 
   const handleDeleteTarget = async (targetId: string) => {
-    if (!window.confirm("この検査対象を削除しますか？")) return;
+    if (!window.confirm("この検査マスタを削除しますか？")) return;
 
     try {
       setLoading(true);
@@ -275,7 +275,7 @@ export function InspectionMasters() {
         setTargetInspectionItems([]);
       }
     } catch (error) {
-      setError("検査対象の削除に失敗しました");
+      setError("検査マスタの削除に失敗しました");
       console.error("Failed to delete target:", error);
     } finally {
       setLoading(false);
@@ -295,15 +295,15 @@ export function InspectionMasters() {
       )}
 
       <Grid container spacing={3}>
-        {/* 検査対象一覧 */}
+      {/* 検査マスタ一覧 */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} gap={1}>
-                <Typography variant="h6">検査対象</Typography>
+                <Typography variant="h6">検査マスタ</Typography>
                 <Box display="flex" gap={1}>
-                  <TextField size="small" placeholder="型式コード/検査対象名で検索" value={targetSearch} onChange={(e)=> setTargetSearch(e.target.value)} />
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateTarget} disabled={loading}>検査対象を新規作成</Button>
+                  <TextField size="small" placeholder="型式コード/検査マスタ名で検索" value={targetSearch} onChange={(e)=> setTargetSearch(e.target.value)} />
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateTarget} disabled={loading}>検査マスタを新規作成</Button>
                 </Box>
               </Box>
 
@@ -312,7 +312,7 @@ export function InspectionMasters() {
                   <TableHead>
                     <TableRow>
                       <TableCell>型式コード</TableCell>
-                      <TableCell>検査対象名</TableCell>
+                      <TableCell>検査マスタ名</TableCell>
                       <TableCell>バージョン</TableCell>
                       <TableCell>操作</TableCell>
                     </TableRow>
@@ -371,7 +371,7 @@ export function InspectionMasters() {
                 <Typography variant="h6">
                   検査項目 {selectedTarget && `- ${selectedTarget.name}`}
                 </Typography>
-                <Tooltip title={selectedTarget ? "" : "左の検査対象を選択してください"}>
+                <Tooltip title={selectedTarget ? "" : "左の検査マスタを選択してください"}>
                   <span>
                     <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateItem} disabled={!selectedTarget}>検査項目を追加</Button>
                   </span>
@@ -433,9 +433,9 @@ export function InspectionMasters() {
               ) : (
                 <Box py={4}>
                   <Alert severity="info" sx={{ width: "fit-content", mx: "auto" }}
-                    action={<Button color="inherit" size="small" onClick={handleCreateTarget}>検査対象を作成</Button>}
+                    action={<Button color="inherit" size="small" onClick={handleCreateTarget}>検査マスタを作成</Button>}
                   >
-                    右側の検査項目を追加するには、左の検査対象を選択してください。
+                    右側の検査項目を追加するには、左の検査マスタを選択してください。
                   </Alert>
                 </Box>
               )}
@@ -443,13 +443,13 @@ export function InspectionMasters() {
           </Card>
         </Grid>
 
-        {/* 検査対象詳細・統計 */}
+        {/* 検査マスタ詳細・統計 */}
         {selectedTarget && (
           <Grid item xs={12}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  検査対象詳細
+                  検査マスタ詳細
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={6}>
@@ -461,7 +461,7 @@ export function InspectionMasters() {
                       margin="normal"
                     />
                     <TextField
-                      label="検査対象名"
+                      label="検査マスタ名"
                       value={selectedTarget.name}
                       fullWidth
                       InputProps={{ readOnly: true }}
@@ -511,7 +511,7 @@ export function InspectionMasters() {
         )}
       </Grid>
 
-      {/* 検査対象編集ダイアログ */}
+      {/* 検査マスタ編集ダイアログ */}
       <Dialog
         open={openDialog}
         onClose={() => setOpenDialog(false)}
@@ -519,7 +519,7 @@ export function InspectionMasters() {
         fullWidth
       >
         <DialogTitle>
-          {editingTarget?.id ? "検査対象編集" : "検査対象新規作成"}
+          {editingTarget?.id ? "検査マスタ編集" : "検査マスタ新規作成"}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -619,7 +619,7 @@ export function InspectionMasters() {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                label="検査対象名"
+                label="検査マスタ名"
                 value={editingTarget?.name || ""}
                 onChange={(e) =>
                   setEditingTarget((prev) =>
