@@ -137,7 +137,8 @@ class InspectionTargetBase(BaseModel):
     group_id: Optional[uuid.UUID] = None
     group_name: Optional[str] = Field(None, max_length=255)
     version: str = Field(default="1.0", max_length=50)
-    metadata: Optional[Dict[str, Any]] = {}
+    # Input payload uses key "metadata"; in DB the column attribute is metadata_
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class InspectionTargetCreate(InspectionTargetBase):
@@ -156,7 +157,16 @@ class InspectionTargetUpdate(BaseModel):
 
 
 class InspectionTargetResponse(InspectionTargetBase):
-    model_config = ConfigDict(from_attributes=True)
+    # Map ORM attribute metadata_ -> JSON field "metadata"
+    # Ensure pydantic reads from attribute name and serializes with field name
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    # Override to set validation alias for ORM attribute
+    metadata: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        validation_alias="metadata_",
+        serialization_alias="metadata",
+    )
     
     id: uuid.UUID
     created_at: datetime
