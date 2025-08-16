@@ -57,11 +57,11 @@ interface InspectionItem {
 }
 
 interface ProductTypeGroup {
-  id: string
-  name: string
-  description?: string
-  created_at: string
-  updated_at: string
+  id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export function InspectionMasters() {
@@ -78,17 +78,19 @@ export function InspectionMasters() {
   const [editingTarget, setEditingTarget] =
     useState<Partial<InspectionTarget> | null>(null);
   const [openItemDialog, setOpenItemDialog] = useState(false);
-  const [editingItem, setEditingItem] = useState<Partial<InspectionItem> | null>(null);
+  const [editingItem, setEditingItem] =
+    useState<Partial<InspectionItem> | null>(null);
   // 型式グループ
-  const [groups, setGroups] = useState<ProductTypeGroup[]>([])
-  const [openGroupDialog, setOpenGroupDialog] = useState(false)
-  const [editingGroup, setEditingGroup] = useState<Partial<ProductTypeGroup> | null>(null)
-  const [groupMembers, setGroupMembers] = useState<string[]>([])
-  const [memberInput, setMemberInput] = useState("")
+  const [groups, setGroups] = useState<ProductTypeGroup[]>([]);
+  const [openGroupDialog, setOpenGroupDialog] = useState(false);
+  const [editingGroup, setEditingGroup] =
+    useState<Partial<ProductTypeGroup> | null>(null);
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [memberInput, setMemberInput] = useState("");
   // 検査基準
-  const [criterias, setCriterias] = useState<any[]>([])
-  const [openCriteriaDialog, setOpenCriteriaDialog] = useState(false)
-  const [editingCriteria, setEditingCriteria] = useState<any | null>(null)
+  const [criterias, setCriterias] = useState<any[]>([]);
+  const [openCriteriaDialog, setOpenCriteriaDialog] = useState(false);
+  const [editingCriteria, setEditingCriteria] = useState<any | null>(null);
 
   useEffect(() => {
     loadTargets();
@@ -99,7 +101,10 @@ export function InspectionMasters() {
   const loadTargets = async () => {
     try {
       setLoading(true);
-      const response = await inspectionApi.listInspectionTargets();
+      // Fetch more rows to avoid missing older targets due to pagination (default 20)
+      const response = await inspectionApi.listInspectionTargets({
+        page_size: 200,
+      });
       setTargets(response.items);
     } catch (error) {
       setError("検査対象の読み込みに失敗しました");
@@ -111,21 +116,23 @@ export function InspectionMasters() {
 
   const loadGroups = async () => {
     try {
-      const resp = await inspectionApi.listProductTypeGroups({ page_size: 200 })
-      setGroups(resp.items)
+      const resp = await inspectionApi.listProductTypeGroups({
+        page_size: 200,
+      });
+      setGroups(resp.items);
     } catch (e) {
-      console.error('Failed to load groups', e)
+      console.error("Failed to load groups", e);
     }
-  }
+  };
 
   const loadCriterias = async () => {
     try {
-      const resp = await inspectionApi.listCriterias({ page_size: 200 })
-      setCriterias(resp.items)
+      const resp = await inspectionApi.listCriterias({ page_size: 200 });
+      setCriterias(resp.items);
     } catch (e) {
-      console.error('Failed to load criterias', e)
+      console.error("Failed to load criterias", e);
     }
-  }
+  };
 
   const loadTargetInspectionItems = async (targetId: string) => {
     try {
@@ -185,7 +192,7 @@ export function InspectionMasters() {
         criteria_id: editingItem.criteria_id || undefined,
       };
       if (editingItem.id) {
-        await inspectionApi.updateInspectionItem(editingItem.id, payload)
+        await inspectionApi.updateInspectionItem(editingItem.id, payload);
       } else {
         await inspectionApi.createInspectionItem(payload);
       }
@@ -200,22 +207,22 @@ export function InspectionMasters() {
     }
   };
   const handleEditItem = (item: InspectionItem) => {
-    setEditingItem(item)
-    setOpenItemDialog(true)
-  }
+    setEditingItem(item);
+    setOpenItemDialog(true);
+  };
   const handleDeleteItem = async (item: InspectionItem) => {
-    if (!selectedTarget) return
-    if (!window.confirm('この項目を削除しますか？')) return
+    if (!selectedTarget) return;
+    if (!window.confirm("この項目を削除しますか？")) return;
     try {
-      setLoading(true)
-      await inspectionApi.deleteInspectionItem(item.id)
-      await loadTargetInspectionItems(selectedTarget.id)
+      setLoading(true);
+      await inspectionApi.deleteInspectionItem(item.id);
+      await loadTargetInspectionItems(selectedTarget.id);
     } catch (e) {
-      setError('検査項目の削除に失敗しました')
+      setError("検査項目の削除に失敗しました");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleEditTarget = (target: InspectionTarget) => {
     setEditingTarget(target);
@@ -367,7 +374,11 @@ export function InspectionMasters() {
                   検査項目 {selectedTarget && `- ${selectedTarget.name}`}
                 </Typography>
                 {selectedTarget && (
-                  <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateItem}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={handleCreateItem}
+                  >
                     項目追加
                   </Button>
                 )}
@@ -406,10 +417,17 @@ export function InspectionMasters() {
                             />
                           </TableCell>
                           <TableCell>
-                            <IconButton size="small" onClick={() => handleEditItem(item)}>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditItem(item)}
+                            >
                               <EditIcon />
                             </IconButton>
-                            <IconButton size="small" color="error" onClick={() => handleDeleteItem(item)}>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleDeleteItem(item)}
+                            >
                               <DeleteIcon />
                             </IconButton>
                           </TableCell>
@@ -507,7 +525,7 @@ export function InspectionMasters() {
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-        <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <TextField
                 label="型式コード product_code（グループ設定時は空で可）"
                 value={editingTarget?.product_code || ""}
@@ -523,7 +541,11 @@ export function InspectionMasters() {
               <TextField
                 label="型式名 product_name（任意・表示用）"
                 value={(editingTarget as any)?.product_name || ""}
-                onChange={(e) => setEditingTarget((prev) => prev ? { ...prev, product_name: e.target.value } : null)}
+                onChange={(e) =>
+                  setEditingTarget((prev) =>
+                    prev ? { ...prev, product_name: e.target.value } : null
+                  )
+                }
                 fullWidth
               />
             </Grid>
@@ -533,28 +555,46 @@ export function InspectionMasters() {
                 SelectProps={{ native: true }}
                 label="型式グループ group_id"
                 value={(editingTarget as any)?.group_id || ""}
-                onChange={(e) => setEditingTarget((prev) => prev ? { ...prev, group_id: e.target.value } : null)}
+                onChange={(e) =>
+                  setEditingTarget((prev) =>
+                    prev ? { ...prev, group_id: e.target.value } : null
+                  )
+                }
                 fullWidth
                 helperText="グループを選択すると group_name は自動で設定できます"
               >
                 <option value="">（未選択）</option>
-                {groups.map(g => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
                 ))}
               </TextField>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Button variant="outlined" onClick={() => {
-                const gid = (editingTarget as any)?.group_id
-                const g = groups.find(x => x.id === gid)
-                if (g) setEditingTarget(prev => prev ? { ...prev, group_name: g.name } : prev)
-              }}>グループ名を自動設定</Button>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  const gid = (editingTarget as any)?.group_id;
+                  const g = groups.find((x) => x.id === gid);
+                  if (g)
+                    setEditingTarget((prev) =>
+                      prev ? { ...prev, group_name: g.name } : prev
+                    );
+                }}
+              >
+                グループ名を自動設定
+              </Button>
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
                 label="グループ名 group_name（任意・表示用）"
                 value={(editingTarget as any)?.group_name || ""}
-                onChange={(e) => setEditingTarget((prev) => prev ? { ...prev, group_name: e.target.value } : null)}
+                onChange={(e) =>
+                  setEditingTarget((prev) =>
+                    prev ? { ...prev, group_name: e.target.value } : null
+                  )
+                }
                 fullWidth
               />
             </Grid>
@@ -604,7 +644,12 @@ export function InspectionMasters() {
           <Button
             onClick={handleSaveTarget}
             variant="contained"
-            disabled={loading || !editingTarget?.name || (!editingTarget?.product_code && !(editingTarget as any)?.group_id)}
+            disabled={
+              loading ||
+              !editingTarget?.name ||
+              (!editingTarget?.product_code &&
+                !(editingTarget as any)?.group_id)
+            }
           >
             保存
           </Button>
@@ -613,8 +658,18 @@ export function InspectionMasters() {
 
       {/* 型式グループ 管理（簡易） */}
       <Box mt={4}>
-        <Typography variant="h5" gutterBottom>型式グループ管理</Typography>
-        <Button variant="outlined" onClick={() => { setEditingGroup({ name: "", description: "" }); setOpenGroupDialog(true) }}>グループ作成</Button>
+        <Typography variant="h5" gutterBottom>
+          型式グループ管理
+        </Typography>
+        <Button
+          variant="outlined"
+          onClick={() => {
+            setEditingGroup({ name: "", description: "" });
+            setOpenGroupDialog(true);
+          }}
+        >
+          グループ作成
+        </Button>
         <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
           <Table size="small">
             <TableHead>
@@ -630,15 +685,34 @@ export function InspectionMasters() {
                   <TableCell>{g.name}</TableCell>
                   <TableCell>{g.description}</TableCell>
                   <TableCell>
-                    <Button size="small" onClick={async () => {
-                      setEditingGroup(g)
-                      try {
-                        const m = await inspectionApi.listProductTypeGroupMembers(g.id)
-                        setGroupMembers(m.map((x:any)=> x.product_code))
-                      } catch {}
-                      setOpenGroupDialog(true)
-                    }}>編集</Button>
-                    <Button size="small" color="error" onClick={async () => { if (confirm('削除しますか？')) { await inspectionApi.deleteProductTypeGroup(g.id); loadGroups() }}}>削除</Button>
+                    <Button
+                      size="small"
+                      onClick={async () => {
+                        setEditingGroup(g);
+                        try {
+                          const m =
+                            await inspectionApi.listProductTypeGroupMembers(
+                              g.id
+                            );
+                          setGroupMembers(m.map((x: any) => x.product_code));
+                        } catch {}
+                        setOpenGroupDialog(true);
+                      }}
+                    >
+                      編集
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={async () => {
+                        if (confirm("削除しますか？")) {
+                          await inspectionApi.deleteProductTypeGroup(g.id);
+                          loadGroups();
+                        }
+                      }}
+                    >
+                      削除
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -648,46 +722,141 @@ export function InspectionMasters() {
       </Box>
 
       {/* 型式グループ編集ダイアログ */}
-      <Dialog open={openGroupDialog} onClose={() => setOpenGroupDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingGroup?.id ? '型式グループ編集' : '型式グループ作成'}</DialogTitle>
+      <Dialog
+        open={openGroupDialog}
+        onClose={() => setOpenGroupDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {editingGroup?.id ? "型式グループ編集" : "型式グループ作成"}
+        </DialogTitle>
         <DialogContent>
-          <TextField label="名前" value={editingGroup?.name || ''} onChange={(e)=> setEditingGroup(prev => prev ? { ...prev, name: e.target.value } : prev)} fullWidth sx={{ mt: 1 }}/>
-          <TextField label="説明" value={editingGroup?.description || ''} onChange={(e)=> setEditingGroup(prev => prev ? { ...prev, description: e.target.value } : prev)} fullWidth sx={{ mt: 1 }}/>
+          <TextField
+            label="名前"
+            value={editingGroup?.name || ""}
+            onChange={(e) =>
+              setEditingGroup((prev) =>
+                prev ? { ...prev, name: e.target.value } : prev
+              )
+            }
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+          <TextField
+            label="説明"
+            value={editingGroup?.description || ""}
+            onChange={(e) =>
+              setEditingGroup((prev) =>
+                prev ? { ...prev, description: e.target.value } : prev
+              )
+            }
+            fullWidth
+            sx={{ mt: 1 }}
+          />
           {editingGroup?.id && (
             <Box mt={2}>
               <Typography variant="subtitle1">メンバー型式コード</Typography>
               <Box display="flex" gap={1} mt={1}>
-                <TextField label="型式コード product_code を追加" value={memberInput} onChange={(e)=> setMemberInput(e.target.value)} fullWidth />
-                <Button onClick={async ()=> { if (!memberInput) return; await inspectionApi.addProductTypeGroupMember(editingGroup.id!, memberInput); setMemberInput(''); const m = await inspectionApi.listProductTypeGroupMembers(editingGroup.id!); setGroupMembers(m.map((x:any)=> x.product_code)) }}>追加</Button>
+                <TextField
+                  label="型式コード product_code を追加"
+                  value={memberInput}
+                  onChange={(e) => setMemberInput(e.target.value)}
+                  fullWidth
+                />
+                <Button
+                  onClick={async () => {
+                    if (!memberInput) return;
+                    await inspectionApi.addProductTypeGroupMember(
+                      editingGroup.id!,
+                      memberInput
+                    );
+                    setMemberInput("");
+                    const m = await inspectionApi.listProductTypeGroupMembers(
+                      editingGroup.id!
+                    );
+                    setGroupMembers(m.map((x: any) => x.product_code));
+                  }}
+                >
+                  追加
+                </Button>
               </Box>
               <Box mt={1}>
-                {groupMembers.length ? groupMembers.map(code => (
-                  <Chip key={code} label={code} onDelete={async ()=> { await inspectionApi.deleteProductTypeGroupMember(editingGroup.id!, code); const m = await inspectionApi.listProductTypeGroupMembers(editingGroup.id!); setGroupMembers(m.map((x:any)=> x.product_code)) }} sx={{ mr: 1, mb: 1 }}/>
-                )) : <Typography color="textSecondary">未登録</Typography>}
+                {groupMembers.length ? (
+                  groupMembers.map((code) => (
+                    <Chip
+                      key={code}
+                      label={code}
+                      onDelete={async () => {
+                        await inspectionApi.deleteProductTypeGroupMember(
+                          editingGroup.id!,
+                          code
+                        );
+                        const m =
+                          await inspectionApi.listProductTypeGroupMembers(
+                            editingGroup.id!
+                          );
+                        setGroupMembers(m.map((x: any) => x.product_code));
+                      }}
+                      sx={{ mr: 1, mb: 1 }}
+                    />
+                  ))
+                ) : (
+                  <Typography color="textSecondary">未登録</Typography>
+                )}
               </Box>
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={()=> setOpenGroupDialog(false)}>閉じる</Button>
-          <Button variant="contained" onClick={async ()=>{
-            try {
-              if (editingGroup?.id) {
-                await inspectionApi.updateProductTypeGroup(editingGroup.id, { name: editingGroup.name, description: editingGroup.description })
-              } else {
-                await inspectionApi.createProductTypeGroup({ name: editingGroup?.name, description: editingGroup?.description })
+          <Button onClick={() => setOpenGroupDialog(false)}>閉じる</Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              try {
+                if (editingGroup?.id) {
+                  await inspectionApi.updateProductTypeGroup(editingGroup.id, {
+                    name: editingGroup.name,
+                    description: editingGroup.description,
+                  });
+                } else {
+                  await inspectionApi.createProductTypeGroup({
+                    name: editingGroup?.name,
+                    description: editingGroup?.description,
+                  });
+                }
+                setOpenGroupDialog(false);
+                await loadGroups();
+              } catch (e) {
+                console.error(e);
               }
-              setOpenGroupDialog(false)
-              await loadGroups()
-            } catch (e) { console.error(e); }
-          }} disabled={!editingGroup?.name}>保存</Button>
+            }}
+            disabled={!editingGroup?.name}
+          >
+            保存
+          </Button>
         </DialogActions>
       </Dialog>
 
       {/* 検査基準 管理 */}
       <Box mt={4}>
-        <Typography variant="h5" gutterBottom>検査基準管理</Typography>
-        <Button variant="outlined" onClick={() => { setEditingCriteria({ name: '', description: '', judgment_type: 'BINARY', spec: { binary: { expected_value: true } } }); setOpenCriteriaDialog(true) }}>基準を追加</Button>
+        <Typography variant="h5" gutterBottom>
+          検査基準管理
+        </Typography>
+        <Button
+          variant="outlined"
+          onClick={() => {
+            setEditingCriteria({
+              name: "",
+              description: "",
+              judgment_type: "BINARY",
+              spec: { binary: { expected_value: true } },
+            });
+            setOpenCriteriaDialog(true);
+          }}
+        >
+          基準を追加
+        </Button>
         <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
           <Table size="small">
             <TableHead>
@@ -705,8 +874,27 @@ export function InspectionMasters() {
                   <TableCell>{c.judgment_type}</TableCell>
                   <TableCell>{c.description}</TableCell>
                   <TableCell>
-                    <Button size="small" onClick={() => { setEditingCriteria(c); setOpenCriteriaDialog(true) }}>編集</Button>
-                    <Button size="small" color="error" onClick={async () => { if (confirm('削除しますか？')) { await inspectionApi.deleteInspectionCriteria(c.id); await loadCriterias() } }}>削除</Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingCriteria(c);
+                        setOpenCriteriaDialog(true);
+                      }}
+                    >
+                      編集
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={async () => {
+                        if (confirm("削除しますか？")) {
+                          await inspectionApi.deleteInspectionCriteria(c.id);
+                          await loadCriterias();
+                        }
+                      }}
+                    >
+                      削除
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -716,36 +904,112 @@ export function InspectionMasters() {
       </Box>
 
       {/* 検査基準 編集ダイアログ（JSON簡易入力） */}
-      <Dialog open={openCriteriaDialog} onClose={() => setOpenCriteriaDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingCriteria?.id ? '検査基準編集' : '検査基準追加'}</DialogTitle>
+      <Dialog
+        open={openCriteriaDialog}
+        onClose={() => setOpenCriteriaDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {editingCriteria?.id ? "検査基準編集" : "検査基準追加"}
+        </DialogTitle>
         <DialogContent>
-          <TextField label="名称" value={editingCriteria?.name || ''} onChange={(e)=> setEditingCriteria((p:any)=> ({ ...(p||{}), name: e.target.value }))} fullWidth sx={{ mt: 1 }}/>
-          <TextField label="説明" value={editingCriteria?.description || ''} onChange={(e)=> setEditingCriteria((p:any)=> ({ ...(p||{}), description: e.target.value }))} fullWidth sx={{ mt: 1 }}/>
-          <TextField label="判定タイプ（BINARY/NUMERICAL/CATEGORICAL/THRESHOLD）" value={editingCriteria?.judgment_type || 'BINARY'} onChange={(e)=> setEditingCriteria((p:any)=> ({ ...(p||{}), judgment_type: e.target.value }))} fullWidth sx={{ mt: 1 }}/>
-          <TextField label="基準仕様（JSON）" value={JSON.stringify(editingCriteria?.spec || {}, null, 2)} onChange={(e)=> {
-            try { const v = JSON.parse(e.target.value); setEditingCriteria((p:any)=> ({ ...(p||{}), spec: v })) } catch (_) {}
-          }} fullWidth multiline rows={8} sx={{ mt: 2 }}/>
+          <TextField
+            label="名称"
+            value={editingCriteria?.name || ""}
+            onChange={(e) =>
+              setEditingCriteria((p: any) => ({
+                ...(p || {}),
+                name: e.target.value,
+              }))
+            }
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+          <TextField
+            label="説明"
+            value={editingCriteria?.description || ""}
+            onChange={(e) =>
+              setEditingCriteria((p: any) => ({
+                ...(p || {}),
+                description: e.target.value,
+              }))
+            }
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+          <TextField
+            label="判定タイプ（BINARY/NUMERICAL/CATEGORICAL/THRESHOLD）"
+            value={editingCriteria?.judgment_type || "BINARY"}
+            onChange={(e) =>
+              setEditingCriteria((p: any) => ({
+                ...(p || {}),
+                judgment_type: e.target.value,
+              }))
+            }
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+          <TextField
+            label="基準仕様（JSON）"
+            value={JSON.stringify(editingCriteria?.spec || {}, null, 2)}
+            onChange={(e) => {
+              try {
+                const v = JSON.parse(e.target.value);
+                setEditingCriteria((p: any) => ({ ...(p || {}), spec: v }));
+              } catch (_) {}
+            }}
+            fullWidth
+            multiline
+            rows={8}
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={()=> setOpenCriteriaDialog(false)}>キャンセル</Button>
-          <Button variant="contained" onClick={async ()=>{
-            try {
-              setLoading(true)
-              const payload = { name: editingCriteria.name, description: editingCriteria.description, judgment_type: editingCriteria.judgment_type, spec: editingCriteria.spec }
-              if (editingCriteria.id) {
-                await inspectionApi.updateInspectionCriteria(editingCriteria.id, payload)
-              } else {
-                await inspectionApi.createInspectionCriteria(payload)
+          <Button onClick={() => setOpenCriteriaDialog(false)}>
+            キャンセル
+          </Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const payload = {
+                  name: editingCriteria.name,
+                  description: editingCriteria.description,
+                  judgment_type: editingCriteria.judgment_type,
+                  spec: editingCriteria.spec,
+                };
+                if (editingCriteria.id) {
+                  await inspectionApi.updateInspectionCriteria(
+                    editingCriteria.id,
+                    payload
+                  );
+                } else {
+                  await inspectionApi.createInspectionCriteria(payload);
+                }
+                setOpenCriteriaDialog(false);
+                await loadCriterias();
+              } catch (e) {
+                setError("検査基準の保存に失敗しました");
+              } finally {
+                setLoading(false);
               }
-              setOpenCriteriaDialog(false)
-              await loadCriterias()
-            } catch (e) { setError('検査基準の保存に失敗しました') } finally { setLoading(false) }
-          }} disabled={!editingCriteria?.name || !editingCriteria?.judgment_type}>保存</Button>
+            }}
+            disabled={!editingCriteria?.name || !editingCriteria?.judgment_type}
+          >
+            保存
+          </Button>
         </DialogActions>
       </Dialog>
 
       {/* 検査項目編集ダイアログ（新規作成用の簡易版） */}
-      <Dialog open={openItemDialog} onClose={() => setOpenItemDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={openItemDialog}
+        onClose={() => setOpenItemDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>検査項目の追加</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -753,7 +1017,11 @@ export function InspectionMasters() {
               <TextField
                 label="項目名"
                 value={editingItem?.name || ""}
-                onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                onChange={(e) =>
+                  setEditingItem((prev) =>
+                    prev ? { ...prev, name: e.target.value } : prev
+                  )
+                }
                 fullWidth
                 required
               />
@@ -762,7 +1030,11 @@ export function InspectionMasters() {
               <TextField
                 label="説明"
                 value={editingItem?.description || ""}
-                onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, description: e.target.value } : prev))}
+                onChange={(e) =>
+                  setEditingItem((prev) =>
+                    prev ? { ...prev, description: e.target.value } : prev
+                  )
+                }
                 fullWidth
                 multiline
                 rows={2}
@@ -772,7 +1044,11 @@ export function InspectionMasters() {
               <TextField
                 label="タイプ"
                 value={editingItem?.type || "VISUAL_INSPECTION"}
-                onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, type: e.target.value } : prev))}
+                onChange={(e) =>
+                  setEditingItem((prev) =>
+                    prev ? { ...prev, type: e.target.value } : prev
+                  )
+                }
                 fullWidth
                 placeholder="VISUAL_INSPECTION"
               />
@@ -782,7 +1058,13 @@ export function InspectionMasters() {
                 type="number"
                 label="順序"
                 value={editingItem?.execution_order ?? 1}
-                onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, execution_order: Number(e.target.value) } : prev))}
+                onChange={(e) =>
+                  setEditingItem((prev) =>
+                    prev
+                      ? { ...prev, execution_order: Number(e.target.value) }
+                      : prev
+                  )
+                }
                 fullWidth
               />
             </Grid>
@@ -790,7 +1072,11 @@ export function InspectionMasters() {
               <TextField
                 label="パイプラインID"
                 value={editingItem?.pipeline_id || ""}
-                onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, pipeline_id: e.target.value } : prev))}
+                onChange={(e) =>
+                  setEditingItem((prev) =>
+                    prev ? { ...prev, pipeline_id: e.target.value } : prev
+                  )
+                }
                 fullWidth
               />
             </Grid>
@@ -798,7 +1084,16 @@ export function InspectionMasters() {
               <TextField
                 label="必須 (true/false)"
                 value={(editingItem?.is_required ?? true).toString()}
-                onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, is_required: e.target.value.toLowerCase() === 'true' } : prev))}
+                onChange={(e) =>
+                  setEditingItem((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          is_required: e.target.value.toLowerCase() === "true",
+                        }
+                      : prev
+                  )
+                }
                 fullWidth
               />
             </Grid>
@@ -806,9 +1101,22 @@ export function InspectionMasters() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenItemDialog(false)}>キャンセル</Button>
-          <Button onClick={handleSaveItem} variant="contained" disabled={loading || !editingItem?.name}>保存</Button>
+          <Button
+            onClick={handleSaveItem}
+            variant="contained"
+            disabled={loading || !editingItem?.name}
+          >
+            保存
+          </Button>
         </DialogActions>
       </Dialog>
+      {error && (
+        <Box mt={2}>
+          <Alert severity="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        </Box>
+      )}
     </Box>
   );
 }

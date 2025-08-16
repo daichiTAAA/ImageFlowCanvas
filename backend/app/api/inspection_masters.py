@@ -94,7 +94,7 @@ async def create_inspection_target(
             group_id=target_data.group_id,
             group_name=target_data.group_name,
             version=target_data.version,
-            metadata=target_data.metadata or {},
+            metadata_=target_data.metadata or {},
             created_by=_extract_user_id(current_user),
         )
 
@@ -105,6 +105,11 @@ async def create_inspection_target(
         logger.info(f"Created inspection target: {target.id}")
         return target
 
+    except HTTPException as e:
+        # Preserve intended HTTP error codes (e.g., 400 on duplicate)
+        await db.rollback()
+        logger.error(f"Failed to create inspection target (client error): {e.detail}")
+        raise
     except Exception as e:
         logger.error(f"Failed to create inspection target: {e}")
         await db.rollback()
@@ -237,6 +242,9 @@ async def update_inspection_target(
 
         # 更新
         for field, value in target_data.dict(exclude_unset=True).items():
+            if field == "metadata":
+                setattr(target, "metadata_", value)
+                continue
             if hasattr(target, field):
                 setattr(target, field, value)
 
