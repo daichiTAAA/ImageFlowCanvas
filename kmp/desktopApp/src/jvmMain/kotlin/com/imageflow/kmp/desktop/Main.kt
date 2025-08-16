@@ -146,6 +146,7 @@ private fun ImageFlowDesktopApp() {
                     isLoading = uiState.isLoading,
                     errorMessage = uiState.errorMessage,
                     addedImages = currentInspection?.imagePaths ?: emptyList(),
+                    inspectionItems = uiState.inspectionItems,
                     onAddImage = { _ ->
                         pickImageFile()?.let { selected ->
                             viewModel.captureImage(selected)

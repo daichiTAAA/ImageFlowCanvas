@@ -247,7 +247,7 @@ private fun ResultCard(
             if (result.success && result.productInfo != null) {
                 val p = result.productInfo!!
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("製品タイプ: ${p.productType}")
+                    Text("製品コード: ${p.productCode}")
                     Text("機番: ${p.machineNumber}")
                     Text("指図番号: ${p.workOrderId}")
                     Text("指示番号: ${p.instructionId}")

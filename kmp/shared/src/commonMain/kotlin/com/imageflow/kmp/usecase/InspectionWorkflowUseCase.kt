@@ -408,4 +408,13 @@ class InspectionWorkflowUseCase(
             overallStatus = current
         )
     }
+
+    // Masters fetch: expose inspection items configured on Web for given product
+    suspend fun getInspectionItemsForProduct(productId: String): List<com.imageflow.kmp.network.InspectionItemKmp> {
+        return when (val res = inspectionApiService.getInspectionItemsForProduct(productId)) {
+            is ApiResult.Success -> res.data.items
+            is ApiResult.Error -> emptyList()
+            is ApiResult.NetworkError -> emptyList()
+        }
+    }
 }

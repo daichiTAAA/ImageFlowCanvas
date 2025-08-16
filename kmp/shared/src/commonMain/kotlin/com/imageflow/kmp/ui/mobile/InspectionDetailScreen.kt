@@ -21,6 +21,7 @@ fun InspectionDetailScreen(
     isLoading: Boolean,
     errorMessage: String?,
     addedImages: List<String> = emptyList(),
+    inspectionItems: List<com.imageflow.kmp.network.InspectionItemKmp> = emptyList(),
     onAddImage: (String) -> Unit,
     onRunAi: () -> Unit,
     onHumanReview: (HumanResult) -> Unit,
@@ -35,7 +36,7 @@ fun InspectionDetailScreen(
                 Text("検査詳細", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 if (currentProduct != null) {
-                    Text("製品: ${currentProduct.productType} - ${currentProduct.machineNumber}", fontWeight = FontWeight.SemiBold)
+                    Text("製品: ${currentProduct.productCode} - ${currentProduct.machineNumber}", fontWeight = FontWeight.SemiBold)
                     Text("指図: ${currentProduct.workOrderId} / 指示: ${currentProduct.instructionId}")
                     Text("生産日: ${currentProduct.productionDate} / 連番: ${currentProduct.monthlySequence}")
                 } else {
@@ -52,6 +53,17 @@ fun InspectionDetailScreen(
                     LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
                     Text("${(progress * 100).toInt()}% / 状態: ${stateLabel(inspectionState)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        if (inspectionItems.isNotEmpty()) {
+            Card {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("検査項目 (${inspectionItems.size})")
+                    inspectionItems.sortedBy { it.execution_order }.forEach { item ->
+                        Text("• [${item.execution_order}] ${item.name} (${item.type})", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

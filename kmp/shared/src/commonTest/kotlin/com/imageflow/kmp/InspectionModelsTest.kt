@@ -14,7 +14,7 @@ class InspectionModelsTest {
         val productInfo = ProductInfo(
             workOrderId = "WORK001",
             instructionId = "INST001",
-            productType = "TYPE-A",
+            productCode = "TYPE-A",
             machineNumber = "MACHINE-123",
             productionDate = "2024-01-15",
             monthlySequence = 1
@@ -127,7 +127,7 @@ class InspectionModelsTest {
         val productInfo = ProductInfo(
             workOrderId = "WORK001",
             instructionId = "INST001",
-            productType = "TYPE-A",
+            productCode = "TYPE-A",
             machineNumber = "MACHINE-123",
             productionDate = "2024-01-15",
             monthlySequence = 1

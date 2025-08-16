@@ -24,7 +24,7 @@ def _to_schema(p: ProductMaster) -> ProductInfo:
         id=str(p.id),
         workOrderId=p.work_order_id,
         instructionId=p.instruction_id,
-        productType=p.product_type,
+        productCode=p.product_code,
         machineNumber=p.machine_number,
         productionDate=(
             p.production_date.isoformat()
@@ -46,8 +46,8 @@ def _to_schema(p: ProductMaster) -> ProductInfo:
 
 
 def _apply_update(p: ProductMaster, upd: ProductUpdate) -> None:
-    if upd.product_type is not None:
-        p.product_type = upd.product_type
+    if upd.product_code is not None:
+        p.product_code = upd.product_code
     if upd.machine_number is not None:
         p.machine_number = upd.machine_number
     if upd.production_date is not None:
@@ -78,7 +78,7 @@ def _apply_update(p: ProductMaster, upd: ProductUpdate) -> None:
 async def search_products(
     work_order_id: Optional[str] = Query(None),
     instruction_id: Optional[str] = Query(None),
-    product_type: Optional[str] = Query(None),
+    product_code: Optional[str] = Query(None),
     machine_number: Optional[str] = Query(None),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
@@ -90,13 +90,13 @@ async def search_products(
     print(f"=== SEARCH ENDPOINT CALLED ===")
     print(f"work_order_id: {work_order_id}")
     print(f"instruction_id: {instruction_id}")
-    print(f"product_type: {product_type}")
+    print(f"product_code: {product_code}")
 
     logger = logging.getLogger(__name__)
 
     try:
         logger.info(
-            f"Search request - work_order_id: {work_order_id}, instruction_id: {instruction_id}, product_type: {product_type}, machine_number: {machine_number}, start_date: {start_date}, end_date: {end_date}, limit: {limit}"
+            f"Search request - work_order_id: {work_order_id}, instruction_id: {instruction_id}, product_code: {product_code}, machine_number: {machine_number}, start_date: {start_date}, end_date: {end_date}, limit: {limit}"
         )
 
         stmt = select(ProductMaster)
@@ -104,8 +104,8 @@ async def search_products(
             stmt = stmt.where(ProductMaster.work_order_id == work_order_id)
         if instruction_id:
             stmt = stmt.where(ProductMaster.instruction_id == instruction_id)
-        if product_type:
-            stmt = stmt.where(ProductMaster.product_type.ilike(f"%{product_type}%"))
+        if product_code:
+            stmt = stmt.where(ProductMaster.product_code.ilike(f"%{product_code}%"))
         if machine_number:
             # allow partial match for machine number to improve usability
             stmt = stmt.where(ProductMaster.machine_number.ilike(f"%{machine_number}%"))
@@ -184,12 +184,12 @@ async def get_suggestions(
     out: List[ProductSuggestion] = []
     ql = q.lower()
     for r in rows:
-        if not q or (ql in r.product_type.lower()) or (q in r.work_order_id):
-            out.append(
-                ProductSuggestion(
-                    productId=str(r.id),
-                    displayText=f"{r.product_type} - {r.machine_number}",
-                    productType=r.product_type,
+            if not q or (ql in r.product_code.lower()) or (q in r.work_order_id):
+                out.append(
+                    ProductSuggestion(
+                        productId=str(r.id),
+                    displayText=f"{r.product_code} - {r.machine_number}",
+                    productCode=r.product_code,
                     machineNumber=r.machine_number,
                     relevanceScore=0.9,
                 )
@@ -199,11 +199,11 @@ async def get_suggestions(
 
 @router.get("/", response_model=List[ProductInfo])
 async def list_products(
-    product_type: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)
+    product_code: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)
 ) -> List[ProductInfo]:
     stmt = select(ProductMaster)
-    if product_type:
-        stmt = stmt.where(ProductMaster.product_type.ilike(f"%{product_type}%"))
+    if product_code:
+        stmt = stmt.where(ProductMaster.product_code.ilike(f"%{product_code}%"))
     rows = (await db.execute(stmt)).scalars().all()
     return [_to_schema(r) for r in rows]
 
@@ -266,7 +266,7 @@ async def create_product(
     row = ProductMaster(
         work_order_id=payload.work_order_id,
         instruction_id=payload.instruction_id,
-        product_type=payload.product_type,
+        product_code=payload.product_code,
         machine_number=payload.machine_number,
         production_date=prod_date,
         monthly_sequence=payload.monthly_sequence,
@@ -368,7 +368,7 @@ async def seed_products(db: AsyncSession = Depends(get_db)) -> List[ProductInfo]
         dict(
             workOrderId="WORK-1001",
             instructionId="INST-01",
-            productType="MODEL-A",
+            productCode="MODEL-A",
             machineNumber="MACHINE-001",
             productionDate="2025-08-01",
             monthlySequence=1,
@@ -376,7 +376,7 @@ async def seed_products(db: AsyncSession = Depends(get_db)) -> List[ProductInfo]
         dict(
             workOrderId="WORK-1002",
             instructionId="INST-03",
-            productType="MODEL-B",
+            productCode="MODEL-B",
             machineNumber="MACHINE-002",
             productionDate="2025-08-02",
             monthlySequence=12,
@@ -384,7 +384,7 @@ async def seed_products(db: AsyncSession = Depends(get_db)) -> List[ProductInfo]
         dict(
             workOrderId="WORK-2001",
             instructionId="INST-02",
-            productType="MODEL-C",
+            productCode="MODEL-C",
             machineNumber="MACHINE-010",
             productionDate="2025-08-10",
             monthlySequence=5,
@@ -411,7 +411,7 @@ async def seed_products(db: AsyncSession = Depends(get_db)) -> List[ProductInfo]
             row = ProductMaster(
                 work_order_id=payload.work_order_id,
                 instruction_id=payload.instruction_id,
-                product_type=payload.product_type,
+                product_code=payload.product_code,
                 machine_number=payload.machine_number,
                 production_date=prod_date,
                 monthly_sequence=payload.monthly_sequence,

@@ -1197,3 +1197,16 @@ sequenceDiagram
 | 接続制御   | LTE/Wi-Fiの同時接続数       | 制限値遵守     |
 - 削除順: 最古の「SYNCED」→ 次に「LOCAL」。`tags["protected"]=="true"`は保護
 - クリーンアップはバックグラウンドで、I/Oスロットリングを考慮
+---
+
+# 12. 検査マスタ連携
+
+## 12.1. 製品選択後の検査項目同期
+
+- フロー: 製品選択 → `GET /v1/inspection/products/{product_id}/items` 呼び出し → 取得した検査項目をUIに表示。
+- 実装: `InspectionApiService.getInspectionItemsForProduct()` を追加し、`MobileInspectionViewModel` が製品選択時に取得して `InspectionDetailScreen` に表示。
+- 用途: 作業者はWebで設定された順序と必須設定に従って検査を実施可能。
+
+## 12.2. オフライン考慮
+
+- オフライン時はローカルキャッシュ（将来）を用意し、オンライン復帰時に再取得・差分更新する方針。

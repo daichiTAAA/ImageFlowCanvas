@@ -86,7 +86,7 @@ def main():
                 {
                     "workOrderId": "WORK001",
                     "instructionId": "INST001",
-                    "productType": "TYPE-A",
+                    "productCode": "TYPE-A",
                     "machineNumber": "MACHINE-123",
                     "productionDate": "2024-01-15",
                     "monthlySequence": 1,
@@ -100,7 +100,7 @@ def main():
                 {
                     "workOrderId": "WORK002",
                     "instructionId": "INST002",
-                    "productType": "TYPE-B",
+                    "productCode": "TYPE-B",
                     "machineNumber": "MACHINE-456",
                     "productionDate": "2024-02-20",
                     "monthlySequence": 5,
@@ -124,7 +124,7 @@ def main():
                 {
                     "workOrderId": "",
                     "instructionId": "INST004",
-                    "productType": "TYPE-D",
+                    "productCode": "TYPE-D",
                     "machineNumber": "",
                     "productionDate": "2024-04-01",
                     "monthlySequence": 3,
@@ -138,7 +138,7 @@ def main():
                 {
                     "workOrderId": "WORK005",
                     "instructionId": "INST005",
-                    "productType": "TYPE-E",
+                    "productCode": "TYPE-E",
                     "machineNumber": "MACHINE-999",
                     "productionDate": "24/05/15",  # 不正な日付形式
                     "monthlySequence": 7,
@@ -157,7 +157,7 @@ def main():
                 {
                     "workOrderId": "WORK2025001",
                     "instructionId": "INST2025001",
-                    "productType": "TYPE-CURRENT",
+                    "productCode": "TYPE-CURRENT",
                     "machineNumber": "MACHINE-2025",
                     "productionDate": "2025-08-13",
                     "monthlySequence": 13,

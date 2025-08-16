@@ -88,7 +88,7 @@ data class ProductInfo(
     val id: String,
     val workOrderId: String,      // 指図番号
     val instructionId: String,    // 指示番号
-    val productType: String,      // 型式
+    val productCode: String,      // 型式コード
     val machineNumber: String,    // 機番
     val productionDate: String,   // 生産年月日
     val monthlySequence: Int,     // 月連番

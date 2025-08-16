@@ -19,7 +19,7 @@ class ProductInfo(BaseModel):
     id: str = Field(default="")
     work_order_id: str = Field(alias="workOrderId")
     instruction_id: str = Field(alias="instructionId")
-    product_type: str = Field(alias="productType")
+    product_code: str = Field(alias="productCode")
     machine_number: str = Field(alias="machineNumber")
     production_date: str = Field(alias="productionDate")
     monthly_sequence: int = Field(alias="monthlySequence")
@@ -47,7 +47,7 @@ class ProductSearchResponse(BaseModel):
 class ProductSuggestion(BaseModel):
     productId: str
     displayText: str
-    productType: str
+    productCode: str
     machineNumber: str
     relevanceScore: float
 
@@ -63,7 +63,7 @@ class ProductSyncResponse(BaseModel):
 class ProductCreate(BaseModel):
     work_order_id: str = Field(alias="workOrderId")
     instruction_id: str = Field(alias="instructionId")
-    product_type: str = Field(alias="productType")
+    product_code: str = Field(alias="productCode")
     machine_number: str = Field(alias="machineNumber")
     production_date: str = Field(alias="productionDate")
     monthly_sequence: int = Field(alias="monthlySequence")
@@ -77,7 +77,7 @@ class ProductCreate(BaseModel):
 
 
 class ProductUpdate(BaseModel):
-    product_type: Optional[str] = Field(default=None, alias="productType")
+    product_code: Optional[str] = Field(default=None, alias="productCode")
     machine_number: Optional[str] = Field(default=None, alias="machineNumber")
     production_date: Optional[str] = Field(default=None, alias="productionDate")
     monthly_sequence: Optional[int] = Field(default=None, alias="monthlySequence")

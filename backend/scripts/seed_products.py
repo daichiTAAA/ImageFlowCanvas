@@ -6,9 +6,9 @@ from sqlalchemy import select
 
 
 DEMO = [
-    dict(work_order_id="WORK-1001", instruction_id="INST-01", product_type="MODEL-A", machine_number="MACHINE-001", production_date="2025-08-01", monthly_sequence=1),
-    dict(work_order_id="WORK-1002", instruction_id="INST-03", product_type="MODEL-B", machine_number="MACHINE-002", production_date="2025-08-02", monthly_sequence=12),
-    dict(work_order_id="WORK-2001", instruction_id="INST-02", product_type="MODEL-C", machine_number="MACHINE-010", production_date="2025-08-10", monthly_sequence=5),
+    dict(work_order_id="WORK-1001", instruction_id="INST-01", product_code="MODEL-A", machine_number="MACHINE-001", production_date="2025-08-01", monthly_sequence=1),
+    dict(work_order_id="WORK-1002", instruction_id="INST-03", product_code="MODEL-B", machine_number="MACHINE-002", production_date="2025-08-02", monthly_sequence=12),
+    dict(work_order_id="WORK-2001", instruction_id="INST-02", product_code="MODEL-C", machine_number="MACHINE-010", production_date="2025-08-10", monthly_sequence=5),
 ]
 
 
@@ -31,7 +31,7 @@ async def main():
             row = ProductMaster(
                 work_order_id=d["work_order_id"],
                 instruction_id=d["instruction_id"],
-                product_type=d["product_type"],
+                product_code=d["product_code"],
                 machine_number=d["machine_number"],
                 production_date=datetime.fromisoformat(d["production_date"]).date(),
                 monthly_sequence=d["monthly_sequence"],
@@ -48,4 +48,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

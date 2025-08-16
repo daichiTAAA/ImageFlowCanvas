@@ -21,7 +21,7 @@ class ProductMaster(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     work_order_id = Column(String(100), nullable=False)
     instruction_id = Column(String(100), nullable=False)
-    product_type = Column(String(100), nullable=False)
+    product_code = Column(String(100), nullable=False)
     machine_number = Column(String(100), nullable=False)
     production_date = Column(Date, nullable=False)
     monthly_sequence = Column(Integer, nullable=False)
@@ -40,7 +40,7 @@ class ProductMaster(Base):
     __table_args__ = (
         Index("idx_product_master_work_order", "work_order_id"),
         Index("idx_product_master_instruction", "instruction_id"),
-        Index("idx_product_master_product_type", "product_type"),
+        Index("idx_product_master_product_code", "product_code"),
         Index("idx_product_master_machine_number", "machine_number"),
         Index(
             "idx_product_master_unique_key",
@@ -51,4 +51,3 @@ class ProductMaster(Base):
             unique=True,
         ),
     )
-

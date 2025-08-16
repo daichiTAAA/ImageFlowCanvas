@@ -46,7 +46,7 @@ class ProductRepositoryImpl : ProductRepository {
         return allProducts.filter { product ->
             (query.workOrderId == null || product.workOrderId.contains(query.workOrderId, true)) &&
             (query.instructionId == null || product.instructionId.contains(query.instructionId, true)) &&
-            (query.productType == null || product.productType.contains(query.productType, true)) &&
+            (query.productCode == null || product.productCode.contains(query.productCode, true)) &&
             (query.machineNumber == null || product.machineNumber.contains(query.machineNumber, true))
         }.take(query.limit)
     }
@@ -61,8 +61,8 @@ class ProductRepositoryImpl : ProductRepository {
             .sortedByDescending { it.lastAccessedAt ?: 0 }
             .take(limit)
 
-    override suspend fun getProductsByType(productType: String): List<ProductInfo> =
-        db.productQueries.selectByProductType("$productType%").executeAsList()
+    override suspend fun getProductsByCode(productCode: String): List<ProductInfo> =
+        db.productQueries.selectByProductCode("$productCode%").executeAsList()
             .map { convertToProductInfo(it) }
 
     override suspend fun saveProduct(product: ProductInfo): Boolean {
@@ -72,7 +72,7 @@ class ProductRepositoryImpl : ProductRepository {
                 id = product.id,
                 work_order_id = product.workOrderId,
                 instruction_id = product.instructionId,
-                product_type = product.productType,
+                product_code = product.productCode,
                 machine_number = product.machineNumber,
                 production_date = product.productionDate,
                 monthly_sequence = product.monthlySequence.toLong(),
@@ -189,7 +189,7 @@ class ProductRepositoryImpl : ProductRepository {
             id = row.id,
             workOrderId = row.work_order_id,
             instructionId = row.instruction_id,
-            productType = row.product_type,
+            productCode = row.product_code,
             machineNumber = row.machine_number,
             productionDate = row.production_date,
             monthlySequence = row.monthly_sequence.toInt(),

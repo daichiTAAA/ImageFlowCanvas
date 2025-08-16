@@ -7,7 +7,7 @@ import kotlinx.serialization.json.Json
 // Product info fields aligned with docs:
 // - 指図番号: workOrderId
 // - 指示番号: instructionId
-// - 型式: productType
+// - 型式: product_code
 // - 機番: machineNumber
 // - 生産年月日: productionDate (ISO-8601 string)
 // - 月連番: monthlySequence
@@ -15,7 +15,7 @@ import kotlinx.serialization.json.Json
 data class DecodedProductInfo(
     val workOrderId: String?,
     val instructionId: String?,
-    val productType: String?,
+    val productCode: String?,
     val machineNumber: String?,
     val productionDate: String?,
     val monthlySequence: Int?,
@@ -71,7 +71,7 @@ class DefaultBarcodeDecoder : BarcodeDecoder {
         return DecodedProductInfo(
             workOrderId = parts.getOrNull(0),
             instructionId = parts.getOrNull(1),
-            productType = parts.getOrNull(2),
+            productCode = parts.getOrNull(2),
             machineNumber = parts.getOrNull(3),
             productionDate = parts.getOrNull(4),
             monthlySequence = parts.getOrNull(5)?.toIntOrNull()
@@ -89,8 +89,8 @@ class DefaultBarcodeDecoder : BarcodeDecoder {
         if (productInfo.instructionId.isNullOrBlank()) {
             errors.add(ValidationError("instructionId", "指示番号は必須です", "REQUIRED_FIELD"))
         }
-        if (productInfo.productType.isNullOrBlank()) {
-            errors.add(ValidationError("productType", "型式は必須です", "REQUIRED_FIELD"))
+        if (productInfo.productCode.isNullOrBlank()) {
+            errors.add(ValidationError("productCode", "型式は必須です", "REQUIRED_FIELD"))
         }
         if (productInfo.machineNumber.isNullOrBlank()) {
             errors.add(ValidationError("machineNumber", "機番は必須です", "REQUIRED_FIELD"))
@@ -130,12 +130,12 @@ class DefaultBarcodeDecoder : BarcodeDecoder {
 // Extension function to convert decoded info to ProductInfo
 fun DecodedProductInfo.toProductInfo(): ProductInfo? {
     return if (workOrderId != null && instructionId != null && 
-               productType != null && machineNumber != null && 
+               productCode != null && machineNumber != null && 
                productionDate != null && monthlySequence != null) {
         ProductInfo(
             workOrderId = workOrderId,
             instructionId = instructionId,
-            productType = productType,
+            productCode = productCode,
             machineNumber = machineNumber,
             productionDate = productionDate,
             monthlySequence = monthlySequence

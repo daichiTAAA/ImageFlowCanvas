@@ -149,7 +149,7 @@ sequenceDiagram
 #### 2.2.2.3. AIパイプラインの負荷制御（QoS）
 - フレーム間引き（例: 30→15→8fps）。
 - 解像度段階（例: 2160p→1080p→720p）。
-- モデル切替（軽量版へのフェイルダウン）。
+    - モデル切替（軽量版へのフェイルダウン）。
 
 ## 2.3. 製品情報取得機能の詳細設計
 
@@ -192,11 +192,11 @@ sequenceDiagram
 - QRコードデコードによる製品情報取得
 - 複数条件による製品マスタ検索
 - 製品詳細情報とトレーサビリティデータの提供
-- 高性能一括取得機能
-- 製品マスタの更新管理
+    - 高性能一括取得機能
+    - 製品マスタの更新管理
 
-**通信方式**: gRPCによる高性能・型安全な通信
-**データ形式**: Protocol Buffersによる効率的なシリアライゼーション
+    **通信方式**: gRPCによる高性能・型安全な通信
+    **データ形式**: Protocol Buffersによる効率的なシリアライゼーション
 **性能要件**: レスポンス時間100ms以下、同時接続1000クライアント対応
 
 #### 2.3.2.2. 主要メッセージ構造
@@ -501,7 +501,7 @@ graph LR
   "product_info": {
     "work_order_id": "WO123456",
     "instruction_id": "INST789",
-    "product_type": "TYPE-ABC",
+    "product_code": "TYPE-ABC",
     "machine_number": "MACH001"
   },
   "analysis_results": {
@@ -851,7 +851,7 @@ message ErrorDetails {
 | 🔍 Product Master        | 製品の基本情報（型式、機番、仕様等）を管理するマスタデータベース                                        | PostgreSQL, Index       |
 | 🆔 Work Order ID         | 指図番号。製造指示を一意に識別する番号                                                                  | String, UUID            |
 | 📋 Instruction ID        | 指示番号。作業指示を一意に識別する番号                                                                  | String, UUID            |
-| 🏭 Product Type          | 型式。製品の種類・モデルを表す識別子                                                                    | String                  |
+| 🏭 Product Code          | 型式。製品の種類・モデルを表す識別子                                                                    | String                  |
 | 🔢 Machine Number        | 機番。製造機械・設備の識別番号                                                                          | String                  |
 | 🎥 Video Recording       | ウェアラブルデバイスで撮影された一人称映像の録画データ                                                  | MP4, Metadata           |
 | 🔍 Video Search          | 録画映像を製品情報・日時・検査結果等の条件で検索する機能                                                | SQL, Index              |
@@ -898,3 +898,37 @@ message ErrorDetails {
 | 🎯 QR Scan Result         | QRコードスキャンの結果として取得された製品識別情報                           | JSON, String      |
 | 🔍 Product Search Query   | サーバーでの製品情報検索に使用するクエリパラメータ                           | JSON, SQL         |
 | 📊 Traceability Record    | 製品のトレーサビリティを実現するための履歴記録データ                         | JSON, Audit Log   |
+
+---
+# 11. 検査マスタと製品のマッピング仕様
+
+## 11.1. 目的
+Webで設定した検査項目（InspectionTarget/InspectionItem）を、端末アプリが選択した製品（ProductMaster）に連動させて取得するためのサーバー側規約とAPIを定義する。
+
+## 11.2. マッピング規約
+- 第一候補（推奨）: 型式グループ
+  - 製品の `product_code`（＝ProductMaster.product_code） が所属する `ProductTypeGroup` を検索
+  - `InspectionTarget.group_id` ≡ `ProductTypeGroup.id` のターゲットに紐づく項目を採用
+- フォールバック: 型式コード単体
+  - `InspectionTarget.product_code` ≡ 製品 `product_code`（＝ProductMaster.product_code）
+- さらなるフォールバック: 作業指図単位
+  - `InspectionTarget.product_code` ≡ `ProductMaster.work_order_id`
+- いずれも不一致の場合: 空配列を返す（404は返さない）
+
+## 11.3. API
+- `GET /v1/inspection/products/{product_id}/items`
+  - `product_id` は UUID または `work_order_instruction_machine_seq` 生成ID
+  - 応答は `execution_order` 昇順のページネーションレスポンス
+
+## 11.4. 型式グループ管理API
+- POST `/v1/inspection/type-groups`
+- GET `/v1/inspection/type-groups`
+- PUT `/v1/inspection/type-groups/{group_id}`
+- DELETE `/v1/inspection/type-groups/{group_id}`
+- POST `/v1/inspection/type-groups/{group_id}/members`
+- GET `/v1/inspection/type-groups/{group_id}/members`
+- DELETE `/v1/inspection/type-groups/{group_id}/members/{product_code}`
+
+## 11.5. セキュリティ/運用
+- 認証必須（JWT）。
+- マッピング規約の変更が必要な場合は、`InspectionTarget` に製品FKを直接持たせる選択肢もある（将来拡張）。

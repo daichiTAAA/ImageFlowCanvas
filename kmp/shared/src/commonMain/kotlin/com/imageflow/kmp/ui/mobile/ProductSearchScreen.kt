@@ -24,12 +24,12 @@ fun ProductSearchScreen(
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onSelectSuggestion: (ProductSuggestion) -> Unit,
-    onAdvancedSearch: (productType: String, machineNumber: String) -> Unit,
+    onAdvancedSearch: (productCode: String, machineNumber: String) -> Unit,
     onSelectProduct: (ProductInfo) -> Unit,
     onBack: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    var productType by remember { mutableStateOf("") }
+    var productCode by remember { mutableStateOf("") }
     var machineNumber by remember { mutableStateOf("") }
 
     // Load latest list by default (productionDate, monthlySequence desc)
@@ -76,12 +76,12 @@ fun ProductSearchScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Manual filters: productType and machineNumber
+            // Manual filters: productCode and machineNumber
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = productType,
-                    onValueChange = { productType = it },
-                    label = { Text("型式コード (productType)") },
+                    value = productCode,
+                    onValueChange = { productCode = it },
+                    label = { Text("型式コード (product_code)") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -94,7 +94,7 @@ fun ProductSearchScreen(
                 )
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { onAdvancedSearch(productType, machineNumber) }) {
+                TextButton(onClick = { onAdvancedSearch(productCode, machineNumber) }) {
                     Icon(Icons.Filled.Search, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
                     Text("詳細条件で検索")
@@ -146,7 +146,7 @@ private fun SuggestionItem(s: ProductSuggestion, onClick: () -> Unit) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(text = s.displayText, fontWeight = FontWeight.Medium)
             Text(
-                text = "${s.productType} / ${s.machineNumber}",
+                text = "${s.productCode} / ${s.machineNumber}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -158,7 +158,7 @@ private fun SuggestionItem(s: ProductSuggestion, onClick: () -> Unit) {
 private fun ProductResultItem(product: ProductInfo, onClick: () -> Unit) {
     ElevatedCard(onClick = onClick) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = "${product.productType} - ${product.machineNumber}", fontWeight = FontWeight.SemiBold)
+            Text(text = "${product.productCode} - ${product.machineNumber}", fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(2.dp))
             Text(
                 text = "指図: ${product.workOrderId} / 指示: ${product.instructionId}",

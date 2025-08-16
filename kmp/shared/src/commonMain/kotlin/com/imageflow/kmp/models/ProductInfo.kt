@@ -9,7 +9,7 @@ data class ProductInfo(
     val id: String = "", // Generated unique ID
     val workOrderId: String,
     val instructionId: String,
-    val productType: String,
+    val productCode: String,
     val machineNumber: String,
     val productionDate: String, // ISO-8601 (YYYY-MM-DD)
     val monthlySequence: Int,
@@ -71,4 +71,3 @@ enum class ValidationStatus {
     NETWORK_ERROR,
     NOT_FOUND
 }
-

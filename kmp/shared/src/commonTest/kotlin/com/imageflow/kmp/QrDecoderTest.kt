@@ -18,7 +18,7 @@ class QrDecoderTest {
         
         assertEquals("WORK001", result.workOrderId)
         assertEquals("INST001", result.instructionId)
-        assertEquals("TYPE-A", result.productType)
+        assertEquals("TYPE-A", result.productCode)
         assertEquals("MACHINE-123", result.machineNumber)
         assertEquals("2024-01-15", result.productionDate)
         assertEquals(1, result.monthlySequence)
@@ -26,12 +26,12 @@ class QrDecoderTest {
     
     @Test
     fun testValidJsonQrCode() {
-        val rawData = """{"workOrderId":"WORK002","instructionId":"INST002","productType":"TYPE-B","machineNumber":"MACHINE-456","productionDate":"2024-02-20","monthlySequence":5}"""
+        val rawData = """{"workOrderId":"WORK002","instructionId":"INST002","productCode":"TYPE-B","machineNumber":"MACHINE-456","productionDate":"2024-02-20","monthlySequence":5}"""
         val result = decoder.decode(rawData)
         
         assertEquals("WORK002", result.workOrderId)
         assertEquals("INST002", result.instructionId)
-        assertEquals("TYPE-B", result.productType)
+        assertEquals("TYPE-B", result.productCode)
         assertEquals("MACHINE-456", result.machineNumber)
         assertEquals("2024-02-20", result.productionDate)
         assertEquals(5, result.monthlySequence)
@@ -42,7 +42,7 @@ class QrDecoderTest {
         val productInfo = DecodedProductInfo(
             workOrderId = "WORK001",
             instructionId = "INST001",
-            productType = "TYPE-A",
+            productCode = "TYPE-A",
             machineNumber = "MACHINE-123",
             productionDate = "2024-01-15",
             monthlySequence = 1
@@ -58,7 +58,7 @@ class QrDecoderTest {
         val productInfo = DecodedProductInfo(
             workOrderId = null,
             instructionId = "INST001",
-            productType = "TYPE-A",
+            productCode = "TYPE-A",
             machineNumber = null,
             productionDate = "2024-01-15",
             monthlySequence = 1
@@ -74,7 +74,7 @@ class QrDecoderTest {
         val productInfo = DecodedProductInfo(
             workOrderId = "WORK001",
             instructionId = "INST001",
-            productType = "TYPE-A",
+            productCode = "TYPE-A",
             machineNumber = "MACHINE-123",
             productionDate = "2024/01/15", // Wrong format
             monthlySequence = 1
@@ -90,7 +90,7 @@ class QrDecoderTest {
         val decodedInfo = DecodedProductInfo(
             workOrderId = "WORK001",
             instructionId = "INST001",
-            productType = "TYPE-A",
+            productCode = "TYPE-A",
             machineNumber = "MACHINE-123",
             productionDate = "2024-01-15",
             monthlySequence = 1
@@ -101,7 +101,7 @@ class QrDecoderTest {
         assertTrue(productInfo != null)
         assertEquals("WORK001", productInfo!!.workOrderId)
         assertEquals("INST001", productInfo.instructionId)
-        assertEquals("TYPE-A", productInfo.productType)
+        assertEquals("TYPE-A", productInfo.productCode)
         assertEquals("MACHINE-123", productInfo.machineNumber)
         assertEquals("2024-01-15", productInfo.productionDate)
         assertEquals(1, productInfo.monthlySequence)

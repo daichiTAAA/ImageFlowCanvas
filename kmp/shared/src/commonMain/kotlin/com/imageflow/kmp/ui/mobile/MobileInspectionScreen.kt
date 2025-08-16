@@ -151,7 +151,7 @@ private fun InspectionHeader(
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "${product.productType} - ${product.machineNumber}",
+                            text = "${product.productCode} - ${product.machineNumber}",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )

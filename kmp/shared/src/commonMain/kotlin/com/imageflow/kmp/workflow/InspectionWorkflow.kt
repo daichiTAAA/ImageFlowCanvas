@@ -56,7 +56,7 @@ data class InspectionProgress(
 data class ProductSearchQuery(
     val workOrderId: String? = null,
     val instructionId: String? = null,
-    val productType: String? = null,
+    val productCode: String? = null,
     val machineNumber: String? = null,
     val productionDateRange: DateRange? = null,
     val limit: Int = 50
@@ -88,4 +88,3 @@ data class DefectReview(
     val confidence: Float,
     val comments: String? = null
 )
-

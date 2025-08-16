@@ -11,7 +11,14 @@ import uuid
 import logging
 
 from app.database import get_db
-from app.models.inspection import InspectionTarget, InspectionItem, InspectionCriteria
+from app.models.inspection import (
+    InspectionTarget,
+    InspectionItem,
+    InspectionCriteria,
+    ProductTypeGroup,
+    ProductTypeGroupMember,
+)
+from app.models.product import ProductMaster
 from app.schemas.inspection import (
     InspectionTargetCreate,
     InspectionTargetUpdate,
@@ -23,6 +30,11 @@ from app.schemas.inspection import (
     InspectionCriteriaUpdate,
     InspectionCriteriaResponse,
     PaginatedResponse,
+    ProductTypeGroupCreate,
+    ProductTypeGroupUpdate,
+    ProductTypeGroupResponse,
+    ProductTypeGroupMemberCreate,
+    ProductTypeGroupMemberResponse,
 )
 from app.services.auth_service import get_current_user
 
@@ -43,19 +55,32 @@ async def create_inspection_target(
 ):
     """検査対象を作成"""
     try:
-        # 重複チェック
-        existing = await db.execute(
-            select(InspectionTarget).where(
-                InspectionTarget.product_code == target_data.product_code
+        # 入力バリデーション: product_code か group_id の少なくとも片方は必要
+        if not target_data.product_code and not target_data.group_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Either product_code or group_id must be provided",
             )
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Product code already exists")
+
+        # product_code が指定された場合は重複を避ける（同一コードに複数ターゲットを作らない運用）
+        if target_data.product_code:
+            existing = await db.execute(
+                select(InspectionTarget).where(
+                    InspectionTarget.product_code == target_data.product_code
+                )
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=400, detail="Product code already exists"
+                )
 
         target = InspectionTarget(
             name=target_data.name,
             description=target_data.description,
             product_code=target_data.product_code,
+            product_name=target_data.product_name,
+            group_id=target_data.group_id,
+            group_name=target_data.group_name,
             version=target_data.version,
             metadata=target_data.metadata or {},
             created_by=current_user.id,
@@ -183,7 +208,7 @@ async def update_inspection_target(
         if not target:
             raise HTTPException(status_code=404, detail="Inspection target not found")
 
-        # 重複チェック（自分以外）
+        # 重複チェック（自分以外） product_code が更新される場合のみ
         if target_data.product_code and target_data.product_code != target.product_code:
             existing = await db.execute(
                 select(InspectionTarget).where(
@@ -340,6 +365,66 @@ async def get_inspection_item(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put(
+    "/items/{item_id}",
+    response_model=InspectionItemResponse,
+    tags=["inspection-masters"],
+)
+async def update_inspection_item(
+    item_id: uuid.UUID,
+    item_data: InspectionItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """検査項目を更新"""
+    try:
+        result = await db.execute(
+            select(InspectionItem).where(InspectionItem.id == item_id)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Inspection item not found")
+
+        for field, value in item_data.dict(exclude_unset=True).items():
+            if hasattr(item, field):
+                setattr(item, field, value)
+
+        await db.commit()
+        await db.refresh(item)
+        return item
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to update inspection item: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/items/{item_id}", status_code=204, tags=["inspection-masters"])
+async def delete_inspection_item(
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """検査項目を削除"""
+    try:
+        result = await db.execute(
+            select(InspectionItem).where(InspectionItem.id == item_id)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Inspection item not found")
+        await db.delete(item)
+        await db.commit()
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete inspection item: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get(
     "/targets/{target_id}/items",
     response_model=PaginatedResponse[InspectionItemResponse],
@@ -386,6 +471,337 @@ async def list_inspection_items(
 
     except Exception as e:
         logger.error(f"Failed to list inspection items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/products/{product_id}/items",
+    response_model=PaginatedResponse[InspectionItemResponse],
+    tags=["inspection-masters"],
+)
+async def list_items_by_product(
+    product_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """製品IDから検査項目一覧を取得
+
+    設計上の前提:
+    - Webアプリで作成される InspectionTarget.product_code は製品の型式コード(ProductMaster.product_code)と一致させる
+    - 上記が見つからない場合のフォールバックとして、work_order_id などの補助キーも試行
+    """
+    try:
+        # 製品取得（UUID or 生成IDの両対応は products API と同等のロジックにするのが理想だが、ここでは単純化）
+        from uuid import UUID
+
+        product: ProductMaster | None = None
+        try:
+            uid = UUID(product_id)
+            res = await db.execute(select(ProductMaster).where(ProductMaster.id == uid))
+            product = res.scalar_one_or_none()
+        except Exception:
+            # 非UUIDは全件からの簡易探索にフォールバック
+            rows = (await db.execute(select(ProductMaster))).scalars().all()
+            for r in rows:
+                # 生成ID（work_order_id_instruction_id_machine_monthlySequence）形式の簡易一致
+                gen = f"{r.work_order_id}_{r.instruction_id}_{r.machine_number}_{r.monthly_sequence}"
+                if gen == product_id:
+                    product = r
+                    break
+
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        # 1) 型式グループ優先: product.product_code が所属するグループを検索
+        group = None
+        grp = await db.execute(
+            select(ProductTypeGroup)
+            .join(ProductTypeGroupMember)
+            .where(ProductTypeGroupMember.product_code == product.product_code)
+        )
+        group = grp.scalar_one_or_none()
+
+        target = None
+        if group:
+            tgt_by_group = await db.execute(
+                select(InspectionTarget).where(InspectionTarget.group_id == group.id)
+            )
+            target = tgt_by_group.scalar_one_or_none()
+
+        # 2) グループ未設定の場合は従来の product_code マッピング
+        if not target:
+            # まず product_code
+            target_q = select(InspectionTarget).where(
+                InspectionTarget.product_code == product.product_code
+            )
+            target = (await db.execute(target_q)).scalar_one_or_none()
+        if not target:
+            # フォールバック: work_order_id
+            alt_q = select(InspectionTarget).where(
+                InspectionTarget.product_code == product.work_order_id
+            )
+            target = (await db.execute(alt_q)).scalar_one_or_none()
+
+        if not target:
+            # 一致する検査対象がない場合は空で返す（404ではなく空配列の方がクライアント実装簡素）
+            return PaginatedResponse(
+                items=[], total_count=0, page=page, page_size=page_size, total_pages=0
+            )
+
+        # 対象に紐づく項目を順序で返す
+        base_q = select(InspectionItem).where(InspectionItem.target_id == target.id)
+        count_q = select(func.count(InspectionItem.id)).where(
+            InspectionItem.target_id == target.id
+        )
+
+        total_count = (await db.execute(count_q)).scalar() or 0
+        offset = (page - 1) * page_size
+        rows = (
+            (
+                await db.execute(
+                    base_q.order_by(InspectionItem.execution_order.asc())
+                    .offset(offset)
+                    .limit(page_size)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        return PaginatedResponse(
+            items=rows,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+            total_pages=(total_count + page_size - 1) // page_size,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list items by product: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 型式グループ管理API
+
+
+@router.post(
+    "/type-groups", response_model=ProductTypeGroupResponse, tags=["inspection-masters"]
+)
+async def create_product_code_group(
+    payload: ProductTypeGroupCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = ProductTypeGroup(
+            name=payload.name,
+            description=payload.description,
+            created_by=current_user.id,
+        )
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+        return row
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to create Product Code group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/type-groups",
+    response_model=PaginatedResponse[ProductTypeGroupResponse],
+    tags=["inspection-masters"],
+)
+async def list_product_code_groups(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        count = (
+            await db.execute(select(func.count(ProductTypeGroup.id)))
+        ).scalar() or 0
+        offset = (page - 1) * page_size
+        rows = (
+            (
+                await db.execute(
+                    select(ProductTypeGroup)
+                    .order_by(ProductTypeGroup.created_at.desc())
+                    .offset(offset)
+                    .limit(page_size)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return PaginatedResponse(
+            items=rows,
+            total_count=count,
+            page=page,
+            page_size=page_size,
+            total_pages=(count + page_size - 1) // page_size,
+        )
+    except Exception as e:
+        logger.error(f"Failed to list Product Code groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put(
+    "/type-groups/{group_id}",
+    response_model=ProductTypeGroupResponse,
+    tags=["inspection-masters"],
+)
+async def update_product_code_group(
+    group_id: uuid.UUID,
+    payload: ProductTypeGroupUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = (
+            await db.execute(
+                select(ProductTypeGroup).where(ProductTypeGroup.id == group_id)
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Group not found")
+        for field, value in payload.dict(exclude_unset=True).items():
+            setattr(row, field, value)
+        await db.commit()
+        await db.refresh(row)
+        return row
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to update Product Code group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/type-groups/{group_id}", status_code=204, tags=["inspection-masters"])
+async def delete_product_code_group(
+    group_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = (
+            await db.execute(
+                select(ProductTypeGroup).where(ProductTypeGroup.id == group_id)
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Group not found")
+        await db.delete(row)
+        await db.commit()
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete Product Code group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/type-groups/{group_id}/members",
+    response_model=ProductTypeGroupMemberResponse,
+    tags=["inspection-masters"],
+)
+async def add_group_member(
+    group_id: uuid.UUID,
+    payload: ProductTypeGroupMemberCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        grp = (
+            await db.execute(
+                select(ProductTypeGroup).where(ProductTypeGroup.id == group_id)
+            )
+        ).scalar_one_or_none()
+        if not grp:
+            raise HTTPException(status_code=404, detail="Group not found")
+            member = ProductTypeGroupMember(
+                group_id=group_id, product_code=payload.product_code
+            )
+        db.add(member)
+        await db.commit()
+        await db.refresh(member)
+        return member
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to add group member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/type-groups/{group_id}/members",
+    response_model=List[ProductTypeGroupMemberResponse],
+    tags=["inspection-masters"],
+)
+async def list_group_members(
+    group_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        rows = (
+            (
+                await db.execute(
+                    select(ProductTypeGroupMember)
+                    .where(ProductTypeGroupMember.group_id == group_id)
+                    .order_by(ProductTypeGroupMember.product_code.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return rows
+    except Exception as e:
+        logger.error(f"Failed to list group members: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/type-groups/{group_id}/members/{product_code}",
+    status_code=204,
+    tags=["inspection-masters"],
+)
+async def delete_group_member(
+    group_id: uuid.UUID,
+    product_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = (
+            await db.execute(
+                select(ProductTypeGroupMember).where(
+                    and_(
+                        ProductTypeGroupMember.group_id == group_id,
+                        ProductTypeGroupMember.product_code == product_code,
+                    )
+                )
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Member not found")
+        await db.delete(row)
+        await db.commit()
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete group member: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -476,4 +892,80 @@ async def list_inspection_criterias(
 
     except Exception as e:
         logger.error(f"Failed to list inspection criterias: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/criterias/{criteria_id}", response_model=InspectionCriteriaResponse, tags=["inspection-masters"]
+)
+async def get_inspection_criteria(
+    criteria_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = (
+            await db.execute(select(InspectionCriteria).where(InspectionCriteria.id == criteria_id))
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Inspection criteria not found")
+        return row
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get inspection criteria: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put(
+    "/criterias/{criteria_id}", response_model=InspectionCriteriaResponse, tags=["inspection-masters"]
+)
+async def update_inspection_criteria(
+    criteria_id: uuid.UUID,
+    payload: InspectionCriteriaUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = (
+            await db.execute(select(InspectionCriteria).where(InspectionCriteria.id == criteria_id))
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Inspection criteria not found")
+        for field, value in payload.dict(exclude_unset=True).items():
+            if hasattr(row, field):
+                setattr(row, field, value)
+        await db.commit()
+        await db.refresh(row)
+        return row
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to update inspection criteria: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/criterias/{criteria_id}", status_code=204, tags=["inspection-masters"]
+)
+async def delete_inspection_criteria(
+    criteria_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = (
+            await db.execute(select(InspectionCriteria).where(InspectionCriteria.id == criteria_id))
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Inspection criteria not found")
+        await db.delete(row)
+        await db.commit()
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete inspection criteria: {e}")
         raise HTTPException(status_code=500, detail=str(e))

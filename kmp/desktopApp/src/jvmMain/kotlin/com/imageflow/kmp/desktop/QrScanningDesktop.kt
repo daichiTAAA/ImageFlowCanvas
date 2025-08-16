@@ -354,7 +354,7 @@ private fun ResultCardDesktop(
             Text("QRコード読み取り成功", color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
             val p = result.productInfo!!
-            Text("製品タイプ: ${p.productType}")
+            Text("製品コード: ${p.productCode}")
             Text("機番: ${p.machineNumber}")
             Text("指図番号: ${p.workOrderId}")
             Text("指示番号: ${p.instructionId}")
@@ -389,13 +389,13 @@ private fun DifferenceCard(
             Text(raw, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text("指定フォーマット:")
-            Text("workOrderId,instructionId,productType,machineNumber,productionDate(YYYY-MM-DD),monthlySequence")
+            Text("workOrderId,instructionId,productCode,machineNumber,productionDate(YYYY-MM-DD),monthlySequence")
             Spacer(Modifier.height(8.dp))
             Text("解析されたフィールド:")
             val fields = listOf(
                 "workOrderId" to (decoded.workOrderId ?: "(なし)"),
                 "instructionId" to (decoded.instructionId ?: "(なし)"),
-                "productType" to (decoded.productType ?: "(なし)"),
+                "productCode" to (decoded.productCode ?: "(なし)"),
                 "machineNumber" to (decoded.machineNumber ?: "(なし)"),
                 "productionDate" to (decoded.productionDate ?: "(なし)"),
                 "monthlySequence" to (decoded.monthlySequence?.toString() ?: "(なし)")

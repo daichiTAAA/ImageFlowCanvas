@@ -2,7 +2,7 @@
 検査関連のデータベースモデル
 """
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, JSON, ForeignKey, Index
+from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, JSON, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -18,7 +18,11 @@ class InspectionTarget(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    product_code = Column(String(100), nullable=False, unique=True)
+    product_code = Column(String(100), nullable=True, unique=False)
+    product_name = Column(String(255))
+    # 型式グループ紐付け（product_code単位の管理を簡素化）
+    group_id = Column(UUID(as_uuid=True), ForeignKey('product_code_groups.id'), nullable=True)
+    group_name = Column(String(255))
     version = Column(String(50), nullable=False, default="1.0")
     metadata_ = Column("metadata", JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -26,13 +30,54 @@ class InspectionTarget(Base):
     created_by = Column(UUID(as_uuid=True))
     
     # リレーション
+    group = relationship("ProductTypeGroup", back_populates="inspection_targets")
     inspection_items = relationship("InspectionItem", back_populates="target", cascade="all, delete-orphan")
     inspection_executions = relationship("InspectionExecution", back_populates="target")
     
     # インデックス
     __table_args__ = (
         Index('idx_inspection_targets_product_code', 'product_code'),
+        Index('idx_inspection_targets_group_id', 'group_id'),
         Index('idx_inspection_targets_created_at', 'created_at'),
+    )
+
+
+class ProductTypeGroup(Base):
+    """型式グループ（複数の型式コードをまとめる）"""
+    __tablename__ = "product_code_groups"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(UUID(as_uuid=True))
+
+    # リレーション
+    members = relationship("ProductTypeGroupMember", back_populates="group", cascade="all, delete-orphan")
+    inspection_targets = relationship("InspectionTarget", back_populates="group")
+
+    __table_args__ = (
+        Index('idx_product_code_groups_name', 'name'),
+    )
+
+
+class ProductTypeGroupMember(Base):
+    """型式グループのメンバー（製品の型式コード）"""
+    __tablename__ = "product_code_group_members"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    group_id = Column(UUID(as_uuid=True), ForeignKey('product_code_groups.id'), nullable=False)
+    product_code = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # リレーション
+    group = relationship("ProductTypeGroup", back_populates="members")
+
+    __table_args__ = (
+        UniqueConstraint('group_id', 'product_code', name='uq_group_product_code'),
+        Index('idx_ptg_members_group_id', 'group_id'),
+        Index('idx_ptg_members_product_code', 'product_code'),
     )
 
 

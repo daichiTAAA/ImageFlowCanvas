@@ -127,12 +127,12 @@ class MobileInspectionViewModel(
     }
 
     // Advanced search by specific fields
-    fun searchProductsAdvanced(productType: String, machineNumber: String) {
+    fun searchProductsAdvanced(productCode: String, machineNumber: String) {
         viewModelScope.launch {
             updateUiState { it.copy(isLoading = true) }
             try {
                 val query = com.imageflow.kmp.workflow.ProductSearchQuery(
-                    productType = productType.ifBlank { null },
+                    productCode = productCode.ifBlank { null },
                     machineNumber = machineNumber.ifBlank { null },
                     limit = 50
                 )
@@ -172,6 +172,11 @@ class MobileInspectionViewModel(
                             currentProduct = productInfo,
                             isQrScanningActive = false
                         )
+                    }
+                    // Fetch inspection items configured on Web for this product
+                    runCatching {
+                        val items = inspectionWorkflowUseCase.getInspectionItemsForProduct(productInfo.id)
+                        updateUiState { prev -> prev.copy(inspectionItems = items) }
                     }
                     clearSearchResults()
                 }
@@ -382,5 +387,6 @@ data class MobileInspectionUiState(
     val errorMessage: String? = null,
     val lastAiResult: AiInspectionResult? = null,
     val lastHumanResult: HumanResult? = null,
-    val lastSyncResult: SyncResult? = null
+    val lastSyncResult: SyncResult? = null,
+    val inspectionItems: List<com.imageflow.kmp.network.InspectionItemKmp> = emptyList()
 )

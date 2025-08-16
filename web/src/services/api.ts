@@ -354,6 +354,58 @@ class ApiService {
     return response.data
   }
 
+  async updateInspectionItem(itemId: string, data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.put(`/inspection/items/${itemId}`, data)
+    return response.data
+  }
+
+  async deleteInspectionItem(itemId: string): Promise<void> {
+    const api = this.ensureApiInitialized()
+    await api.delete(`/inspection/items/${itemId}`)
+  }
+
+  // Product Code Groups (型式グループ)
+  async createProductTypeGroup(data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/type-groups', data)
+    return response.data
+  }
+
+  async listProductTypeGroups(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/type-groups', { params })
+    return response.data
+  }
+
+  async updateProductTypeGroup(groupId: string, data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.put(`/inspection/type-groups/${groupId}`, data)
+    return response.data
+  }
+
+  async deleteProductTypeGroup(groupId: string): Promise<void> {
+    const api = this.ensureApiInitialized()
+    await api.delete(`/inspection/type-groups/${groupId}`)
+  }
+
+  async addProductTypeGroupMember(groupId: string, productCode: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post(`/inspection/type-groups/${groupId}/members`, { product_code: productCode })
+    return response.data
+  }
+
+  async listProductTypeGroupMembers(groupId: string): Promise<any[]> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/type-groups/${groupId}/members`)
+    return response.data
+  }
+
+  async deleteProductTypeGroupMember(groupId: string, productCode: string): Promise<void> {
+    const api = this.ensureApiInitialized()
+    await api.delete(`/inspection/type-groups/${groupId}/members/${encodeURIComponent(productCode)}`)
+  }
+
   async getInspectionItem(itemId: string): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get(`/inspection/items/${itemId}`)
@@ -377,6 +429,23 @@ class ApiService {
     const api = this.ensureApiInitialized()
     const response = await api.get('/inspection/criterias', { params })
     return response.data
+  }
+
+  async getCriteria(criteriaId: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/criterias/${criteriaId}`)
+    return response.data
+  }
+
+  async updateInspectionCriteria(criteriaId: string, data: any): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.put(`/inspection/criterias/${criteriaId}`, data)
+    return response.data
+  }
+
+  async deleteInspectionCriteria(criteriaId: string): Promise<void> {
+    const api = this.ensureApiInitialized()
+    await api.delete(`/inspection/criterias/${criteriaId}`)
   }
 
   // Inspection Executions

@@ -15,7 +15,7 @@ interface ProductRepository {
     suspend fun searchProducts(query: ProductSearchQuery): List<ProductInfo>
     suspend fun getFrequentlyUsedProducts(limit: Int = 100): List<ProductInfo>
     suspend fun getRecentProducts(limit: Int = 50): List<ProductInfo>
-    suspend fun getProductsByType(productType: String): List<ProductInfo>
+    suspend fun getProductsByCode(productCode: String): List<ProductInfo>
     
     // CRUD operations
     suspend fun saveProduct(product: ProductInfo): Boolean
@@ -55,4 +55,3 @@ sealed class ProductUpdate {
     data class Deleted(val productId: String) : ProductUpdate()
     data class SyncStatusChanged(val productId: String, val status: SyncStatus) : ProductUpdate()
 }
-

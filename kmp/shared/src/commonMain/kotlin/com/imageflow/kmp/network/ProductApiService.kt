@@ -16,7 +16,7 @@ interface ProductApiService {
     // Product search and discovery
     suspend fun searchProducts(query: ProductSearchQuery): ApiResult<ProductSearchResponse>
     suspend fun getProductSuggestions(partialQuery: String): ApiResult<List<ProductSuggestion>>
-    suspend fun getProductsByType(productType: String): ApiResult<List<ProductInfo>>
+    suspend fun getProductsByCode(productCode: String): ApiResult<List<ProductInfo>>
     
     // Product validation
     suspend fun validateProduct(productInfo: ProductInfo): ApiResult<ProductValidationResult>
@@ -39,7 +39,7 @@ data class ProductSearchResponse(
 data class ProductSuggestion(
     val productId: String,
     val displayText: String,
-    val productType: String,
+    val productCode: String,
     val machineNumber: String,
     val relevanceScore: Float
 )

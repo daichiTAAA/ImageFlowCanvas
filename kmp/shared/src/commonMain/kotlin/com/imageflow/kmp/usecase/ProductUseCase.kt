@@ -207,7 +207,7 @@ class SearchProductUseCase(
         }
     }
     
-    // Overload: structured search by fields (productType, machineNumber, etc.)
+    // Overload: structured search by fields (productCode, machineNumber, etc.)
     suspend fun searchProducts(query: ProductSearchQuery, useServerSearch: Boolean = true): ProductSearchResult {
         val startTime = System.currentTimeMillis()
         
@@ -261,8 +261,8 @@ class SearchProductUseCase(
                     localProducts.take(10).map { product ->
                         ProductSuggestion(
                             productId = product.id,
-                            displayText = "${product.productType} - ${product.machineNumber}",
-                            productType = product.productType,
+                            displayText = "${product.productCode} - ${product.machineNumber}",
+                            productCode = product.productCode,
                             machineNumber = product.machineNumber,
                             relevanceScore = 0.8f
                         )
@@ -286,7 +286,7 @@ class SearchProductUseCase(
         return ProductSearchQuery(
             workOrderId = if (query.startsWith("WORK")) query else null,
             instructionId = if (query.startsWith("INST")) query else null,
-            productType = if (!query.startsWith("WORK") && !query.startsWith("INST")) query else null,
+            productCode = if (!query.startsWith("WORK") && !query.startsWith("INST")) query else null,
             machineNumber = if (query.startsWith("MACHINE")) query else null,
             limit = 50
         )

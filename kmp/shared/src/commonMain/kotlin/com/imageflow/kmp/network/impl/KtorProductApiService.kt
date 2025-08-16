@@ -40,7 +40,7 @@ class KtorProductApiService(
             val q = buildString {
                 query.workOrderId?.let { append("work_order_id=$it&") }
                 query.instructionId?.let { append("instruction_id=$it&") }
-                query.productType?.let { append("product_type=${encode(it)}&") }
+                query.productCode?.let { append("product_code=${encode(it)}&") }
                 query.machineNumber?.let { append("machine_number=${encode(it)}&") }
                 query.productionDateRange?.let { append("start_date=${encode(it.startDate)}&end_date=${encode(it.endDate)}&") }
                 append("limit=${query.limit}")
@@ -57,9 +57,9 @@ class KtorProductApiService(
             ApiResult.Success(list)
         }.getOrElse { e -> networkError(e) }
 
-    override suspend fun getProductsByType(productType: String): ApiResult<List<com.imageflow.kmp.models.ProductInfo>> =
+    override suspend fun getProductsByCode(productCode: String): ApiResult<List<com.imageflow.kmp.models.ProductInfo>> =
         runCatching {
-            val body = rest.get("products?product_type=${encode(productType)}")
+            val body = rest.get("products?product_code=${encode(productCode)}")
             val list = json.decodeFromString<List<com.imageflow.kmp.models.ProductInfo>>(body)
             ApiResult.Success(list)
         }.getOrElse { e -> networkError(e) }

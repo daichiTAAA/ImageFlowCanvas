@@ -35,7 +35,33 @@ interface InspectionApiService {
     // Batch operations and sync
     suspend fun submitInspectionBatch(inspections: List<Inspection>): ApiResult<BatchSubmissionResult>
     suspend fun syncInspectionData(lastSyncTime: Long): ApiResult<InspectionSyncResponse>
+
+    // Masters: fetch inspection items configured on Web for given product
+    suspend fun getInspectionItemsForProduct(productId: String, page: Int = 1, pageSize: Int = 100): ApiResult<PaginatedResponse<InspectionItemKmp>>
 }
+
+@Serializable
+data class PaginatedResponse<T>(
+    val items: List<T>,
+    val total_count: Int,
+    val page: Int,
+    val page_size: Int,
+    val total_pages: Int
+)
+
+@Serializable
+data class InspectionItemKmp(
+    val id: String,
+    val target_id: String,
+    val name: String,
+    val description: String? = null,
+    val type: String,
+    val pipeline_id: String? = null,
+    val pipeline_params: Map<String, String>? = null,
+    val execution_order: Int = 1,
+    val is_required: Boolean = true,
+    val criteria_id: String? = null
+)
 
 @Serializable
 data class AiInspectionRequest(
@@ -124,14 +150,14 @@ data class HumanReviewResponse(
 data class StatisticsRequest(
     val startDate: Long,
     val endDate: Long,
-    val productTypes: List<String> = emptyList(),
+    val productCodes: List<String> = emptyList(),
     val inspectorIds: List<String> = emptyList(),
     val groupBy: List<StatisticsGrouping> = emptyList()
 )
 
 @Serializable
 enum class StatisticsGrouping {
-    DATE, PRODUCT_TYPE, INSPECTOR, DEFECT_TYPE, RESULT
+    DATE, PRODUCT_CODE, INSPECTOR, DEFECT_TYPE, RESULT
 }
 
 @Serializable

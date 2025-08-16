@@ -47,7 +47,7 @@ class SettingsViewModel {
         }
     }
 
-    suspend fun testConnection(): ConnectionTestResult = when (val r = api.getProductsByType("")) {
+    suspend fun testConnection(): ConnectionTestResult = when (val r = api.getProductsByCode("")) {
         is ApiResult.Success -> ConnectionTestResult(true, null)
         is ApiResult.Error -> ConnectionTestResult(false, r.message)
         is ApiResult.NetworkError -> ConnectionTestResult(false, r.message)

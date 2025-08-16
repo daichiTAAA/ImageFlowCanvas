@@ -4,7 +4,7 @@ CREATE TABLE products (
   id TEXT NOT NULL PRIMARY KEY,
   work_order_id TEXT NOT NULL,
   instruction_id TEXT NOT NULL,
-  product_type TEXT NOT NULL,
+  product_code TEXT NOT NULL,
   machine_number TEXT NOT NULL,
   production_date TEXT NOT NULL, -- ISO-8601 format
   monthly_sequence INTEGER NOT NULL,
@@ -46,16 +46,16 @@ WHERE status = 'ACTIVE'
 ORDER BY access_count DESC, last_accessed_at DESC
 LIMIT ?;
 
-selectByProductType:
+selectByProductCode:
 SELECT *
 FROM products
-WHERE product_type LIKE ?
+WHERE product_code LIKE ?
 AND status = 'ACTIVE'
 ORDER BY machine_number;
 
 insertOrReplace:
 INSERT OR REPLACE INTO products(
-  id, work_order_id, instruction_id, product_type, machine_number,
+  id, work_order_id, instruction_id, product_code, machine_number,
   production_date, monthly_sequence, qr_raw_data, status,
   created_at, updated_at, last_accessed_at, access_count, is_cached, server_sync_status
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

@@ -131,7 +131,11 @@ class HumanResult(BaseModel):
 class InspectionTargetBase(BaseModel):
     name: str = Field(..., max_length=255)
     description: Optional[str] = None
-    product_code: str = Field(..., max_length=100)
+    # 型式コードまたは型式グループのどちらかを指定（サーバー側で最低1つ必須チェック）
+    product_code: Optional[str] = Field(None, max_length=100)
+    product_name: Optional[str] = Field(None, max_length=255)
+    group_id: Optional[uuid.UUID] = None
+    group_name: Optional[str] = Field(None, max_length=255)
     version: str = Field(default="1.0", max_length=50)
     metadata: Optional[Dict[str, Any]] = {}
 
@@ -144,6 +148,9 @@ class InspectionTargetUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     product_code: Optional[str] = Field(None, max_length=100)
+    product_name: Optional[str] = Field(None, max_length=255)
+    group_id: Optional[uuid.UUID] = None
+    group_name: Optional[str] = Field(None, max_length=255)
     version: Optional[str] = Field(None, max_length=50)
     metadata: Optional[Dict[str, Any]] = None
 
@@ -183,6 +190,41 @@ class InspectionCriteriaResponse(InspectionCriteriaBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[uuid.UUID] = None
+
+
+# 型式グループスキーマ
+class ProductTypeGroupBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    description: Optional[str] = None
+
+
+class ProductTypeGroupCreate(ProductTypeGroupBase):
+    pass
+
+
+class ProductTypeGroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = None
+
+
+class ProductTypeGroupResponse(ProductTypeGroupBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[uuid.UUID] = None
+
+
+class ProductTypeGroupMemberCreate(BaseModel):
+    product_code: str = Field(..., max_length=100)
+
+
+class ProductTypeGroupMemberResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    group_id: uuid.UUID
+    product_code: str
+    created_at: datetime
 
 
 # 検査項目スキーマ
