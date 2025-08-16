@@ -236,6 +236,8 @@ cd kmp
 # 出力先: kmp/desktopApp/build/compose/binaries/main/{dmg,msi,deb}/
 # 実行方法（macOSは .app を Finder から開くか、下記コマンド推奨）
 open desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app
+# または
+./desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app/Contents/MacOS/ImageFlowDesktop
 ```
 
 ### カメラが映らない/権限が表示されない場合の対処
