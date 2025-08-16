@@ -38,6 +38,18 @@ from app.schemas.inspection import (
 )
 from app.services.auth_service import get_current_user
 
+
+def _extract_user_id(current_user) -> Optional[uuid.UUID]:
+    try:
+        if isinstance(current_user, dict):
+            val = current_user.get("id")
+            return uuid.UUID(val) if isinstance(val, str) else val
+        # object with attribute
+        val = getattr(current_user, "id", None)
+        return uuid.UUID(val) if isinstance(val, str) else val
+    except Exception:
+        return None
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -83,7 +95,7 @@ async def create_inspection_target(
             group_name=target_data.group_name,
             version=target_data.version,
             metadata=target_data.metadata or {},
-            created_by=current_user.id,
+            created_by=_extract_user_id(current_user),
         )
 
         db.add(target)
@@ -313,7 +325,7 @@ async def create_inspection_item(
             execution_order=item_data.execution_order,
             is_required=item_data.is_required,
             criteria_id=item_data.criteria_id,
-            created_by=current_user.id,
+            created_by=_extract_user_id(current_user),
         )
 
         db.add(item)
@@ -599,7 +611,7 @@ async def create_product_code_group(
         row = ProductTypeGroup(
             name=payload.name,
             description=payload.description,
-            created_by=current_user.id,
+            created_by=_extract_user_id(current_user),
         )
         db.add(row)
         await db.commit()
@@ -727,9 +739,9 @@ async def add_group_member(
         ).scalar_one_or_none()
         if not grp:
             raise HTTPException(status_code=404, detail="Group not found")
-            member = ProductTypeGroupMember(
-                group_id=group_id, product_code=payload.product_code
-            )
+        member = ProductTypeGroupMember(
+            group_id=group_id, product_code=payload.product_code
+        )
         db.add(member)
         await db.commit()
         await db.refresh(member)
@@ -823,7 +835,7 @@ async def create_inspection_criteria(
             description=criteria_data.description,
             judgment_type=criteria_data.judgment_type,
             spec=criteria_data.spec,
-            created_by=current_user.id,
+            created_by=_extract_user_id(current_user),
         )
 
         db.add(criteria)
