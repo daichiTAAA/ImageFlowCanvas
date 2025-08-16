@@ -41,6 +41,8 @@ compose.desktop {
         jvmArgs += listOf(
             "-Dfile.encoding=UTF-8"
         )
+        // Note: Compose's macOS launcher already manages main-thread startup.
+        // Do not add -XstartOnFirstThread here to avoid startup conflicts.
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
@@ -50,6 +52,15 @@ compose.desktop {
             modules("java.sql", "java.net.http")
 
             macOS {
+                // Note: Compose signing with identity "-" may not be supported in all environments.
+                // We wire a post-packaging ad-hoc codesign task below as a reliable fallback.
+                // Allow overriding bundle ID to retrigger macOS TCC prompts in development builds
+                val overrideBundleId = providers.gradleProperty("bundleIdOverride").orNull
+                if (overrideBundleId != null) {
+                    bundleID = overrideBundleId
+                } else {
+                    bundleID = "com.imageflow.kmp.desktop"
+                }
                 // Add camera usage description and enable Continuity Camera device type
                 infoPlist {
                     // Inject raw XML keys compatible with Apple's Info.plist
@@ -61,9 +72,28 @@ compose.desktop {
                         <key>NSCameraUseContinuityCameraDeviceType</key>
                         <true/>
                     """.trimIndent()
+        }
+
+        // On macOS, perform ad-hoc codesign after the .app is created to improve Gatekeeper/TCC behavior
+        if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
+            val appBundle = layout.buildDirectory.dir("compose/binaries/main/app/ImageFlowDesktop.app")
+            tasks.register("packageAdHocSigned") {
+                dependsOn("packageDistributionForCurrentOS")
+                doLast {
+                    exec {
+                        commandLine(
+                            "/usr/bin/codesign",
+                            "--force",
+                            "--deep",
+                            "-s", "-",
+                            appBundle.get().asFile.absolutePath
+                        )
+                    }
                 }
             }
         }
+    }
+}
 
         // Ensure modules are enabled at runtime as well
         jvmArgs += listOf("--add-modules", "java.sql,java.net.http")

@@ -232,19 +232,57 @@ cd kmp
 ### パッケージ作成（配布物）
 ```bash
 cd kmp
+./gradlew :desktopApp:packageAdHocSigned
 ./gradlew :desktopApp:packageDistributionForCurrentOS
 # 出力先: kmp/desktopApp/build/compose/binaries/main/{dmg,msi,deb}/
 # 実行方法（macOSは .app を Finder から開くか、下記コマンド推奨）
 open desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app
-# または
+# ログの確認方法
+log stream --predicate 'process == "ImageFlowDesktop"' --info
+# または直接実行
 ./desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app/Contents/MacOS/ImageFlowDesktop
 ```
+
+#### 開発向け Ad-hoc 署名（macOS）
+- 目的: Gatekeeper/TCC（権限管理）で `.app` を安定的に扱わせ、Finder 起動時の初回カメラ許可ダイアログを確実に表示させるため、ビルド済み `.app` にアドホック署名を付与します（配布向けの正式署名ではありません）。
+- 使い方:
+  ```bash
+  cd kmp
+  ./gradlew :desktopApp:packageAdHocSigned
+  # 生成先: kmp/desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app （ad-hoc署名済み）
+  #        kmp/desktopApp/build/compose/binaries/main/dmg/ImageFlowDesktop-1.0.0.dmg
+  ```
+- 推奨起動フロー:
+  1) 生成された `.app` を `/Applications` に移動
+  2) Finder から起動し、初回のカメラ権限ダイアログで「OK」を選択
+- 初回ダイアログが出ない/一度拒否してしまった場合（開発時の再プロンプト）:
+  - 一時的にバンドルIDを変更して再パッケージすると別アプリ扱いとなり、再び初回プロンプトが表示されます。
+    ```bash
+    cd kmp
+    ./gradlew :desktopApp:packageAdHocSigned -PbundleIdOverride=com.imageflow.kmp.desktop.dev
+    ```
+  - 既存バンドルIDで続ける場合は、システム設定で手動許可するか、開発時のみ `tccutil reset Camera com.imageflow.kmp.desktop` 実行後に Finder から起動してください。
 
 ### カメラが映らない/権限が表示されない場合の対処
 - `.app` を `open` で起動しているか確認（`.app/Contents/MacOS/...` を直接実行しない）。
 - 初回ダイアログで「許可」したか確認。拒否した場合は「システム設定 > プライバシーとセキュリティ > カメラ」で ImageFlowDesktop を有効化。
 - それでも表示されない場合は `.app` を一度削除し、再度 `:desktopApp:packageDistributionForCurrentOS` で作成し直して `.app` から起動。
-- 端末に複数カメラがある場合、内部で `avfoundation` デバイス (`0`, `1`, `0:0`, `1:0`) を自動プローブします。検出失敗時はアプリ内に「カメラ初期化に失敗しました」と表示されます。必要に応じてデバイス選択UIを追加可能です。
+- もし項目が表示されない/うまく切り替わらない場合は、以下でカメラ権限をリセット
+    - `tccutil reset Camera com.imageflow.kmp.desktop`
+
+#### TCCにアプリが登録されない場合の推奨手順（macOS）
+- 最も安定するのは、以下の順で固定パス配置＋隔離解除＋アドホック署名を行い、Finderから起動して権限ダイアログで「許可」する方法です。
+  1) アプリを /Applications へ配置
+     - `mv kmp/desktopApp/build/compose/binaries/main/app/ImageFlowDesktop.app /Applications/`
+  2) 隔離属性を解除（Gatekeeperの隔離を外す）
+     - `xattr -dr com.apple.quarantine /Applications/ImageFlowDesktop.app`
+  3) 可能ならアドホック署名（バンドル内のネイティブを含めて深い署名）
+     - `codesign --force --deep -s - "/Applications/ImageFlowDesktop.app"`
+  4) カメラ権限をリセット（必要な場合のみ）
+     - `tccutil reset Camera com.imageflow.kmp.desktop`
+  5) Finderから `/Applications/ImageFlowDesktop.app` を開く → カメラ権限ダイアログで「OK」を選択
+
+配布（ユーザー端末への配布）を想定する場合は、Developer ID 署名＋公証（notarization）の導入をご検討ください。Compose の `nativeDistributions { macOS { signing { … } notarization { … } } }` で設定可能です（本リポジトリの標準ビルドは開発用途の ad-hoc 署名のみを同梱）。
 
 ### ビルドが遅い場合の対処（3分以上かかるなど）
 - 依存のネイティブダウンロード: `org.bytedeco:javacv-platform` は複数OS/CPUのFFmpeg/OpenCVネイティブを含むため、初回取得に時間がかかります。

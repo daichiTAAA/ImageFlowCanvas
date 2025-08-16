@@ -26,6 +26,13 @@ import javax.swing.JPanel
 import java.awt.BorderLayout
 import java.awt.image.BufferedImage
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_0RGB
+import javax.swing.SwingUtilities
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import java.awt.Desktop
+import java.net.URI
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,11 +48,14 @@ fun QrScanningScreenDesktop(
     var grabber by remember { mutableStateOf<FFmpegFrameGrabber?>(null) }
     var imagePanel by remember { mutableStateOf<ImagePanel?>(null) }
     var latestFrame by remember { mutableStateOf<java.awt.image.BufferedImage?>(null) }
+    var frameCount by remember { mutableStateOf(0) }
+    var scanningStartAt by remember { mutableStateOf(0L) }
+    val scope = rememberCoroutineScope()
 
     // Initialize webcam lazily when screen enters composition
     LaunchedEffect(Unit) {
-        // Try to find a working camera index (0..5)
-        val working = findWorkingGrabberAvFoundation()
+        // Try to find a working camera index off the UI thread
+        val working = withContext(Dispatchers.Default) { findWorkingGrabberAvFoundation() }
         grabber = working
         if (working != null) {
             imagePanel = ImagePanel()
@@ -77,31 +87,44 @@ fun QrScanningScreenDesktop(
             setHints(hints)
         }
         val converter = Java2DFrameConverter()
-        while (isScanning) {
-            if (!emitted) {
-                try {
-                    val frame: Frame? = try { grabber?.grab() } catch (_: Throwable) { null }
-                    val img = frame?.let { converter.convert(it) }
-                    if (img != null) {
-                        val rgb = ensureRgb(img)
-                        latestFrame = rgb
-                        imagePanel?.setImage(rgb)
-                        val source = BufferedImageLuminanceSource(rgb)
-                        val bitmap = BinaryBitmap(HybridBinarizer(source))
-                        val result = reader.decodeWithState(bitmap)
-                        val text = result.text
-                        if (!text.isNullOrBlank()) {
-                            emitted = true
-                            onRawScanned(text)
+        // start a new diagnostic window
+        scanningStartAt = System.currentTimeMillis()
+        frameCount = 0
+        // Perform grabbing/decoding off the UI thread to avoid freezes
+        withContext(Dispatchers.Default) {
+            while (isActive) {
+                if (!emitted) {
+                    try {
+                        val frame: Frame? = try { grabber?.grab() } catch (_: Throwable) { null }
+                        val img = frame?.let { converter.convert(it) }
+                        if (img != null) {
+                            val rgb = ensureRgb(img)
+                            // Update Compose state on main thread
+                            withContext(Dispatchers.Main) {
+                                latestFrame = rgb
+                                frameCount += 1
+                            }
+                            // Update Swing component on the EDT
+                            SwingUtilities.invokeLater { imagePanel?.setImage(rgb) }
+                            val source = BufferedImageLuminanceSource(rgb)
+                            val bitmap = BinaryBitmap(HybridBinarizer(source))
+                            val result = reader.decodeWithState(bitmap)
+                            val text = result.text
+                            if (!text.isNullOrBlank()) {
+                                withContext(Dispatchers.Main) {
+                                    emitted = true
+                                    onRawScanned(text)
+                                }
+                            }
                         }
+                    } catch (_: NotFoundException) {
+                        // no code in frame
+                    } catch (_: Throwable) {
+                        // ignore decode errors
                     }
-                } catch (_: NotFoundException) {
-                    // no code in frame
-                } catch (_: Throwable) {
-                    // ignore decode errors
                 }
+                kotlinx.coroutines.delay(250)
             }
-            kotlinx.coroutines.delay(250)
         }
     }
 
@@ -132,11 +155,42 @@ fun QrScanningScreenDesktop(
         ) {
             // Camera preview area (SwingPanel hosting WebcamPanel)
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                SwingPanelHost(imagePanel)
+                // Show guidance if scanning but no frames are arriving (likely permission)
+                val now = remember { mutableStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        now.value = System.currentTimeMillis()
+                        kotlinx.coroutines.delay(500)
+                    }
+                }
+                val showNoFramesOverlay = isScanning && frameCount == 0 && scanningStartAt != 0L && (now.value - scanningStartAt) > 4000
+                if (showNoFramesOverlay) {
+                    // Render only the overlay to ensure it appears over heavyweight SwingPanel
+                    PermissionHelpOverlay(
+                        onOpenSettings = { openPrivacyCameraSettings() },
+                        onRetryInit = {
+                            scope.launch {
+                                try { grabber?.stop() } catch (_: Throwable) {}
+                                try { grabber?.release() } catch (_: Throwable) {}
+                                grabber = null
+                                imagePanel = null
+                                frameCount = 0
+                                scanningStartAt = 0L
+                                val working = withContext(Dispatchers.Default) { findWorkingGrabberAvFoundation() }
+                                grabber = working
+                                if (working != null) {
+                                    imagePanel = ImagePanel()
+                                }
+                            }
+                        }
+                    )
+                } else {
+                    SwingPanelHost(imagePanel)
 
-                if (grabber == null) {
-                    Box(modifier = Modifier.align(Alignment.Center)) {
-                        Text("カメラ初期化に失敗しました", color = Color.White)
+                    if (grabber == null) {
+                        Box(modifier = Modifier.align(Alignment.Center)) {
+                            Text("カメラ初期化に失敗しました", color = Color.White)
+                        }
                     }
                 }
             }
@@ -154,6 +208,47 @@ fun QrScanningScreenDesktop(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PermissionHelpOverlay(
+    onOpenSettings: () -> Unit,
+    onRetryInit: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            ,
+        colors = CardDefaults.cardColors(containerColor = Color(0xCC000000)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("カメラ映像を表示できません", color = Color.White)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "カメラ権限が未許可の可能性があります。システム設定→プライバシーとセキュリティ→カメラで ImageFlowDesktop を許可してください。",
+                color = Color.LightGray
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpenSettings) { Text("カメラ設定を開く") }
+                OutlinedButton(onClick = onRetryInit) { Text("再初期化") }
+            }
+        }
+    }
+}
+
+private fun openPrivacyCameraSettings() {
+    val uri = try { URI("x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") } catch (_: Throwable) { null }
+    try {
+        if (uri != null && Desktop.isDesktopSupported()) {
+            Desktop.getDesktop().browse(uri)
+            return
+        }
+    } catch (_: Throwable) {
+        // ignore
     }
 }
 
@@ -226,6 +321,8 @@ private fun findWorkingGrabberAvFoundation(): FFmpegFrameGrabber? {
             g.imageWidth = 1280
             g.imageHeight = 720
             g.pixelFormat = AV_PIX_FMT_0RGB
+            // Avoid requesting microphone access (video only)
+            g.audioChannels = 0
             // Try start
             g.start()
             val frame = g.grab()
