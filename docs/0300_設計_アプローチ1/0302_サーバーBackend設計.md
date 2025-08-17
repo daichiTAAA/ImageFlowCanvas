@@ -932,3 +932,28 @@ Webで設定した検査項目（InspectionTarget/InspectionItem）を、端末�
 ## 11.5. セキュリティ/運用
 - 認証必須（JWT）。
 - マッピング規約の変更が必要な場合は、`InspectionTarget` に製品FKを直接持たせる選択肢もある（将来拡張）。
+  
+## 11.6. Backend 変更（検査マスタのキーを型式グループ + 工程へ）
+
+### 11.6.1. モデル
+- ProductTypeGroup: 追加 `group_code`（unique）
+- ProcessMaster（新規）: `process_code`（PK相当）, `process_name`
+- InspectionTarget: 廃止/非推奨 `product_code`、必須 `group_id`, 追加 `process_code`
+
+### 11.6.2. ルータ
+- `inspection_masters`
+  - targets 作成/更新で `group_id`, `process_code` を必須に変更
+  - items, criterias は従来通り target に紐付く
+  - 製品→項目解決: product_id → product_code → group_id → (group_id, process_code) で特定
+- `processes`（新規）
+  - CRUD を提供
+
+### 11.6.3. マイグレーション
+- Alembic 等で以下を追加:
+  - `product_code_groups.group_code`（ユニーク制約）
+  - `process_masters` 新規作成
+  - `inspection_targets.process_code` 追加、`product_code` を非推奨（段階的削除）
+
+### 11.6.4. 後方互換
+- 旧 API/データの読み取りは可能（group/工程未設定時は従来ロジックにフォールバック）
+  - 優先度: (group+process) > (groupのみ) > 旧 product_code > work_order_id など
