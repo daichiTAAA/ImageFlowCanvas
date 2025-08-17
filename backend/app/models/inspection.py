@@ -18,12 +18,12 @@ class InspectionTarget(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    product_code = Column(String(100), nullable=True, unique=False)
     product_name = Column(String(255))
     # 型式グループ紐付け（product_code単位の管理を簡素化）
     group_id = Column(UUID(as_uuid=True), ForeignKey('product_code_groups.id'), nullable=True)
     group_name = Column(String(255))
     version = Column(String(50), nullable=False, default="1.0")
+    process_code = Column(String(100))  # FK to process_masters.process_code (added vNEXT)
     metadata_ = Column("metadata", JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -36,8 +36,8 @@ class InspectionTarget(Base):
     
     # インデックス
     __table_args__ = (
-        Index('idx_inspection_targets_product_code', 'product_code'),
         Index('idx_inspection_targets_group_id', 'group_id'),
+        Index('idx_inspection_targets_process_code', 'process_code'),
         Index('idx_inspection_targets_created_at', 'created_at'),
     )
 
@@ -48,6 +48,7 @@ class ProductTypeGroup(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
+    group_code = Column(String(100), unique=True)
     description = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -59,6 +60,23 @@ class ProductTypeGroup(Base):
 
     __table_args__ = (
         Index('idx_product_code_groups_name', 'name'),
+        Index('idx_product_code_groups_group_code', 'group_code'),
+    )
+
+
+class ProcessMaster(Base):
+    """工程マスタ"""
+    __tablename__ = "process_masters"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    process_code = Column(String(100), unique=True, nullable=False)
+    process_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_process_masters_code', 'process_code'),
+        Index('idx_process_masters_name', 'process_name'),
     )
 
 

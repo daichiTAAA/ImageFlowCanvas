@@ -36,8 +36,8 @@ interface InspectionApiService {
     suspend fun submitInspectionBatch(inspections: List<Inspection>): ApiResult<BatchSubmissionResult>
     suspend fun syncInspectionData(lastSyncTime: Long): ApiResult<InspectionSyncResponse>
 
-    // Masters: fetch inspection items configured on Web for given product
-    suspend fun getInspectionItemsForProduct(productId: String, page: Int = 1, pageSize: Int = 100): ApiResult<PaginatedResponse<InspectionItemKmp>>
+    // Masters: fetch inspection items configured on Web for given product + process
+    suspend fun getInspectionItemsForProduct(productId: String, processCode: String, page: Int = 1, pageSize: Int = 100): ApiResult<PaginatedResponse<InspectionItemKmp>>
 }
 
 @Serializable

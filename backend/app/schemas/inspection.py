@@ -131,26 +131,27 @@ class HumanResult(BaseModel):
 class InspectionTargetBase(BaseModel):
     name: str = Field(..., max_length=255)
     description: Optional[str] = None
-    # 型式コードまたは型式グループのどちらかを指定（サーバー側で最低1つ必須チェック）
-    product_code: Optional[str] = Field(None, max_length=100)
+    # group_id + process_code を主キーとする
     product_name: Optional[str] = Field(None, max_length=255)
     group_id: Optional[uuid.UUID] = None
     group_name: Optional[str] = Field(None, max_length=255)
+    process_code: Optional[str] = Field(None, max_length=100)
     version: str = Field(default="1.0", max_length=50)
     # Input payload uses key "metadata"; in DB the column attribute is metadata_
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class InspectionTargetCreate(InspectionTargetBase):
-    pass
+    group_id: uuid.UUID
+    process_code: str
 
 
 class InspectionTargetUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
-    product_code: Optional[str] = Field(None, max_length=100)
     product_name: Optional[str] = Field(None, max_length=255)
     group_id: Optional[uuid.UUID] = None
+    process_code: Optional[str] = Field(None, max_length=100)
     group_name: Optional[str] = Field(None, max_length=255)
     version: Optional[str] = Field(None, max_length=50)
     metadata: Optional[Dict[str, Any]] = None
@@ -205,15 +206,20 @@ class InspectionCriteriaResponse(InspectionCriteriaBase):
 # 型式グループスキーマ
 class ProductTypeGroupBase(BaseModel):
     name: str = Field(..., max_length=255)
+    group_code: str | None = Field(default=None, max_length=100)
     description: Optional[str] = None
+    # vNEXT: group_code を導入（UIからの参照/検索用）
+    # 既存レスポンスには追加し、作成/更新は任意
 
 
 class ProductTypeGroupCreate(ProductTypeGroupBase):
-    pass
+    name: str
+    group_code: str
 
 
 class ProductTypeGroupUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
+    group_code: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
 
 
@@ -235,6 +241,27 @@ class ProductTypeGroupMemberResponse(BaseModel):
     group_id: uuid.UUID
     product_code: str
     created_at: datetime
+
+
+# 工程マスタスキーマ
+class ProcessMasterBase(BaseModel):
+    process_code: str = Field(..., max_length=100)
+    process_name: str = Field(..., max_length=255)
+
+
+class ProcessMasterCreate(ProcessMasterBase):
+    pass
+
+
+class ProcessMasterUpdate(BaseModel):
+    process_name: Optional[str] = Field(None, max_length=255)
+
+
+class ProcessMasterResponse(ProcessMasterBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
 
 
 # 検査項目スキーマ

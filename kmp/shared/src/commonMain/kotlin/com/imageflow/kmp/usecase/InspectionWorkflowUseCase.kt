@@ -409,9 +409,9 @@ class InspectionWorkflowUseCase(
         )
     }
 
-    // Masters fetch: expose inspection items configured on Web for given product
-    suspend fun getInspectionItemsForProduct(productId: String): List<com.imageflow.kmp.network.InspectionItemKmp> {
-        return when (val res = inspectionApiService.getInspectionItemsForProduct(productId)) {
+    // Masters fetch: expose inspection items configured on Web for given product + process
+    suspend fun getInspectionItemsForProduct(productId: String, processCode: String = "DEFAULT"): List<com.imageflow.kmp.network.InspectionItemKmp> {
+        return when (val res = inspectionApiService.getInspectionItemsForProduct(productId, processCode)) {
             is ApiResult.Success -> res.data.items
             is ApiResult.Error -> emptyList()
             is ApiResult.NetworkError -> emptyList()

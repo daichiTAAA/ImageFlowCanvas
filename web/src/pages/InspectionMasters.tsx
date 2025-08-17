@@ -43,7 +43,9 @@ interface InspectionTarget {
   id: string;
   name: string;
   description?: string;
-  product_code: string;
+  // group/process based targeting
+  group_id?: string;
+  process_code?: string;
   version: string;
   metadata?: Record<string, any>;
   created_at: string;
@@ -66,6 +68,7 @@ interface InspectionItem {
 interface ProductTypeGroup {
   id: string;
   name: string;
+  group_code?: string;
   description?: string;
   created_at: string;
   updated_at: string;
@@ -93,17 +96,28 @@ export function InspectionMasters() {
   const [editingGroup, setEditingGroup] =
     useState<Partial<ProductTypeGroup> | null>(null);
   const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [groupMembersMap, setGroupMembersMap] = useState<Record<string, string[]>>({});
+  const [aliasMap, setAliasMap] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem('productCodeAliases');
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
   const [memberInput, setMemberInput] = useState("");
   // 検査基準
   const [criterias, setCriterias] = useState<any[]>([]);
   const [openCriteriaDialog, setOpenCriteriaDialog] = useState(false);
   const [editingCriteria, setEditingCriteria] = useState<any | null>(null);
   const [targetSearch, setTargetSearch] = useState("");
+  const [processes, setProcesses] = useState<any[]>([]);
+  const [openProcessDialog, setOpenProcessDialog] = useState(false);
+  const [editingProcess, setEditingProcess] = useState<any | null>(null);
 
   useEffect(() => {
     loadTargets();
     loadGroups();
     loadCriterias();
+    loadProcesses();
   }, []);
 
   const loadTargets = async () => {
@@ -115,7 +129,7 @@ export function InspectionMasters() {
       });
       setTargets(response.items);
     } catch (error) {
-      setError("検査マスタの読み込みに失敗しました");
+      setError("検査対象マスタの読み込みに失敗しました");
       console.error("Failed to load targets:", error);
     } finally {
       setLoading(false);
@@ -127,7 +141,19 @@ export function InspectionMasters() {
       const resp = await inspectionApi.listProductTypeGroups({
         page_size: 200,
       });
-      setGroups(resp.items);
+      const items = resp.items || [];
+      setGroups(items);
+      // load members for each group to display in table
+      const map: Record<string, string[]> = {};
+      await Promise.all(
+        items.map(async (g: any) => {
+          try {
+            const ms = await inspectionApi.listProductTypeGroupMembers(g.id);
+            map[g.id] = (ms || []).map((x: any) => x.product_code);
+          } catch {}
+        })
+      );
+      setGroupMembersMap(map);
     } catch (e) {
       console.error("Failed to load groups", e);
     }
@@ -139,6 +165,15 @@ export function InspectionMasters() {
       setCriterias(resp.items);
     } catch (e) {
       console.error("Failed to load criterias", e);
+    }
+  };
+
+  const loadProcesses = async () => {
+    try {
+      const resp = await inspectionApi.listProcesses({ page_size: 200 });
+      setProcesses(resp.items || []);
+    } catch (e) {
+      console.error("Failed to load processes", e);
     }
   };
 
@@ -160,7 +195,6 @@ export function InspectionMasters() {
     setEditingTarget({
       name: "",
       description: "",
-      product_code: "",
       // group_id はダイアログで選択
       version: "1.0",
       metadata: {},
@@ -256,7 +290,7 @@ export function InspectionMasters() {
       setEditingTarget(null);
       await loadTargets();
     } catch (error) {
-      setError("検査マスタの保存に失敗しました");
+      setError("検査対象マスタの保存に失敗しました");
       console.error("Failed to save target:", error);
     } finally {
       setLoading(false);
@@ -264,7 +298,7 @@ export function InspectionMasters() {
   };
 
   const handleDeleteTarget = async (targetId: string) => {
-    if (!window.confirm("この検査マスタを削除しますか？")) return;
+    if (!window.confirm("この検査対象マスタを削除しますか？")) return;
 
     try {
       setLoading(true);
@@ -275,7 +309,7 @@ export function InspectionMasters() {
         setTargetInspectionItems([]);
       }
     } catch (error) {
-      setError("検査マスタの削除に失敗しました");
+      setError("検査対象マスタの削除に失敗しました");
       console.error("Failed to delete target:", error);
     } finally {
       setLoading(false);
@@ -285,7 +319,7 @@ export function InspectionMasters() {
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        検査マスタ管理
+        検査対象マスタ管理
       </Typography>
 
       {error && (
@@ -295,15 +329,33 @@ export function InspectionMasters() {
       )}
 
       <Grid container spacing={3}>
-      {/* 検査マスタ一覧 */}
+        {/* 検査対象マスタ一覧 */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} gap={1}>
-                <Typography variant="h6">検査マスタ</Typography>
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={2}
+                gap={1}
+              >
+                <Typography variant="h6">検査対象マスタ</Typography>
                 <Box display="flex" gap={1}>
-                  <TextField size="small" placeholder="型式コード/検査マスタ名で検索" value={targetSearch} onChange={(e)=> setTargetSearch(e.target.value)} />
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateTarget} disabled={loading}>検査マスタを新規作成</Button>
+                  <TextField
+                    size="small"
+                    placeholder="型式グループ/工程/検査対象マスタ名で検索"
+                    value={targetSearch}
+                    onChange={(e) => setTargetSearch(e.target.value)}
+                  />
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleCreateTarget}
+                    disabled={loading}
+                  >
+                    検査対象マスタを新規作成
+                  </Button>
                 </Box>
               </Box>
 
@@ -311,51 +363,75 @@ export function InspectionMasters() {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>型式コード</TableCell>
-                      <TableCell>検査マスタ名</TableCell>
+                      <TableCell>型式グループ</TableCell>
+                      <TableCell>工程</TableCell>
+                      <TableCell>検査対象マスタ名</TableCell>
                       <TableCell>バージョン</TableCell>
                       <TableCell>操作</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {targets.filter(t => {
-                      const q = targetSearch.trim().toLowerCase();
-                      if (!q) return true;
-                      return (t.product_code || "").toLowerCase().includes(q) || (t.name || "").toLowerCase().includes(q);
-                    }).map((target) => (
-                      <TableRow
-                        key={target.id}
-                        selected={selectedTarget?.id === target.id}
-                        hover
-                        onClick={() => handleTargetSelect(target)}
-                        sx={{ cursor: "pointer" }}
-                      >
-                        <TableCell>{target.product_code}</TableCell>
-                        <TableCell>{target.name}</TableCell>
-                        <TableCell>{target.version}</TableCell>
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditTarget(target);
-                            }}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteTarget(target.id);
-                            }}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {targets
+                      .filter((t) => {
+                        const q = targetSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        // Lookup group and process labels for filtering
+                        const group = groups.find((g) => g.id === (t as any).group_id);
+                        const groupText = group ? `${(group as any).group_code || ''} ${group.name || ''}`.toLowerCase() : '';
+                        const process = processes.find((p: any) => p.process_code === (t as any).process_code);
+                        const processText = process ? `${process.process_code || ''} ${process.process_name || ''}`.toLowerCase() : '';
+                        const nameText = (t.name || '').toLowerCase();
+                        return groupText.includes(q) || processText.includes(q) || nameText.includes(q);
+                      })
+                      .map((target) => (
+                        <TableRow
+                          key={target.id}
+                          selected={selectedTarget?.id === target.id}
+                          hover
+                          onClick={() => handleTargetSelect(target)}
+                          sx={{ cursor: "pointer" }}
+                        >
+                          <TableCell>
+                            {(() => {
+                              const gid = (target as any).group_id as string | undefined;
+                              const g = gid ? groups.find((x) => x.id === gid) : undefined;
+                              if (g) return `${(g as any).group_code || g.id} (${g.name})`;
+                              return gid || '-';
+                            })()}
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const code = (target as any).process_code as string | undefined;
+                              const p = code ? (processes as any[]).find((x) => x.process_code === code) : undefined;
+                              if (p) return `${p.process_name} (${p.process_code})`;
+                              return code || '-';
+                            })()}
+                          </TableCell>
+                          <TableCell>{target.name}</TableCell>
+                          <TableCell>{target.version}</TableCell>
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditTarget(target);
+                              }}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteTarget(target.id);
+                              }}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -367,13 +443,29 @@ export function InspectionMasters() {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={2}
+              >
                 <Typography variant="h6">
                   検査項目 {selectedTarget && `- ${selectedTarget.name}`}
                 </Typography>
-                <Tooltip title={selectedTarget ? "" : "左の検査マスタを選択してください"}>
+                <Tooltip
+                  title={
+                    selectedTarget ? "" : "左の検査対象マスタを選択してください"
+                  }
+                >
                   <span>
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateItem} disabled={!selectedTarget}>検査項目を追加</Button>
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={handleCreateItem}
+                      disabled={!selectedTarget}
+                    >
+                      検査項目を追加
+                    </Button>
                   </span>
                 </Tooltip>
               </Box>
@@ -432,10 +524,20 @@ export function InspectionMasters() {
                 </TableContainer>
               ) : (
                 <Box py={4}>
-                  <Alert severity="info" sx={{ width: "fit-content", mx: "auto" }}
-                    action={<Button color="inherit" size="small" onClick={handleCreateTarget}>検査マスタを作成</Button>}
+                  <Alert
+                    severity="info"
+                    sx={{ width: "fit-content", mx: "auto" }}
+                    action={
+                      <Button
+                        color="inherit"
+                        size="small"
+                        onClick={handleCreateTarget}
+                      >
+                        検査対象マスタを作成
+                      </Button>
+                    }
                   >
-                    右側の検査項目を追加するには、左の検査マスタを選択してください。
+                    右側の検査項目を追加するには、左の検査対象マスタを選択してください。
                   </Alert>
                 </Box>
               )}
@@ -443,25 +545,42 @@ export function InspectionMasters() {
           </Card>
         </Grid>
 
-        {/* 検査マスタ詳細・統計 */}
+        {/* 検査対象マスタ詳細・統計 */}
         {selectedTarget && (
           <Grid item xs={12}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  検査マスタ詳細
+                  検査対象マスタ詳細
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={6}>
                     <TextField
-                      label="型式コード"
-                      value={selectedTarget.product_code}
+                      label="型式グループ"
+                      value={(function(){
+                        const gid = (selectedTarget as any).group_id as string | undefined;
+                        const g = gid ? groups.find((x) => x.id === gid) : undefined;
+                        if (g) return `${(g as any).group_code || g.id} (${g.name})`;
+                        return gid || '-';
+                      })()}
                       fullWidth
                       InputProps={{ readOnly: true }}
                       margin="normal"
                     />
                     <TextField
-                      label="検査マスタ名"
+                      label="工程"
+                      value={(function(){
+                        const code = (selectedTarget as any).process_code as string | undefined;
+                        const p = code ? (processes as any[]).find((x) => x.process_code === code) : undefined;
+                        if (p) return `${p.process_name} (${p.process_code})`;
+                        return code || '-';
+                      })()}
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                      margin="normal"
+                    />
+                    <TextField
+                      label="検査対象マスタ名"
                       value={selectedTarget.name}
                       fullWidth
                       InputProps={{ readOnly: true }}
@@ -511,7 +630,7 @@ export function InspectionMasters() {
         )}
       </Grid>
 
-      {/* 検査マスタ編集ダイアログ */}
+      {/* 検査対象マスタ編集ダイアログ */}
       <Dialog
         open={openDialog}
         onClose={() => setOpenDialog(false)}
@@ -519,37 +638,15 @@ export function InspectionMasters() {
         fullWidth
       >
         <DialogTitle>
-          {editingTarget?.id ? "検査マスタ編集" : "検査マスタ新規作成"}
+          {editingTarget?.id ? "検査対象マスタ編集" : "検査対象マスタ新規作成"}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}>
-              <TextField
-                label="型式コード product_code（グループ設定時は空で可）"
-                value={editingTarget?.product_code || ""}
-                onChange={(e) =>
-                  setEditingTarget((prev) =>
-                    prev ? { ...prev, product_code: e.target.value } : null
-                  )
-                }
-                fullWidth
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                label="型式名 product_name（任意・表示用）"
-                value={(editingTarget as any)?.product_name || ""}
-                onChange={(e) =>
-                  setEditingTarget((prev) =>
-                    prev ? { ...prev, product_name: e.target.value } : null
-                  )
-                }
-                fullWidth
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel id="group-select-label">型式グループ group_id</InputLabel>
+                <InputLabel id="group-select-label">
+                  型式グループ group_id
+                </InputLabel>
                 <Select
                   labelId="group-select-label"
                   label="型式グループ group_id"
@@ -562,7 +659,9 @@ export function InspectionMasters() {
                   }}
                   onChange={(e) =>
                     setEditingTarget((prev) =>
-                      prev ? { ...prev, group_id: String(e.target.value) } : null
+                      prev
+                        ? { ...prev, group_id: String(e.target.value) }
+                        : null
                     )
                   }
                   displayEmpty
@@ -579,31 +678,41 @@ export function InspectionMasters() {
               </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Button
-                variant="outlined"
-                onClick={() => {
-                  const gid = (editingTarget as any)?.group_id;
-                  const g = groups.find((x) => x.id === gid);
-                  if (g)
-                    setEditingTarget((prev) =>
-                      prev ? { ...prev, group_name: g.name } : prev
+              <FormControl fullWidth>
+                <InputLabel id="process-select-label">
+                  工程 process_code
+                </InputLabel>
+                <Select
+                  labelId="process-select-label"
+                  label="工程 process_code"
+                  value={(editingTarget as any)?.process_code || ""}
+                  renderValue={(sel) => {
+                    const v = String(sel || "");
+                    if (!v) return "";
+                    const found = processes.find(
+                      (p: any) => p.process_code === v
                     );
-                }}
-              >
-                グループ名を自動設定
-              </Button>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                label="グループ名 group_name（任意・表示用）"
-                value={(editingTarget as any)?.group_name || ""}
-                onChange={(e) =>
-                  setEditingTarget((prev) =>
-                    prev ? { ...prev, group_name: e.target.value } : null
-                  )
-                }
-                fullWidth
-              />
+                    return found?.process_name || v;
+                  }}
+                  onChange={(e) =>
+                    setEditingTarget((prev) =>
+                      prev
+                        ? { ...prev, process_code: String(e.target.value) }
+                        : null
+                    )
+                  }
+                  displayEmpty
+                >
+                  <MenuItem value="">
+                    <em>未選択</em>
+                  </MenuItem>
+                  {processes.map((p: any) => (
+                    <MenuItem key={p.process_code} value={p.process_code}>
+                      {p.process_name} ({p.process_code})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
               <TextField
@@ -619,7 +728,7 @@ export function InspectionMasters() {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                label="検査マスタ名"
+                label="検査対象マスタ名"
                 value={editingTarget?.name || ""}
                 onChange={(e) =>
                   setEditingTarget((prev) =>
@@ -646,7 +755,7 @@ export function InspectionMasters() {
             </Grid>
             <Grid item xs={12}>
               <Alert severity="info">
-                型式コード（product_code）か型式グループ（group_id）のどちらか一方は必須です。
+                型式グループ（group_id）と工程（process_code）の両方が必須です。
               </Alert>
             </Grid>
           </Grid>
@@ -659,8 +768,8 @@ export function InspectionMasters() {
             disabled={
               loading ||
               !editingTarget?.name ||
-              (!editingTarget?.product_code &&
-                !(editingTarget as any)?.group_id)
+              !(editingTarget as any)?.group_id ||
+              !(editingTarget as any)?.process_code
             }
           >
             保存
@@ -673,28 +782,43 @@ export function InspectionMasters() {
         <Typography variant="h5" gutterBottom>
           型式グループ管理
         </Typography>
-        <Button
-          variant="outlined"
-          onClick={() => {
-            setEditingGroup({ name: "", description: "" });
-            setOpenGroupDialog(true);
-          }}
-        >
-          グループ作成
-        </Button>
+        <Button variant="outlined" onClick={() => { setEditingGroup({ name: "", group_code: "", description: "" } as any); setOpenGroupDialog(true) }}>グループ作成</Button>
         <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
           <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>名前</TableCell>
-                <TableCell>説明</TableCell>
-                <TableCell>操作</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+              <TableHead>
+                <TableRow>
+                  <TableCell>グループコード</TableCell>
+                  <TableCell>グループ名</TableCell>
+                  <TableCell>メンバー（型式コード/名）</TableCell>
+                  <TableCell>説明</TableCell>
+                  <TableCell>操作</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
               {groups.map((g) => (
                 <TableRow key={g.id}>
+                  <TableCell>{(g as any).group_code || '-'}</TableCell>
                   <TableCell>{g.name}</TableCell>
+                  <TableCell>
+                    {(groupMembersMap[g.id] || []).slice(0, 6).map((code) => (
+                      <Chip
+                        key={code}
+                        size="small"
+                        label={aliasMap[code] ? `${aliasMap[code]} (${code})` : code}
+                        sx={{ mr: 0.5, mb: 0.5 }}
+                      />
+                    ))}
+                    {(groupMembersMap[g.id] || []).length > 6 && (
+                      <Chip
+                        size="small"
+                        label={`+${(groupMembersMap[g.id] || []).length - 6}`}
+                        sx={{ mr: 0.5, mb: 0.5 }}
+                      />
+                    )}
+                    {!(groupMembersMap[g.id] || []).length && (
+                      <Typography color="textSecondary">未登録</Typography>
+                    )}
+                  </TableCell>
                   <TableCell>{g.description}</TableCell>
                   <TableCell>
                     <Button
@@ -706,7 +830,9 @@ export function InspectionMasters() {
                             await inspectionApi.listProductTypeGroupMembers(
                               g.id
                             );
-                          setGroupMembers(m.map((x: any) => x.product_code));
+                          const codes = m.map((x: any) => x.product_code);
+                          setGroupMembers(codes);
+                          setGroupMembersMap((prev) => ({ ...prev, [g.id]: codes }));
                         } catch {}
                         setOpenGroupDialog(true);
                       }}
@@ -740,21 +866,10 @@ export function InspectionMasters() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>
-          {editingGroup?.id ? "型式グループ編集" : "型式グループ作成"}
-        </DialogTitle>
+        <DialogTitle>{editingGroup?.id ? '型式グループ編集' : '型式グループ作成'}</DialogTitle>
         <DialogContent>
-          <TextField
-            label="名前"
-            value={editingGroup?.name || ""}
-            onChange={(e) =>
-              setEditingGroup((prev) =>
-                prev ? { ...prev, name: e.target.value } : prev
-              )
-            }
-            fullWidth
-            sx={{ mt: 1 }}
-          />
+          <TextField label="型式グループコード" value={(editingGroup as any)?.group_code || ''} onChange={(e)=> setEditingGroup(prev => prev ? { ...prev, group_code: e.target.value } : prev)} fullWidth sx={{ mt: 1 }} disabled={!!editingGroup?.id} />
+          <TextField label="型式グループ名" value={editingGroup?.name || ''} onChange={(e)=> setEditingGroup(prev => prev ? { ...prev, name: e.target.value } : prev)} fullWidth sx={{ mt: 1 }} />
           <TextField
             label="説明"
             value={editingGroup?.description || ""}
@@ -768,7 +883,7 @@ export function InspectionMasters() {
           />
           {editingGroup?.id && (
             <Box mt={2}>
-              <Typography variant="subtitle1">メンバー型式コード</Typography>
+              <Typography variant="subtitle1">メンバー（型式コード/名）</Typography>
               <Box display="flex" gap={1} mt={1}>
                 <TextField
                   label="型式コード product_code を追加"
@@ -787,32 +902,67 @@ export function InspectionMasters() {
                     const m = await inspectionApi.listProductTypeGroupMembers(
                       editingGroup.id!
                     );
-                    setGroupMembers(m.map((x: any) => x.product_code));
+                    const codes = m.map((x: any) => x.product_code);
+                    setGroupMembers(codes);
+                    setGroupMembersMap((prev) => ({ ...prev, [editingGroup.id!]: codes }));
                   }}
                 >
                   追加
                 </Button>
               </Box>
-              <Box mt={1}>
+              <Box mt={2}>
                 {groupMembers.length ? (
-                  groupMembers.map((code) => (
-                    <Chip
-                      key={code}
-                      label={code}
-                      onDelete={async () => {
-                        await inspectionApi.deleteProductTypeGroupMember(
-                          editingGroup.id!,
-                          code
-                        );
-                        const m =
-                          await inspectionApi.listProductTypeGroupMembers(
-                            editingGroup.id!
-                          );
-                        setGroupMembers(m.map((x: any) => x.product_code));
-                      }}
-                      sx={{ mr: 1, mb: 1 }}
-                    />
-                  ))
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>型式コード</TableCell>
+                          <TableCell>型式名（表示名）</TableCell>
+                          <TableCell>操作</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {groupMembers.map((code) => (
+                          <TableRow key={code}>
+                            <TableCell width="30%">{code}</TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                placeholder="例: 製品A-黒"
+                                value={aliasMap[code] || ''}
+                                onChange={(e) => {
+                                  const next = { ...aliasMap, [code]: e.target.value };
+                                  setAliasMap(next);
+                                  try { localStorage.setItem('productCodeAliases', JSON.stringify(next)); } catch {}
+                                }}
+                                fullWidth
+                              />
+                            </TableCell>
+                            <TableCell width="120">
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={async () => {
+                                  await inspectionApi.deleteProductTypeGroupMember(
+                                    editingGroup.id!,
+                                    code
+                                  );
+                                  const m = await inspectionApi.listProductTypeGroupMembers(
+                                    editingGroup.id!
+                                  );
+                                  const codes = m.map((x: any) => x.product_code);
+                                  setGroupMembers(codes);
+                                  setGroupMembersMap((prev) => ({ ...prev, [editingGroup.id!]: codes }));
+                                }}
+                              >
+                                削除
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 ) : (
                   <Typography color="textSecondary">未登録</Typography>
                 )}
@@ -829,11 +979,13 @@ export function InspectionMasters() {
                 if (editingGroup?.id) {
                   await inspectionApi.updateProductTypeGroup(editingGroup.id, {
                     name: editingGroup.name,
+                    group_code: (editingGroup as any).group_code,
                     description: editingGroup.description,
-                  });
+                  } as any);
                 } else {
                   await inspectionApi.createProductTypeGroup({
                     name: editingGroup?.name,
+                    group_code: (editingGroup as any)?.group_code,
                     description: editingGroup?.description,
                   });
                 }
@@ -843,7 +995,7 @@ export function InspectionMasters() {
                 console.error(e);
               }
             }}
-            disabled={!editingGroup?.name}
+            disabled={!editingGroup?.name || !(editingGroup as any)?.group_code}
           >
             保存
           </Button>
@@ -914,6 +1066,61 @@ export function InspectionMasters() {
           </Table>
         </TableContainer>
       </Box>
+
+      {/* 工程マスタ 管理 */}
+      <Box mt={4}>
+        <Typography variant="h5" gutterBottom>工程マスタ管理</Typography>
+        <Button variant="outlined" onClick={() => { setEditingProcess({ process_code: '', process_name: '' }); setOpenProcessDialog(true) }}>工程を追加</Button>
+        <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>工程コード</TableCell>
+                <TableCell>工程名</TableCell>
+                <TableCell>操作</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {processes.map((p: any) => (
+                <TableRow key={p.process_code}>
+                  <TableCell>{p.process_code}</TableCell>
+                  <TableCell>{p.process_name}</TableCell>
+                  <TableCell>
+                    <Button size="small" onClick={() => { setEditingProcess(p); setOpenProcessDialog(true) }}>編集</Button>
+                    <Button size="small" color="error" onClick={async () => { if (confirm('削除しますか？')) { await inspectionApi.deleteProcess(p.process_code); await loadProcesses() } }}>削除</Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+
+      {/* 工程 編集ダイアログ */}
+      <Dialog open={openProcessDialog} onClose={() => setOpenProcessDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingProcess?.id ? '工程編集' : '工程追加'}</DialogTitle>
+        <DialogContent>
+          <TextField label="工程コード" value={editingProcess?.process_code || ''} onChange={(e)=> setEditingProcess((p:any)=> ({ ...(p||{}), process_code: e.target.value }))} fullWidth sx={{ mt: 1 }} disabled={!!editingProcess?.id} />
+          <TextField label="工程名" value={editingProcess?.process_name || ''} onChange={(e)=> setEditingProcess((p:any)=> ({ ...(p||{}), process_name: e.target.value }))} fullWidth sx={{ mt: 1 }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={()=> setOpenProcessDialog(false)}>キャンセル</Button>
+          <Button variant="contained" disabled={!editingProcess?.process_code || !editingProcess?.process_name} onClick={async ()=>{
+            try {
+              setLoading(true)
+              if (editingProcess?.id) {
+                await inspectionApi.updateProcess(editingProcess.process_code, { process_name: editingProcess.process_name })
+              } else {
+                await inspectionApi.createProcess({ process_code: editingProcess.process_code, process_name: editingProcess.process_name })
+              }
+              setOpenProcessDialog(false)
+              await loadProcesses()
+            } catch (e) {
+              setError('工程の保存に失敗しました')
+            } finally { setLoading(false) }
+          }}>保存</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 検査基準 編集ダイアログ（JSON簡易入力） */}
       <Dialog

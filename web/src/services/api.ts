@@ -448,6 +448,24 @@ class ApiService {
     await api.delete(`/inspection/criterias/${criteriaId}`)
   }
 
+  // Process Masters (工程)
+  async createProcess(data: { process_code: string; process_name: string }): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/processes', data)
+    return response.data
+  }
+
+  async updateProcess(processCode: string, data: { process_name: string }): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.put(`/inspection/processes/${encodeURIComponent(processCode)}`, data)
+    return response.data
+  }
+
+  async deleteProcess(processCode: string): Promise<void> {
+    const api = this.ensureApiInitialized()
+    await api.delete(`/inspection/processes/${encodeURIComponent(processCode)}`)
+  }
+
   // Inspection Executions
   async createInspectionExecution(data: any): Promise<any> {
     const api = this.ensureApiInitialized()
@@ -470,6 +488,20 @@ class ApiService {
   async getInspectionExecutionItems(executionId: string): Promise<any> {
     const api = this.ensureApiInitialized()
     const response = await api.get(`/inspection/executions/${executionId}/items`)
+    return response.data
+  }
+
+  // New: get inspection items for product + process
+  async getInspectionItemsForProductByProcess(productId: string, processCode: string, page: number = 1, pageSize: number = 100): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/products/${productId}/processes/${encodeURIComponent(processCode)}/items`, { params: { page, page_size: pageSize } })
+    return response.data
+  }
+
+  // Processes (工程) CRUD - minimal list for UI
+  async listProcesses(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/processes', { params })
     return response.data
   }
 

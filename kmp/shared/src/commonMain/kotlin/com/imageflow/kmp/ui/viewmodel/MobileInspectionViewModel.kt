@@ -173,9 +173,9 @@ class MobileInspectionViewModel(
                             isQrScanningActive = false
                         )
                     }
-                    // Fetch inspection items configured on Web for this product
+                    // Fetch inspection items configured on Web for this product (vNEXT: requires processCode)
                     runCatching {
-                        val items = inspectionWorkflowUseCase.getInspectionItemsForProduct(productInfo.id)
+                        val items = inspectionWorkflowUseCase.getInspectionItemsForProduct(productInfo.id, processCode = "DEFAULT")
                         updateUiState { prev -> prev.copy(inspectionItems = items) }
                     }
                     clearSearchResults()

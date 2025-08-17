@@ -79,11 +79,12 @@ class KtorInspectionApiService(
 
     override suspend fun getInspectionItemsForProduct(
         productId: String,
+        processCode: String,
         page: Int,
         pageSize: Int
     ): ApiResult<PaginatedResponse<InspectionItemKmp>> =
         runCatching {
-            val body = rest.get("inspection/products/${'$'}productId/items?page=${'$'}page&page_size=${'$'}pageSize")
+            val body = rest.get("inspection/products/${'$'}productId/processes/${'$'}processCode/items?page=${'$'}page&page_size=${'$'}pageSize")
             val resp = json.decodeFromString<PaginatedResponse<InspectionItemKmp>>(body)
             ApiResult.Success(resp)
         }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }

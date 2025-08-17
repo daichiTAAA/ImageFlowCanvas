@@ -35,6 +35,9 @@ from app.schemas.inspection import (
     ProductTypeGroupResponse,
     ProductTypeGroupMemberCreate,
     ProductTypeGroupMemberResponse,
+    ProcessMasterCreate,
+    ProcessMasterUpdate,
+    ProcessMasterResponse,
 )
 from app.services.auth_service import get_current_user
 
@@ -65,34 +68,31 @@ async def create_inspection_target(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """検査対象を作成"""
+    """検査対象を作成（vNEXT: group_id + process_code 必須）"""
     try:
-        # 入力バリデーション: product_code か group_id の少なくとも片方は必要
-        if not target_data.product_code and not target_data.group_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Either product_code or group_id must be provided",
-            )
+        if not target_data.group_id or not target_data.process_code:
+            raise HTTPException(status_code=400, detail="group_id and process_code are required")
 
-        # product_code が指定された場合は重複を避ける（同一コードに複数ターゲットを作らない運用）
-        if target_data.product_code:
-            existing = await db.execute(
-                select(InspectionTarget).where(
-                    InspectionTarget.product_code == target_data.product_code
+        # 一意性: group_id + process_code + version
+        dup = await db.execute(
+            select(InspectionTarget).where(
+                and_(
+                    InspectionTarget.group_id == target_data.group_id,
+                    InspectionTarget.process_code == target_data.process_code,
+                    InspectionTarget.version == target_data.version,
                 )
             )
-            if existing.scalar_one_or_none():
-                raise HTTPException(
-                    status_code=400, detail="Product code already exists"
-                )
+        )
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Target already exists for group+process+version")
 
         target = InspectionTarget(
             name=target_data.name,
             description=target_data.description,
-            product_code=target_data.product_code,
             product_name=target_data.product_name,
             group_id=target_data.group_id,
             group_name=target_data.group_name,
+            process_code=target_data.process_code,
             version=target_data.version,
             metadata_=target_data.metadata or {},
             created_by=_extract_user_id(current_user),
@@ -165,12 +165,28 @@ async def list_inspection_targets(
         query = select(InspectionTarget)
         count_query = select(func.count(InspectionTarget.id))
 
-        # 検索条件
+        # 検索条件（group+process+name ベース）
         if search:
+            like = f"%{search}%"
+            # join: 型式グループの group_code/name も対象にする
+            query = query.join(
+                ProductTypeGroup,
+                InspectionTarget.group_id == ProductTypeGroup.id,
+                isouter=True,
+            )
+            count_query = count_query.join(
+                ProductTypeGroup,
+                InspectionTarget.group_id == ProductTypeGroup.id,
+                isouter=True,
+            )
+
             search_filter = or_(
-                InspectionTarget.name.ilike(f"%{search}%"),
-                InspectionTarget.product_code.ilike(f"%{search}%"),
-                InspectionTarget.description.ilike(f"%{search}%"),
+                InspectionTarget.name.ilike(like),
+                InspectionTarget.description.ilike(like),
+                InspectionTarget.group_name.ilike(like),
+                InspectionTarget.process_code.ilike(like),
+                ProductTypeGroup.group_code.ilike(like),
+                ProductTypeGroup.name.ilike(like),
             )
             query = query.where(search_filter)
             count_query = count_query.where(search_filter)
@@ -225,20 +241,23 @@ async def update_inspection_target(
         if not target:
             raise HTTPException(status_code=404, detail="Inspection target not found")
 
-        # 重複チェック（自分以外） product_code が更新される場合のみ
-        if target_data.product_code and target_data.product_code != target.product_code:
-            existing = await db.execute(
+        # 重複チェック（group+process+version）
+        if (target_data.group_id is not None) or (target_data.process_code is not None) or (target_data.version is not None):
+            gid = target_data.group_id or target.group_id
+            pcd = target_data.process_code or target.process_code
+            ver = target_data.version or target.version
+            dup = await db.execute(
                 select(InspectionTarget).where(
                     and_(
-                        InspectionTarget.product_code == target_data.product_code,
+                        InspectionTarget.group_id == gid,
+                        InspectionTarget.process_code == pcd,
+                        InspectionTarget.version == ver,
                         InspectionTarget.id != target_id,
                     )
                 )
             )
-            if existing.scalar_one_or_none():
-                raise HTTPException(
-                    status_code=400, detail="Product code already exists"
-                )
+            if dup.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Target already exists for group+process+version")
 
         # 更新
         for field, value in target_data.dict(exclude_unset=True).items():
@@ -338,7 +357,17 @@ async def create_inspection_item(
 
         db.add(item)
         await db.commit()
-        await db.refresh(item)
+        # Re-query with eager loads to avoid async lazy-loading at response time
+        item = (
+            await db.execute(
+                select(InspectionItem)
+                .options(
+                    selectinload(InspectionItem.target),
+                    selectinload(InspectionItem.criteria),
+                )
+                .where(InspectionItem.id == item.id)
+            )
+        ).scalar_one()
 
         logger.info(f"Created inspection item: {item.id}")
         return item
@@ -410,7 +439,17 @@ async def update_inspection_item(
                 setattr(item, field, value)
 
         await db.commit()
-        await db.refresh(item)
+        # Re-query with eager loads to avoid MissingGreenlet on response serialization
+        item = (
+            await db.execute(
+                select(InspectionItem)
+                .options(
+                    selectinload(InspectionItem.target),
+                    selectinload(InspectionItem.criteria),
+                )
+                .where(InspectionItem.id == item_id)
+            )
+        ).scalar_one_or_none()
         return item
     except HTTPException:
         raise
@@ -477,8 +516,13 @@ async def list_inspection_items(
             .order_by(InspectionItem.execution_order.asc())
         )
 
-        # データ取得
-        result = await db.execute(query)
+        # データ取得（関連をselectinloadで先読みしてレスポンス時の遅延ロードを回避）
+        result = await db.execute(
+            query.options(
+                selectinload(InspectionItem.target),
+                selectinload(InspectionItem.criteria),
+            )
+        )
         items = result.scalars().all()
 
         return PaginatedResponse(
@@ -581,7 +625,11 @@ async def list_items_by_product(
         rows = (
             (
                 await db.execute(
-                    base_q.order_by(InspectionItem.execution_order.asc())
+                    base_q.options(
+                        selectinload(InspectionItem.target),
+                        selectinload(InspectionItem.criteria),
+                    )
+                    .order_by(InspectionItem.execution_order.asc())
                     .offset(offset)
                     .limit(page_size)
                 )
@@ -619,6 +667,7 @@ async def create_product_code_group(
         row = ProductTypeGroup(
             name=payload.name,
             description=payload.description,
+            group_code=payload.group_code,
             created_by=_extract_user_id(current_user),
         )
         db.add(row)
@@ -988,4 +1037,228 @@ async def delete_inspection_criteria(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to delete inspection criteria: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+# vNEXT: products + process_code から検査項目を取得
+@router.get(
+    "/products/{product_id}/processes/{process_code}/items",
+    response_model=PaginatedResponse[InspectionItemResponse],
+    tags=["inspection-masters"],
+)
+async def list_items_by_product_and_process(
+    product_id: str,
+    process_code: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        from uuid import UUID
+        product: ProductMaster | None = None
+        try:
+            uid = UUID(product_id)
+            res = await db.execute(select(ProductMaster).where(ProductMaster.id == uid))
+            product = res.scalar_one_or_none()
+        except Exception:
+            rows = (await db.execute(select(ProductMaster))).scalars().all()
+            for r in rows:
+                gen = f"{r.work_order_id}_{r.instruction_id}_{r.machine_number}_{r.monthly_sequence}"
+                if gen == product_id:
+                    product = r
+                    break
+
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        grp = await db.execute(
+            select(ProductTypeGroup)
+            .join(ProductTypeGroupMember)
+            .where(ProductTypeGroupMember.product_code == product.product_code)
+        )
+        group = grp.scalar_one_or_none()
+
+        target = None
+        if group:
+            q = await db.execute(
+                select(InspectionTarget).where(
+                    and_(
+                        InspectionTarget.group_id == group.id,
+                        InspectionTarget.process_code == process_code,
+                    )
+                )
+            )
+            target = q.scalar_one_or_none()
+
+        if not target:
+            return PaginatedResponse(
+                items=[], total_count=0, page=page, page_size=page_size, total_pages=0
+            )
+
+        base_q = select(InspectionItem).where(InspectionItem.target_id == target.id)
+        count_q = select(func.count(InspectionItem.id)).where(
+            InspectionItem.target_id == target.id
+        )
+        total_count = (await db.execute(count_q)).scalar() or 0
+        offset = (page - 1) * page_size
+        rows = (
+            (
+                await db.execute(
+                    base_q.options(
+                        selectinload(InspectionItem.target),
+                        selectinload(InspectionItem.criteria),
+                    )
+                    .order_by(InspectionItem.execution_order.asc())
+                    .offset(offset)
+                    .limit(page_size)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        return PaginatedResponse(
+            items=rows,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+            total_pages=(total_count + page_size - 1) // page_size,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list items by product+process: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+# 工程マスタ API（最小: 一覧のみ）
+@router.post(
+    "/processes",
+    response_model=ProcessMasterResponse,
+    tags=["inspection-masters"],
+)
+async def create_process(
+    payload: ProcessMasterCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+    try:
+        exists = (
+            await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == payload.process_code))
+        ).scalar_one_or_none()
+        if exists:
+            raise HTTPException(status_code=400, detail="Process code already exists")
+        row = ProcessMaster(process_code=payload.process_code, process_name=payload.process_name)
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+        return row
+    except HTTPException:
+        await db.rollback(); raise
+    except Exception as e:
+        await db.rollback(); logger.error(f"Failed to create process: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get(
+    "/processes",
+    response_model=PaginatedResponse[ProcessMasterResponse],
+    tags=["inspection-masters"],
+)
+async def list_processes(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+    try:
+        total = (await db.execute(select(func.count(ProcessMaster.id)))).scalar() or 0
+        offset = (page - 1) * page_size
+        rows = (
+            (await db.execute(
+                select(ProcessMaster)
+                .order_by(ProcessMaster.process_code.asc())
+                .offset(offset)
+                .limit(page_size)
+            ))
+            .scalars()
+            .all()
+        )
+        return PaginatedResponse(
+            items=rows,
+            total_count=total,
+            page=page,
+            page_size=page_size,
+            total_pages=(total + page_size - 1) // page_size,
+        )
+    except Exception as e:
+        logger.error(f"Failed to list processes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get(
+    "/processes/{process_code}",
+    response_model=ProcessMasterResponse,
+    tags=["inspection-masters"],
+)
+async def get_process(
+    process_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+    row = (
+        await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == process_code))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Process not found")
+    return row
+
+@router.put(
+    "/processes/{process_code}",
+    response_model=ProcessMasterResponse,
+    tags=["inspection-masters"],
+)
+async def update_process(
+    process_code: str,
+    payload: ProcessMasterUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+    try:
+        row = (
+            await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == process_code))
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Process not found")
+        for field, value in payload.dict(exclude_unset=True).items():
+            setattr(row, field, value)
+        await db.commit(); await db.refresh(row)
+        return row
+    except HTTPException:
+        await db.rollback(); raise
+    except Exception as e:
+        await db.rollback(); logger.error(f"Failed to update process: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete(
+    "/processes/{process_code}",
+    status_code=204,
+    tags=["inspection-masters"],
+)
+async def delete_process(
+    process_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+    try:
+        row = (
+            await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == process_code))
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Process not found")
+        await db.delete(row); await db.commit(); return None
+    except HTTPException:
+        await db.rollback(); raise
+    except Exception as e:
+        await db.rollback(); logger.error(f"Failed to delete process: {e}")
         raise HTTPException(status_code=500, detail=str(e))
