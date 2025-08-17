@@ -167,10 +167,16 @@ private fun ImageFlowDesktopApp() {
         AppScreen.SETTINGS -> {
             val settingsVm = remember { com.imageflow.kmp.ui.viewmodel.SettingsViewModel() }
             val currentUrl by settingsVm.baseUrl.collectAsState()
+            val currentProcess by settingsVm.processCode.collectAsState()
+            val authToken by settingsVm.authToken.collectAsState()
+            val processList by settingsVm.processes.collectAsState()
             SettingsScreen(
                 initialBaseUrl = currentUrl,
-                onApply = { newUrl ->
+                initialProcessCode = currentProcess,
+                isAuthenticated = !authToken.isNullOrBlank(),
+                onApply = { newUrl, newProcess ->
                     settingsVm.setBaseUrl(newUrl)
+                    settingsVm.setProcessCode(newProcess)
                     settingsVm.apply()
                 },
                 onTest = { newUrl ->
@@ -183,6 +189,16 @@ private fun ImageFlowDesktopApp() {
                 },
                 onResetDefault = {
                     settingsVm.resetToDefault()
+                },
+                onLogin = { u, p ->
+                    settingsVm.login(u, p)
+                },
+                onLogout = {
+                    settingsVm.logout()
+                },
+                processCandidates = processList,
+                onLoadProcesses = {
+                    settingsVm.loadProcesses()
                 },
                 onBack = { currentScreen = AppScreen.MAIN }
             )

@@ -173,9 +173,10 @@ class MobileInspectionViewModel(
                             isQrScanningActive = false
                         )
                     }
-                    // Fetch inspection items configured on Web for this product (vNEXT: requires processCode)
+                    // Fetch inspection items configured on Web for this product with selected process code
                     runCatching {
-                        val items = inspectionWorkflowUseCase.getInspectionItemsForProduct(productInfo.id, processCode = "DEFAULT")
+                        val selectedProcess = com.imageflow.kmp.di.DependencyContainer.currentProcessCode()
+                        val items = inspectionWorkflowUseCase.getInspectionItemsForProduct(productInfo.id, processCode = selectedProcess)
                         updateUiState { prev -> prev.copy(inspectionItems = items) }
                     }
                     clearSearchResults()

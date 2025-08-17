@@ -38,6 +38,9 @@ interface InspectionApiService {
 
     // Masters: fetch inspection items configured on Web for given product + process
     suspend fun getInspectionItemsForProduct(productId: String, processCode: String, page: Int = 1, pageSize: Int = 100): ApiResult<PaginatedResponse<InspectionItemKmp>>
+
+    // Process masters (工程)
+    suspend fun listProcesses(page: Int = 1, pageSize: Int = 200): ApiResult<PaginatedResponse<ProcessMasterKmp>>
 }
 
 @Serializable
@@ -61,6 +64,13 @@ data class InspectionItemKmp(
     val execution_order: Int = 1,
     val is_required: Boolean = true,
     val criteria_id: String? = null
+)
+
+@Serializable
+data class ProcessMasterKmp(
+    val id: String,
+    val process_code: String,
+    val process_name: String,
 )
 
 @Serializable

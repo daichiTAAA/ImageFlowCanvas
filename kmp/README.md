@@ -225,14 +225,12 @@ kmp/
 
 ### ビルド（開発）
 ```bash
-cd kmp
-./gradlew :desktopApp:build
+cd kmp && ./gradlew :desktopApp:build
 ```
 
 ### ビルド＋起動（開発）
 ```bash
-cd kmp
-./gradlew :desktopApp:run
+cd kmp && ./gradlew :desktopApp:run
 ```
 
 ### パッケージ作成（配布物）

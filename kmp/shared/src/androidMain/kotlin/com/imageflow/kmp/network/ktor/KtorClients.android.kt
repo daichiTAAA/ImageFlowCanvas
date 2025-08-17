@@ -57,6 +57,8 @@ actual fun createHttpClient(): HttpClient = HttpClient(OkHttp) {
     
     defaultRequest {
         contentType(ContentType.Application.Json)
+        // If JWT is configured, attach Authorization header
+        val token = try { com.imageflow.kmp.di.DependencyContainer.currentAuthToken() } catch (_: Exception) { null }
+        if (!token.isNullOrBlank()) header("Authorization", "Bearer $token")
     }
 }
-

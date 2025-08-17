@@ -26,10 +26,16 @@ data class NetworkDiagnosisResult(
 class SettingsViewModel {
     private val _baseUrl = MutableStateFlow(DependencyContainer.currentApiBase())
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
+    private val _authToken = MutableStateFlow(DependencyContainer.currentAuthToken())
+    val authToken: StateFlow<String?> = _authToken.asStateFlow()
+    private val _processCode = MutableStateFlow(DependencyContainer.currentProcessCode())
+    val processCode: StateFlow<String> = _processCode.asStateFlow()
     private val api: ProductApiService = DependencyContainer.provideProductApiService()
     private val rest: RestClient = DependencyContainer.provideRestClient()
     private val _validationError = MutableStateFlow<String?>(null)
     val validationError: StateFlow<String?> = _validationError.asStateFlow()
+    private val _processes = MutableStateFlow<List<com.imageflow.kmp.network.ProcessMasterKmp>>(emptyList())
+    val processes: StateFlow<List<com.imageflow.kmp.network.ProcessMasterKmp>> = _processes.asStateFlow()
 
     fun setBaseUrl(value: String) {
         _baseUrl.value = value
@@ -44,6 +50,42 @@ class SettingsViewModel {
         if (err == null && normalized != null) {
             _baseUrl.value = normalized
             DependencyContainer.configureApiBase(normalized)
+        }
+        // Apply process code immediately as well
+        if (_processCode.value.isNotBlank()) {
+            DependencyContainer.configureProcessCode(_processCode.value.trim())
+        }
+    }
+
+    fun setProcessCode(value: String) {
+        _processCode.value = value
+    }
+
+    suspend fun login(username: String, password: String): Boolean {
+        val auth = DependencyContainer.provideAuthApiService()
+        return when (val res = auth.login(username, password)) {
+            is ApiResult.Success -> {
+                val token = res.data.access_token
+                DependencyContainer.configureAuthToken(token)
+                _authToken.value = token
+                true
+            }
+            is ApiResult.Error -> { _validationError.value = res.message; false }
+            is ApiResult.NetworkError -> { _validationError.value = res.message; false }
+        }
+    }
+
+    fun logout() {
+        DependencyContainer.configureAuthToken(null)
+        _authToken.value = null
+    }
+
+    suspend fun loadProcesses() {
+        val api = DependencyContainer.provideInspectionApiService()
+        when (val res = api.listProcesses(pageSize = 200)) {
+            is ApiResult.Success -> _processes.value = res.data.items
+            is ApiResult.Error -> { /* no-op */ }
+            is ApiResult.NetworkError -> { /* no-op */ }
         }
     }
 

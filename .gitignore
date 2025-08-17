@@ -389,6 +389,7 @@ test.png
 
 # Android / Gradle (app development)
 .gradle/
+.gradle-home/
 local.properties
 **/.cxx/
 **/.externalNativeBuild/

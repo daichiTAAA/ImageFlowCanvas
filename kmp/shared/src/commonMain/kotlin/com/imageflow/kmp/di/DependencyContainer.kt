@@ -27,9 +27,12 @@ object DependencyContainer {
     
     // Network clients and services
     private var apiBaseUrl: String = AppSettings.getBaseUrl() ?: PlatformDefaults.defaultApiBase()
+    private var processCode: String = AppSettings.getProcessCode() ?: "DEFAULT"
+    private var authToken: String? = AppSettings.getAuthToken()
     private val httpClient by lazy { createHttpClient() }
     // Rest client uses dynamic base supplier so changes reflect immediately
     private val restClient by lazy { BasicRestClient(httpClient) { apiBaseUrl } }
+    private val authApiService: com.imageflow.kmp.network.AuthApiService by lazy { com.imageflow.kmp.network.impl.KtorAuthApiService(restClient) }
     private val productApiService: ProductApiService by lazy { KtorProductApiService(restClient) }
     private val inspectionApiService: InspectionApiService by lazy { KtorInspectionApiService(restClient) }
     
@@ -70,7 +73,9 @@ object DependencyContainer {
     fun provideSearchProductUseCase(): SearchProductUseCase = searchProductUseCase
     fun provideInspectionWorkflowUseCase(): InspectionWorkflowUseCase = inspectionWorkflowUseCase
     fun provideProductApiService(): ProductApiService = productApiService
+    fun provideInspectionApiService(): InspectionApiService = inspectionApiService
     fun provideRestClient(): com.imageflow.kmp.network.RestClient = restClient
+    fun provideAuthApiService(): com.imageflow.kmp.network.AuthApiService = authApiService
 
     // Configuration hook for overriding API base URL at runtime
     fun configureApiBase(url: String) {
@@ -80,6 +85,20 @@ object DependencyContainer {
     }
 
     fun currentApiBase(): String = apiBaseUrl
+
+    // Process code configuration
+    fun configureProcessCode(code: String) {
+        processCode = code
+        try { AppSettings.setProcessCode(code) } catch (_: Exception) { }
+    }
+    fun currentProcessCode(): String = processCode
+
+    // Auth token configuration
+    fun configureAuthToken(token: String?) {
+        authToken = token
+        try { AppSettings.setAuthToken(token) } catch (_: Exception) { }
+    }
+    fun currentAuthToken(): String? = authToken
 }
 
 // Note: mock implementations were removed in favor of real Ktor-based services.
