@@ -75,6 +75,7 @@ if [[ "$BUILD_TYPE" == "all" || "$BUILD_TYPE" == "grpc" ]]; then
     build_service "filter-grpc" "$BASE_DIR/services/filter-grpc-app"
     build_service "grpc-gateway" "$BASE_DIR/services/grpc-gateway"
     build_service "camera-stream-grpc" "$BASE_DIR/services/camera-stream-grpc-app"
+    build_service "inspection-evaluator-grpc" "$BASE_DIR/services/inspection-evaluator-grpc-app"
     echo "✅ gRPC services built successfully!"
 fi
 

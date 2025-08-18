@@ -113,6 +113,35 @@ export function InspectionMasters() {
   const [openProcessDialog, setOpenProcessDialog] = useState(false);
   const [editingProcess, setEditingProcess] = useState<any | null>(null);
 
+  // 検査基準のバリデーション（保存ボタン制御用）
+  const isCriteriaValid = React.useMemo(() => {
+    if (!editingCriteria) return false;
+    if (!editingCriteria.name || !editingCriteria.judgment_type) return false;
+    const jt = String(editingCriteria.judgment_type || 'BINARY').toUpperCase();
+    const spec = editingCriteria.spec || {};
+    try {
+      if (jt === 'BINARY') {
+        return typeof spec.binary?.expected_value === 'boolean';
+      }
+      if (jt === 'THRESHOLD') {
+        const th = spec.threshold?.threshold;
+        const op = spec.threshold?.operator;
+        return typeof th === 'number' && isFinite(th) && typeof op === 'string' && op.length > 0;
+      }
+      if (jt === 'CATEGORICAL') {
+        return Array.isArray(spec.categorical?.allowed_categories);
+      }
+      if (jt === 'NUMERICAL') {
+        const mn = spec.numerical?.min_value;
+        const mx = spec.numerical?.max_value;
+        return typeof mn === 'number' && isFinite(mn) && typeof mx === 'number' && isFinite(mx);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, [editingCriteria]);
+
   useEffect(() => {
     loadTargets();
     loadGroups();
@@ -1122,7 +1151,7 @@ export function InspectionMasters() {
         </DialogActions>
       </Dialog>
 
-      {/* 検査基準 編集ダイアログ（JSON簡易入力） */}
+      {/* 検査基準 編集ダイアログ（タイプ別の構造化入力） */}
       <Dialog
         open={openCriteriaDialog}
         onClose={() => setOpenCriteriaDialog(false)}
@@ -1157,31 +1186,157 @@ export function InspectionMasters() {
             fullWidth
             sx={{ mt: 1 }}
           />
-          <TextField
-            label="判定タイプ（BINARY/NUMERICAL/CATEGORICAL/THRESHOLD）"
-            value={editingCriteria?.judgment_type || "BINARY"}
-            onChange={(e) =>
-              setEditingCriteria((p: any) => ({
-                ...(p || {}),
-                judgment_type: e.target.value,
-              }))
+
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel id="judge-type-label">判定タイプ</InputLabel>
+            <Select
+              labelId="judge-type-label"
+              label="判定タイプ"
+              value={(editingCriteria?.judgment_type || 'BINARY') as string}
+              onChange={(e) => {
+                const jt = String(e.target.value).toUpperCase();
+                // タイプ変更時に、そのタイプのデフォルトspecへ初期化
+                const defaultSpec: any = jt === 'BINARY'
+                  ? { binary: { expected_value: true } }
+                  : jt === 'THRESHOLD'
+                  ? { threshold: { threshold: 1, operator: 'LESS_THAN_OR_EQUAL' } }
+                  : jt === 'CATEGORICAL'
+                  ? { categorical: { allowed_categories: [] } }
+                  : { numerical: { min_value: 0, max_value: 1 } };
+                setEditingCriteria((p: any) => ({ ...(p || {}), judgment_type: jt, spec: defaultSpec }));
+              }}
+            >
+              <MenuItem value="BINARY">BINARY（検出有無）</MenuItem>
+              <MenuItem value="THRESHOLD">THRESHOLD（検出数と閾値）</MenuItem>
+              <MenuItem value="CATEGORICAL">CATEGORICAL（許可カテゴリ）</MenuItem>
+              <MenuItem value="NUMERICAL">NUMERICAL（数値範囲）</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* タイプ別フォーム */}
+          {(() => {
+            const jt = (editingCriteria?.judgment_type || 'BINARY').toUpperCase();
+            const spec = editingCriteria?.spec || {};
+            if (jt === 'BINARY') {
+              const expected = !!(spec.binary?.expected_value ?? true);
+              return (
+                <FormControl fullWidth sx={{ mt: 2 }}>
+                  <InputLabel id="binary-expected-label">OK条件</InputLabel>
+                  <Select
+                    labelId="binary-expected-label"
+                    label="OK条件"
+                    value={expected ? 'ZERO_OK' : 'PRESENT_OK'}
+                    onChange={(e) => {
+                      const v = String(e.target.value) === 'ZERO_OK';
+                      setEditingCriteria((p: any) => ({ ...(p || {}), spec: { binary: { expected_value: v } } }));
+                    }}
+                  >
+                    <MenuItem value="ZERO_OK">検出ゼロでOK</MenuItem>
+                    <MenuItem value="PRESENT_OK">検出ありでOK</MenuItem>
+                  </Select>
+                </FormControl>
+              );
             }
-            fullWidth
-            sx={{ mt: 1 }}
-          />
+            if (jt === 'THRESHOLD') {
+              const th = Number(spec.threshold?.threshold ?? 1);
+              const op = String(spec.threshold?.operator || 'LESS_THAN_OR_EQUAL');
+              return (
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={6}>
+                    <TextField
+                      type="number"
+                      label="閾値 (threshold)"
+                      value={th}
+                      onChange={(e) => {
+                        const v = Number(e.target.value || 0);
+                        setEditingCriteria((p: any) => ({ ...(p || {}), spec: { threshold: { threshold: v, operator: op } } }));
+                      }}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <FormControl fullWidth>
+                      <InputLabel id="op-label">比較演算</InputLabel>
+                      <Select
+                        labelId="op-label"
+                        label="比較演算"
+                        value={op}
+                        onChange={(e) => {
+                          const nv = String(e.target.value);
+                          setEditingCriteria((p: any) => ({ ...(p || {}), spec: { threshold: { threshold: th, operator: nv } } }));
+                        }}
+                      >
+                        <MenuItem value="LESS_THAN">LESS_THAN (&lt;)</MenuItem>
+                        <MenuItem value="LESS_THAN_OR_EQUAL">LESS_THAN_OR_EQUAL (≤)</MenuItem>
+                        <MenuItem value="GREATER_THAN">GREATER_THAN (&gt;)</MenuItem>
+                        <MenuItem value="GREATER_THAN_OR_EQUAL">GREATER_THAN_OR_EQUAL (≥)</MenuItem>
+                        <MenuItem value="EQUAL">EQUAL (=)</MenuItem>
+                        <MenuItem value="NOT_EQUAL">NOT_EQUAL (≠)</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              );
+            }
+            if (jt === 'CATEGORICAL') {
+              const allowed = (spec.categorical?.allowed_categories || []).join(',');
+              return (
+                <TextField
+                  label="許可カテゴリ（カンマ区切り）"
+                  value={allowed}
+                  onChange={(e) => {
+                    const arr = e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter((s) => s.length > 0);
+                    setEditingCriteria((p: any) => ({ ...(p || {}), spec: { categorical: { allowed_categories: arr } } }));
+                  }}
+                  fullWidth
+                  sx={{ mt: 2 }}
+                />
+              );
+            }
+            // NUMERICAL
+            const min = (typeof spec.numerical?.min_value === 'number' ? spec.numerical.min_value : 0);
+            const max = (typeof spec.numerical?.max_value === 'number' ? spec.numerical.max_value : 1);
+            return (
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={6}>
+                  <TextField
+                    type="number"
+                    label="最小値 (min)"
+                    value={min}
+                    onChange={(e) => {
+                      const v = Number(e.target.value || 0);
+                      setEditingCriteria((p: any) => ({ ...(p || {}), spec: { numerical: { min_value: v, max_value: max } } }));
+                    }}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    type="number"
+                    label="最大値 (max)"
+                    value={max}
+                    onChange={(e) => {
+                      const v = Number(e.target.value || 0);
+                      setEditingCriteria((p: any) => ({ ...(p || {}), spec: { numerical: { min_value: min, max_value: v } } }));
+                    }}
+                    fullWidth
+                  />
+                </Grid>
+              </Grid>
+            );
+          })()}
+
           <TextField
-            label="基準仕様（JSON）"
+            label="プレビュー（生成JSON）"
             value={JSON.stringify(editingCriteria?.spec || {}, null, 2)}
-            onChange={(e) => {
-              try {
-                const v = JSON.parse(e.target.value);
-                setEditingCriteria((p: any) => ({ ...(p || {}), spec: v }));
-              } catch (_) {}
-            }}
             fullWidth
             multiline
-            rows={8}
+            rows={6}
             sx={{ mt: 2 }}
+            InputProps={{ readOnly: true }}
           />
         </DialogContent>
         <DialogActions>
@@ -1215,7 +1370,7 @@ export function InspectionMasters() {
                 setLoading(false);
               }
             }}
-            disabled={!editingCriteria?.name || !editingCriteria?.judgment_type}
+            disabled={!isCriteriaValid || loading}
           >
             保存
           </Button>

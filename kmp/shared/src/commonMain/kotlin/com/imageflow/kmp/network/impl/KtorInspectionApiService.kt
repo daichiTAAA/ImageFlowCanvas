@@ -89,6 +89,13 @@ class KtorInspectionApiService(
             ApiResult.Success(resp)
         }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
 
+    override suspend fun getInspectionCriteria(criteriaId: String): ApiResult<InspectionCriteriaKmp> =
+        runCatching {
+            val body = rest.get("inspection/criterias/$criteriaId")
+            val resp = json.decodeFromString<InspectionCriteriaKmp>(body)
+            ApiResult.Success(resp)
+        }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
+
     override suspend fun listProcesses(page: Int, pageSize: Int): ApiResult<PaginatedResponse<ProcessMasterKmp>> =
         runCatching {
             val body = rest.get("inspection/processes?page=$page&page_size=$pageSize")

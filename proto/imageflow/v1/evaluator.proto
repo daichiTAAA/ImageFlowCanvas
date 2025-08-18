@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package imageflow.v1;
+
+import "imageflow/v1/ai_detection.proto";
+
+// Inspection Evaluator service: applies business criteria to detections
+service InspectionEvaluator {
+  rpc EvaluateDetections(EvaluationRequest) returns (EvaluationResponse);
+}
+
+message EvaluationRequest {
+  string product_code = 1;    // 型式コード
+  string process_code = 2;    // 工程コード
+  string pipeline_id = 3;     // パイプラインUUID（文字列）
+  repeated Detection detections = 4; // 推論結果
+}
+
+message EvaluationResponse {
+  string judgment = 1;        // "OK" | "NG" | "PENDING"
+  string criteria_id = 2;     // 適用基準
+  string item_id = 3;         // 対象検査項目
+  string pipeline_id = 4;     // 使用パイプライン
+  map<string, string> metrics = 5; // 任意メトリクス（検出数等）
+  string reason = 6;          // 判定根拠の簡易説明
+}
+

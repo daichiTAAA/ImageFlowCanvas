@@ -32,6 +32,10 @@ message ProcessedFrame {
   StreamProcessingStatus status = 5;
   string error_message = 6;
   google.protobuf.Timestamp processed_at = 7;
+  string judgment = 8;       // OK | NG | PENDING
+  string criteria_id = 9;    // UUID of applied criteria
+  string item_id = 10;       // UUID of inspection item
+  string pipeline_id = 11;   // UUID of pipeline used
 }
 
 enum StreamProcessingStatus {

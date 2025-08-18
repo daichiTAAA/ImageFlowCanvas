@@ -206,6 +206,28 @@ services:
       timeout: 10s
       retries: 3
 
+  inspection-evaluator-grpc:
+    image: imageflow/inspection-evaluator-grpc:local
+    container_name: imageflow-inspection-evaluator-grpc
+    build:
+      context: ../../services/inspection-evaluator-grpc-app
+      dockerfile: Dockerfile
+    environment:
+      - GRPC_PORT=9090
+      - DATABASE_URL=postgresql+asyncpg://imageflow:imageflow123@postgres:5432/imageflow
+    # Not exposed to host; backend connects via internal DNS
+    # If you need host access, uncomment and choose a free host port (e.g., 9095)
+    # ports:
+    #   - "9095:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:9090"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Backend API
   backend:
     image: imageflow/backend:local
@@ -227,6 +249,7 @@ services:
       SECRET_KEY: your-secret-key-change-in-production
       TRITON_URL: triton:8000
       GRPC_GATEWAY_URL: grpc-gateway:8080
+      EVALUATOR_GRPC_ENDPOINT: inspection-evaluator-grpc:9090
       # Ensure backend gRPC bridge binds and forwards to correct upstreams
       DESKTOP_GRPC_BIND_ADDR: 0.0.0.0:50051
       CAMERA_STREAM_GRPC_ENDPOINT: camera-stream-grpc:9090

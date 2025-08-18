@@ -39,6 +39,9 @@ interface InspectionApiService {
     // Masters: fetch inspection items configured on Web for given product + process
     suspend fun getInspectionItemsForProduct(productId: String, processCode: String, page: Int = 1, pageSize: Int = 100): ApiResult<PaginatedResponse<InspectionItemKmp>>
 
+    // Inspection criteria
+    suspend fun getInspectionCriteria(criteriaId: String): ApiResult<InspectionCriteriaKmp>
+
     // Process masters (工程)
     suspend fun listProcesses(page: Int = 1, pageSize: Int = 200): ApiResult<PaginatedResponse<ProcessMasterKmp>>
 
@@ -70,6 +73,57 @@ data class InspectionItemKmp(
     val is_required: Boolean = true,
     val criteria_id: String? = null
 )
+
+@Serializable
+data class InspectionCriteriaKmp(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val judgment_type: JudgmentTypeKmp,
+    val spec: CriteriaSpecKmp
+)
+
+@Serializable
+enum class JudgmentTypeKmp { BINARY, NUMERICAL, CATEGORICAL, THRESHOLD, JUDGMENT_TYPE_UNSPECIFIED }
+
+@Serializable
+data class CriteriaSpecKmp(
+    val binary: BinarySpecKmp? = null,
+    val numerical: NumericalSpecKmp? = null,
+    val categorical: CategoricalSpecKmp? = null,
+    val threshold: ThresholdSpecKmp? = null
+)
+
+@Serializable
+data class BinarySpecKmp(val expected_value: Boolean)
+
+@Serializable
+data class NumericalSpecKmp(
+    val min_value: Double? = null,
+    val max_value: Double? = null,
+    val unit: String? = null,
+    val tolerance: Double? = null
+)
+
+@Serializable
+data class CategoricalSpecKmp(val allowed_categories: List<String> = emptyList())
+
+@Serializable
+data class ThresholdSpecKmp(
+    val threshold: Double,
+    val operator: ComparisonOperatorKmp
+)
+
+@Serializable
+enum class ComparisonOperatorKmp {
+    GREATER_THAN,
+    GREATER_THAN_OR_EQUAL,
+    LESS_THAN,
+    LESS_THAN_OR_EQUAL,
+    EQUAL,
+    NOT_EQUAL,
+    COMPARISON_OPERATOR_UNSPECIFIED
+}
 
 @Serializable
 data class ProcessMasterKmp(

@@ -37,6 +37,10 @@ message ProcessedFrame {
   StreamProcessingStatus status = 5; // Processing status
   string error_message = 6;          // Error message if processing failed
   google.protobuf.Timestamp processed_at = 7; // Processing completion timestamp
+  string judgment = 8;               // Server-side judgment: "OK" | "NG" | "PENDING"
+  string criteria_id = 9;            // Applied criteria UUID (if any)
+  string item_id = 10;               // Inspection item UUID (if any)
+  string pipeline_id = 11;           // Pipeline UUID used to process
 }
 
 // Processing status specific to real-time streaming (to avoid conflicts with existing enum)

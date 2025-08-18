@@ -136,6 +136,12 @@ class SettingsViewModel {
         }
     }
 
+    // Public wrapper to validate/refresh token before sensitive operations (e.g., streaming)
+    suspend fun ensureTokenValidForStreaming(): Boolean {
+        ensureValidToken()
+        return !DependencyContainer.currentAuthToken().isNullOrBlank()
+    }
+
     suspend fun testConnection(): ConnectionTestResult = when (val r = api.getProductsByCode("")) {
         is ApiResult.Success -> ConnectionTestResult(true, null)
         is ApiResult.Error -> ConnectionTestResult(false, r.message)

@@ -136,8 +136,84 @@ private fun ImageFlowDesktopApp() {
                 val authToken by settingsVm.authToken.collectAsState()
                 val processCode by settingsVm.processCode.collectAsState()
                 val (grpcHost, grpcPort) = remember(baseUrl) { parseGrpcEndpoint(baseUrl) }
+                // Ensure token is valid for every inspection session
+                var tokenReady by remember { mutableStateOf<Boolean?>(null) }
+                LaunchedEffect(processCode, baseUrl) {
+                    tokenReady = null
+                    val ok = try { settingsVm.ensureTokenValidForStreaming() } catch (_: Exception) { false }
+                    tokenReady = ok
+                }
+
                 // Realtime preview + streaming to backend via gRPC
                 Column(Modifier.fillMaxSize()) {
+                    if (processCode.isNullOrBlank()) {
+                        // 工程コード未設定エラー表示（ストリーミングは開始しない）
+                        androidx.compose.material3.Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                androidx.compose.material3.Text(
+                                    text = "工程コードが未設定です",
+                                    color = androidx.compose.ui.graphics.Color.Red
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                androidx.compose.material3.Text(
+                                    text = "設定画面で工程コードを選択してください。設定→工程コード。"
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    androidx.compose.material3.Button(onClick = { currentScreen = AppScreen.SETTINGS }) {
+                                        androidx.compose.material3.Text("設定を開く")
+                                    }
+                                    androidx.compose.material3.OutlinedButton(onClick = { currentScreen = AppScreen.MAIN }) {
+                                        androidx.compose.material3.Text("戻る")
+                                    }
+                                }
+                            }
+                        }
+                        return@ScreenWithTopBar
+                    }
+
+                    if (tokenReady == null) {
+                        androidx.compose.material3.Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                androidx.compose.material3.Text("認証確認中...")
+                            }
+                        }
+                        return@ScreenWithTopBar
+                    }
+                    if (tokenReady == false) {
+                        androidx.compose.material3.Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                androidx.compose.material3.Text(
+                                    text = "認証が必要です",
+                                    color = androidx.compose.ui.graphics.Color.Red
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                androidx.compose.material3.Text("設定画面からログインしてください。")
+                                Spacer(Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    androidx.compose.material3.Button(onClick = { currentScreen = AppScreen.SETTINGS }) {
+                                        androidx.compose.material3.Text("設定を開く")
+                                    }
+                                    androidx.compose.material3.OutlinedButton(onClick = { currentScreen = AppScreen.MAIN }) {
+                                        androidx.compose.material3.Text("戻る")
+                                    }
+                                }
+                            }
+                        }
+                        return@ScreenWithTopBar
+                    }
                     // Pick pipeline from inspection items: first by execution_order that has pipeline_id
                     val selectedPipelineId = remember(uiState.inspectionItems) {
                         uiState.inspectionItems
@@ -164,7 +240,11 @@ private fun ImageFlowDesktopApp() {
                         },
                         modifier = Modifier.fillMaxWidth(),
                         onDetectionsUpdated = { det, ms ->
-                            viewModel.onRealtimeAiUpdate(det, ms)
+                            // legacy counter-only path
+                            viewModel.onRealtimeAiUpdate(det, ms, selectedPipelineId)
+                        },
+                        onRealtimeUpdate = { det, ms, plId, details, serverJudgment ->
+                            viewModel.onRealtimeAiUpdate(det, ms, plId, details, serverJudgment)
                         }
                     )
                     DesktopInspectionDetailPanel(

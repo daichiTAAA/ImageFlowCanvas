@@ -38,7 +38,9 @@ class ExecutionWorker:
         try:
             # Start monitoring tasks
             await asyncio.gather(
-                self.start_direct_grpc_mode(), self.start_pipeline_monitoring()
+                self.start_direct_grpc_mode(),
+                self.start_pipeline_monitoring(),
+                self.start_judgment_queue_consumer(),
             )
         except Exception as e:
             logger.error(f"Error in execution worker: {e}")
@@ -112,6 +114,58 @@ class ExecutionWorker:
             pass
         except Exception as e:
             logger.error(f"Error processing Kafka pipeline requests: {e}")
+
+    async def start_judgment_queue_consumer(self):
+        """Consume judgments from in-process queue and apply aggregation/DB reflection"""
+        from app.services import judgment_queue
+        logger.info("Starting judgment queue consumer")
+        async for payload in judgment_queue.subscribe():
+            try:
+                execution_id = payload.get("execution_id")
+                item_execution_id = payload.get("item_execution_id")
+                judgment = payload.get("judgment")
+                await self._apply_judgment_and_aggregate(execution_id, item_execution_id, judgment)
+            except Exception as e:
+                logger.error(f"Judgment queue handler error: {e}")
+
+    async def _apply_judgment_and_aggregate(self, execution_id: str, item_execution_id: str, judgment: str):
+        from sqlalchemy import select
+        from app.database import AsyncSessionLocal
+        from app.models.inspection import InspectionItemExecution, InspectionExecution
+        from datetime import datetime
+
+        async with AsyncSessionLocal() as session:
+            # Update item execution
+            item_exec = (
+                await session.execute(
+                    select(InspectionItemExecution).where(InspectionItemExecution.id == item_execution_id)
+                )
+            ).scalars().first()
+            if not item_exec:
+                logger.warning(f"Item execution not found: {item_execution_id}")
+                return
+            item_exec.final_result = judgment
+            item_exec.completed_at = datetime.utcnow()
+            await session.commit()
+
+            # Aggregate: if all items completed, set execution completed (fail-fast: if any NG on required)
+            exec_row = (
+                await session.execute(
+                    select(InspectionExecution).where(InspectionExecution.id == execution_id)
+                )
+            ).scalars().first()
+            if not exec_row:
+                logger.warning(f"Execution not found: {execution_id}")
+                return
+
+            total = len(exec_row.item_executions)
+            completed = len([ie for ie in exec_row.item_executions if ie.final_result])
+            any_ng = any((ie.final_result == "NG") for ie in exec_row.item_executions)
+
+            if total > 0 and completed >= total:
+                exec_row.status = "COMPLETED" if not any_ng else "FAILED"
+                exec_row.completed_at = datetime.utcnow()
+                await session.commit()
 
     async def retry_stale_execution(self, execution):
         """Retry executions that have been pending too long"""

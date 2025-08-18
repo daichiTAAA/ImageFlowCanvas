@@ -39,7 +39,8 @@ fun RealtimeInspectionDesktop(
     authToken: String? = null,
     processingParams: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier,
-    onDetectionsUpdated: ((detections: Int, processingTimeMs: Long) -> Unit)? = null
+    onDetectionsUpdated: ((detections: Int, processingTimeMs: Long) -> Unit)? = null,
+    onRealtimeUpdate: ((detections: Int, processingTimeMs: Long, pipelineId: String?, details: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>, serverJudgment: String?) -> Unit)? = null
 ) {
     val log = remember { LOG }
     var grabber by remember { mutableStateOf<FFmpegFrameGrabber?>(null) }
@@ -169,7 +170,29 @@ fun RealtimeInspectionDesktop(
                     stub.processVideoStream(requests).collect { resp ->
                         withContext(Dispatchers.Main) {
                             stats = stats.copy(lastDetections = resp.detectionsCount)
+                            // Map detections to shared VM DTOs
+                            val details = resp.detectionsList.map { d ->
+                                com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection(
+                                    className = d.className,
+                                    confidence = d.confidence,
+                                    x1 = d.bbox.x1,
+                                    y1 = d.bbox.y1,
+                                    x2 = d.bbox.x2,
+                                    y2 = d.bbox.y2
+                                )
+                            }
+                            // Prefer server-side fields if available
+                            val serverPipelineId = if (resp.pipelineId.isNullOrBlank()) pipelineId else resp.pipelineId
                             onDetectionsUpdated?.invoke(resp.detectionsCount, resp.processingTimeMs)
+                            val serverJudgment = try { resp.judgment } catch (_: Throwable) { null }
+                            onRealtimeUpdate?.invoke(
+                                resp.detectionsCount,
+                                resp.processingTimeMs,
+                                serverPipelineId,
+                                details,
+                                serverJudgment
+                            )
+                            // Note: ViewModel signature updated to accept server judgment; Main.kt will forward it
                         }
                     }
                 } catch (t: Throwable) {

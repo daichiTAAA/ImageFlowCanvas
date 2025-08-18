@@ -117,6 +117,12 @@ class GRPCMonitorService:
                     "namespace": None,
                     "deployment": "camera-stream-grpc",
                 },
+                "inspection-evaluator-grpc": {
+                    "name": "Inspection Evaluator Service",
+                    "endpoint": "inspection-evaluator-grpc:9090",
+                    "namespace": None,
+                    "deployment": "inspection-evaluator-grpc",
+                },
             }
             self.environment = "compose"
         else:
@@ -139,6 +145,12 @@ class GRPCMonitorService:
                     "endpoint": "filter-grpc-service.image-processing.svc.cluster.local:9090",
                     "namespace": "image-processing",
                     "deployment": "filter-grpc-service",
+                },
+                "inspection-evaluator-grpc-service": {
+                    "name": "Inspection Evaluator Service",
+                    "endpoint": "inspection-evaluator-grpc-service.image-processing.svc.cluster.local:9090",
+                    "namespace": "image-processing",
+                    "deployment": "inspection-evaluator-grpc-service",
                 },
             }
             self.environment = "kubernetes"

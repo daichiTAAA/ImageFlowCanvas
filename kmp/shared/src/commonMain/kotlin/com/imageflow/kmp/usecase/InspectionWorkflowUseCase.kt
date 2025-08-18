@@ -214,6 +214,60 @@ class InspectionWorkflowUseCase(
         }
     }
 
+    // === Criteria evaluation helpers for realtime ===
+    suspend fun getInspectionCriteria(criteriaId: String): com.imageflow.kmp.network.InspectionCriteriaKmp? {
+        return when (val res = inspectionApiService.getInspectionCriteria(criteriaId)) {
+            is ApiResult.Success -> res.data
+            else -> null
+        }
+    }
+
+    fun evaluateDetectionsAgainstCriteria(
+        defects: List<DetectedDefect>,
+        criteria: com.imageflow.kmp.network.InspectionCriteriaKmp
+    ): InspectionResult {
+        val count = defects.size
+        return when (criteria.judgment_type) {
+            com.imageflow.kmp.network.JudgmentTypeKmp.BINARY -> {
+                val expectedOk = criteria.spec.binary?.expected_value ?: true
+                if (expectedOk) if (count == 0) InspectionResult.PASS else InspectionResult.FAIL
+                else if (count > 0) InspectionResult.PASS else InspectionResult.FAIL
+            }
+            com.imageflow.kmp.network.JudgmentTypeKmp.THRESHOLD -> {
+                val th = criteria.spec.threshold ?: return if (count == 0) InspectionResult.PASS else InspectionResult.FAIL
+                compareCount(count.toDouble(), th.threshold, th.operator)
+            }
+            com.imageflow.kmp.network.JudgmentTypeKmp.CATEGORICAL -> {
+                val allowed = criteria.spec.categorical?.allowed_categories ?: emptyList()
+                val allAllowed = defects.all { d -> d.description != null && allowed.contains(d.description) }
+                if (allAllowed) InspectionResult.PASS else InspectionResult.FAIL
+            }
+            com.imageflow.kmp.network.JudgmentTypeKmp.NUMERICAL -> {
+                // 数値基準（min/max）は本来は測定値に対して適用するが、
+                // 現時点では検出数に簡易適用（min <= count <= max）
+                val num = criteria.spec.numerical
+                if (num == null) return if (count == 0) InspectionResult.PASS else InspectionResult.FAIL
+                val okMin = num.min_value?.let { count.toDouble() >= it } ?: true
+                val okMax = num.max_value?.let { count.toDouble() <= it } ?: true
+                if (okMin && okMax) InspectionResult.PASS else InspectionResult.FAIL
+            }
+            else -> if (count == 0) InspectionResult.PASS else InspectionResult.FAIL
+        }
+    }
+
+    private fun compareCount(value: Double, threshold: Double, op: com.imageflow.kmp.network.ComparisonOperatorKmp): InspectionResult {
+        val ok = when (op) {
+            com.imageflow.kmp.network.ComparisonOperatorKmp.LESS_THAN -> value < threshold
+            com.imageflow.kmp.network.ComparisonOperatorKmp.LESS_THAN_OR_EQUAL -> value <= threshold
+            com.imageflow.kmp.network.ComparisonOperatorKmp.GREATER_THAN -> value > threshold
+            com.imageflow.kmp.network.ComparisonOperatorKmp.GREATER_THAN_OR_EQUAL -> value >= threshold
+            com.imageflow.kmp.network.ComparisonOperatorKmp.EQUAL -> value == threshold
+            com.imageflow.kmp.network.ComparisonOperatorKmp.NOT_EQUAL -> value != threshold
+            else -> value <= threshold
+        }
+        return if (ok) InspectionResult.PASS else InspectionResult.FAIL
+    }
+
     private suspend fun fallbackLocalAi(currentInspection: Inspection, reason: String?): AiInspectionResult {
         // Offline/dev fallback: generate a simple PASS/FAIL based on presence of images
         val hasImages = currentInspection.imagePaths.isNotEmpty() || currentInspection.videoPath != null

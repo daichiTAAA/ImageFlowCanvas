@@ -94,7 +94,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .menuAnchor(),
-                    placeholder = { Text("例: DEFAULT, PAINT, FINAL") },
+                    placeholder = { Text("") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 )
                 ExposedDropdownMenu(

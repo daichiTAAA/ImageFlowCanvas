@@ -27,7 +27,7 @@ from imageflow.v1 import common_pb2 as imageflow_dot_v1_dot_common__pb2
 from imageflow.v1 import ai_detection_pb2 as imageflow_dot_v1_dot_ai__detection__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n imageflow/v1/camera_stream.proto\x12\x0cimageflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19imageflow/v1/common.proto\x1a\x1fimageflow/v1/ai_detection.proto\"e\n\nVideoFrame\x12\x12\n\nframe_data\x18\x01 \x01(\x0c\x12\x14\n\x0ctimestamp_ms\x18\x02 \x01(\x03\x12-\n\x08metadata\x18\x03 \x01(\x0b\x32\x1b.imageflow.v1.VideoMetadata\"\xdd\x01\n\rVideoMetadata\x12\x11\n\tsource_id\x18\x01 \x01(\t\x12\r\n\x05width\x18\x02 \x01(\x05\x12\x0e\n\x06height\x18\x03 \x01(\x05\x12\x13\n\x0bpipeline_id\x18\x04 \x01(\t\x12L\n\x11processing_params\x18\x05 \x03(\x0b\x32\x31.imageflow.v1.VideoMetadata.ProcessingParamsEntry\x1a\x37\n\x15ProcessingParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x83\x02\n\x0eProcessedFrame\x12\x16\n\x0eprocessed_data\x18\x01 \x01(\x0c\x12\x11\n\tsource_id\x18\x02 \x01(\t\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x03\x12+\n\ndetections\x18\x04 \x03(\x0b\x32\x17.imageflow.v1.Detection\x12\x34\n\x06status\x18\x05 \x01(\x0e\x32$.imageflow.v1.StreamProcessingStatus\x12\x15\n\rerror_message\x18\x06 \x01(\t\x12\x30\n\x0cprocessed_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp*\xd9\x01\n\x16StreamProcessingStatus\x12(\n$STREAM_PROCESSING_STATUS_UNSPECIFIED\x10\x00\x12$\n STREAM_PROCESSING_STATUS_SUCCESS\x10\x01\x12$\n STREAM_PROCESSING_STATUS_PARTIAL\x10\x02\x12#\n\x1fSTREAM_PROCESSING_STATUS_FAILED\x10\x03\x12$\n STREAM_PROCESSING_STATUS_SKIPPED\x10\x04\x32i\n\x15\x43\x61meraStreamProcessor\x12P\n\x12ProcessVideoStream\x12\x18.imageflow.v1.VideoFrame\x1a\x1c.imageflow.v1.ProcessedFrame(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n imageflow/v1/camera_stream.proto\x12\x0cimageflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19imageflow/v1/common.proto\x1a\x1fimageflow/v1/ai_detection.proto\"e\n\nVideoFrame\x12\x12\n\nframe_data\x18\x01 \x01(\x0c\x12\x14\n\x0ctimestamp_ms\x18\x02 \x01(\x03\x12-\n\x08metadata\x18\x03 \x01(\x0b\x32\x1b.imageflow.v1.VideoMetadata\"\xdd\x01\n\rVideoMetadata\x12\x11\n\tsource_id\x18\x01 \x01(\t\x12\r\n\x05width\x18\x02 \x01(\x05\x12\x0e\n\x06height\x18\x03 \x01(\x05\x12\x13\n\x0bpipeline_id\x18\x04 \x01(\t\x12L\n\x11processing_params\x18\x05 \x03(\x0b\x32\x31.imageflow.v1.VideoMetadata.ProcessingParamsEntry\x1a\x37\n\x15ProcessingParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xd0\x02\n\x0eProcessedFrame\x12\x16\n\x0eprocessed_data\x18\x01 \x01(\x0c\x12\x11\n\tsource_id\x18\x02 \x01(\t\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x03\x12+\n\ndetections\x18\x04 \x03(\x0b\x32\x17.imageflow.v1.Detection\x12\x34\n\x06status\x18\x05 \x01(\x0e\x32$.imageflow.v1.StreamProcessingStatus\x12\x15\n\rerror_message\x18\x06 \x01(\t\x12\x30\n\x0cprocessed_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x10\n\x08judgment\x18\x08 \x01(\t\x12\x13\n\x0b\x63riteria_id\x18\t \x01(\t\x12\x0f\n\x07item_id\x18\n \x01(\t\x12\x13\n\x0bpipeline_id\x18\x0b \x01(\t*\xd9\x01\n\x16StreamProcessingStatus\x12(\n$STREAM_PROCESSING_STATUS_UNSPECIFIED\x10\x00\x12$\n STREAM_PROCESSING_STATUS_SUCCESS\x10\x01\x12$\n STREAM_PROCESSING_STATUS_PARTIAL\x10\x02\x12#\n\x1fSTREAM_PROCESSING_STATUS_FAILED\x10\x03\x12$\n STREAM_PROCESSING_STATUS_SKIPPED\x10\x04\x32i\n\x15\x43\x61meraStreamProcessor\x12P\n\x12ProcessVideoStream\x12\x18.imageflow.v1.VideoFrame\x1a\x1c.imageflow.v1.ProcessedFrame(\x01\x30\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,8 +36,8 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_VIDEOMETADATA_PROCESSINGPARAMSENTRY']._loaded_options = None
   _globals['_VIDEOMETADATA_PROCESSINGPARAMSENTRY']._serialized_options = b'8\001'
-  _globals['_STREAMPROCESSINGSTATUS']._serialized_start=733
-  _globals['_STREAMPROCESSINGSTATUS']._serialized_end=950
+  _globals['_STREAMPROCESSINGSTATUS']._serialized_start=810
+  _globals['_STREAMPROCESSINGSTATUS']._serialized_end=1027
   _globals['_VIDEOFRAME']._serialized_start=143
   _globals['_VIDEOFRAME']._serialized_end=244
   _globals['_VIDEOMETADATA']._serialized_start=247
@@ -45,7 +45,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_VIDEOMETADATA_PROCESSINGPARAMSENTRY']._serialized_start=413
   _globals['_VIDEOMETADATA_PROCESSINGPARAMSENTRY']._serialized_end=468
   _globals['_PROCESSEDFRAME']._serialized_start=471
-  _globals['_PROCESSEDFRAME']._serialized_end=730
-  _globals['_CAMERASTREAMPROCESSOR']._serialized_start=952
-  _globals['_CAMERASTREAMPROCESSOR']._serialized_end=1057
+  _globals['_PROCESSEDFRAME']._serialized_end=807
+  _globals['_CAMERASTREAMPROCESSOR']._serialized_start=1029
+  _globals['_CAMERASTREAMPROCESSOR']._serialized_end=1134
 # @@protoc_insertion_point(module_scope)

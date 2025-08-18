@@ -353,21 +353,64 @@ class MobileInspectionViewModel(
     }
 
     // Desktop realtime streaming -> update AI result + state
-    fun onRealtimeAiUpdate(detections: Int, processingTimeMs: Long, pipelineId: String? = null) {
+    data class RealtimeDetection(
+        val className: String,
+        val confidence: Float,
+        val x1: Float,
+        val y1: Float,
+        val x2: Float,
+        val y2: Float
+    )
+
+    fun onRealtimeAiUpdate(
+        detections: Int,
+        processingTimeMs: Long,
+        pipelineId: String? = null,
+        detectionDetails: List<RealtimeDetection> = emptyList(),
+        serverJudgment: String? = null
+    ) {
         viewModelScope.launch {
             try {
+                val defects = detectionDetails.map {
+                    DetectedDefect(
+                        type = DefectType.OTHER,
+                        location = BoundingBox(
+                            x = it.x1,
+                            y = it.y1,
+                            width = (it.x2 - it.x1).coerceAtLeast(0f),
+                            height = (it.y2 - it.y1).coerceAtLeast(0f)
+                        ),
+                        severity = DefectSeverity.MAJOR,
+                        confidence = it.confidence,
+                        description = it.className
+                    )
+                }
+
+                // サーバ判定を最優先で採用
+                val sj = serverJudgment?.uppercase()
+                var overall = when (sj) {
+                    "OK" -> InspectionResult.PASS
+                    "NG" -> InspectionResult.FAIL
+                    "PENDING" -> InspectionResult.PENDING
+                    else -> null
+                }
+                // 互換: 合成検出(JUDGMENT:OK/NG)があればそれを次点で採用（将来削除予定）
+                if (overall == null) {
+                    overall = defects.firstOrNull { it.description?.startsWith("JUDGMENT:") == true }?.let { d ->
+                        if (d.description?.endsWith("OK") == true) InspectionResult.PASS else InspectionResult.FAIL
+                    }
+                }
+                // フォールバックは常にNG（FAIL）
+                if (overall == null) overall = InspectionResult.FAIL
+
+                // 今後: 複数項目の集約（必須項目NGで全体NG等）をここで集計
+                // 現時点ではストリーム対象項目の判定でoverallを決定
+
                 val ai = AiInspectionResult(
-                    overallResult = if (detections == 0) InspectionResult.PASS else InspectionResult.FAIL,
-                    detectedDefects = if (detections <= 0) emptyList() else List(detections) {
-                        DetectedDefect(
-                            type = DefectType.OTHER,
-                            location = BoundingBox(0f, 0f, 0f, 0f),
-                            severity = if (detections == 0) DefectSeverity.INFO else DefectSeverity.MAJOR,
-                            confidence = 0.5f
-                        )
-                    },
+                    overallResult = overall,
+                    detectedDefects = defects,
                     measurements = emptyList(),
-                    confidence = if (detections == 0) 0.90f else 0.70f,
+                    confidence = if (overall == InspectionResult.PASS) 0.90f else 0.70f,
                     processingTimeMs = processingTimeMs,
                     pipelineId = pipelineId
                 )

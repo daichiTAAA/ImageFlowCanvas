@@ -887,11 +887,27 @@ async def create_inspection_criteria(
 ):
     """検査基準を作成"""
     try:
+        # Normalize enum and pydantic model to serializable primitives
+        jt = (
+            criteria_data.judgment_type.value
+            if hasattr(criteria_data.judgment_type, "value")
+            else str(criteria_data.judgment_type)
+        )
+        try:
+            spec_dict = (
+                criteria_data.spec.model_dump()  # Pydantic v2
+                if hasattr(criteria_data.spec, "model_dump")
+                else criteria_data.spec.dict()  # Pydantic v1 fallback
+            )
+        except Exception:
+            # If already a plain dict
+            spec_dict = criteria_data.spec  # type: ignore
+
         criteria = InspectionCriteria(
             name=criteria_data.name,
             description=criteria_data.description,
-            judgment_type=criteria_data.judgment_type,
-            spec=criteria_data.spec,
+            judgment_type=jt,
+            spec=spec_dict,
             created_by=_extract_user_id(current_user),
         )
 
@@ -1001,7 +1017,21 @@ async def update_inspection_criteria(
         ).scalar_one_or_none()
         if not row:
             raise HTTPException(status_code=404, detail="Inspection criteria not found")
-        for field, value in payload.dict(exclude_unset=True).items():
+        # Apply updates with proper normalization
+        data = payload.dict(exclude_unset=True)
+        if "judgment_type" in data and data["judgment_type"] is not None:
+            jt = data["judgment_type"]
+            data["judgment_type"] = jt.value if hasattr(jt, "value") else str(jt)
+        if "spec" in data and data["spec"] is not None:
+            spec = data["spec"]
+            try:
+                data["spec"] = (
+                    spec.model_dump() if hasattr(spec, "model_dump") else spec.dict()
+                )
+            except Exception:
+                # assume already plain dict
+                pass
+        for field, value in data.items():
             if hasattr(row, field):
                 setattr(row, field, value)
         await db.commit()

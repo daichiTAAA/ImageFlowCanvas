@@ -24,20 +24,9 @@ python -m grpc_tools.protoc \
     imageflow/v1/ai_detection.proto \
     imageflow/v1/filter.proto \
     imageflow/v1/camera_stream.proto \
-    imageflow/v1/inspection.proto
+    imageflow/v1/inspection.proto \
+    imageflow/v1/evaluator.proto
 
-# Generate Python code specifically for backend
-python -m grpc_tools.protoc \
-    --proto_path="$PROTO_DIR" \
-    --python_out="$BASE_DIR/backend/generated/python" \
-    imageflow/v1/common.proto \
-    imageflow/v1/resize.proto \
-    imageflow/v1/ai_detection.proto \
-    imageflow/v1/filter.proto \
-    imageflow/v1/camera_stream.proto \
-    imageflow/v1/inspection.proto
-
-echo "Python gRPC code generation completed."
 
 # Create __init__.py files for Python package structure
 find "$OUT_DIR/python" -type d -exec touch {}/__init__.py \;
