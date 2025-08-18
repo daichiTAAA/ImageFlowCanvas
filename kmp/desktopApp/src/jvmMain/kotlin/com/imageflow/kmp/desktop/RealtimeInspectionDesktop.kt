@@ -35,7 +35,9 @@ private val LOG = LoggerFactory.getLogger("RealtimeInspection")
 fun RealtimeInspectionDesktop(
     grpcHost: String,
     grpcPort: Int,
-    pipelineId: String = "default",
+    pipelineId: String?,
+    authToken: String? = null,
+    processingParams: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier,
     onDetectionsUpdated: ((detections: Int, processingTimeMs: Long) -> Unit)? = null
 ) {
@@ -132,7 +134,15 @@ fun RealtimeInspectionDesktop(
             channel = ManagedChannelBuilder.forAddress(grpcHost, grpcPort)
                 .usePlaintext()
                 .build()
-            val stub = CameraStreamProcessorGrpcKt.CameraStreamProcessorCoroutineStub(channel!!)
+            var stub = CameraStreamProcessorGrpcKt.CameraStreamProcessorCoroutineStub(channel!!)
+            if (!authToken.isNullOrBlank()) {
+                val md = io.grpc.Metadata().apply {
+                    val key = io.grpc.Metadata.Key.of("authorization", io.grpc.Metadata.ASCII_STRING_MARSHALLER)
+                    this.put(key, "Bearer $authToken")
+                }
+                val interceptor = io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(md)
+                stub = stub.withInterceptors(interceptor)
+            }
 
             // Print device list to logs (helps on macOS to pick the right index)
             try { listAvFoundationDevices() } catch (_: Throwable) {}
@@ -162,7 +172,9 @@ fun RealtimeInspectionDesktop(
                             onDetectionsUpdated?.invoke(resp.detectionsCount, resp.processingTimeMs)
                         }
                     }
-                } catch (_: Throwable) {}
+                } catch (t: Throwable) {
+                    log.error("[Desktop] gRPC receive stream error: ${t.message}", t)
+                }
             }
 
             try {
@@ -177,23 +189,32 @@ fun RealtimeInspectionDesktop(
                     SwingUtilities.invokeLater { imagePanel?.setImage(img) }
                     withContext(Dispatchers.Main) { frameCount += 1 }
                     val bytes = encodeJpeg(img)
-                    val meta = CameraStream.VideoMetadata.newBuilder()
+                    val metaBuilder = CameraStream.VideoMetadata.newBuilder()
                         .setSourceId("desktop-usb-0")
                         .setWidth(img.width)
                         .setHeight(img.height)
-                        .setPipelineId(pipelineId)
-                        .build()
+                    if (!pipelineId.isNullOrBlank()) {
+                        metaBuilder.setPipelineId(pipelineId)
+                    }
+                    if (processingParams.isNotEmpty()) {
+                        metaBuilder.putAllProcessingParams(processingParams)
+                    }
+                    val meta = metaBuilder.build()
                     val vf = CameraStream.VideoFrame.newBuilder()
                         .setFrameData(com.google.protobuf.ByteString.copyFrom(bytes))
                         .setTimestampMs(System.currentTimeMillis())
                         .setMetadata(meta)
                         .build()
-                    requests.tryEmit(vf)
+                    val ok = requests.tryEmit(vf)
+                    if (!ok) {
+                        log.warn("[Desktop] Dropped frame due to backpressure")
+                    }
                     withContext(Dispatchers.Main) { stats = stats.copy(frames = stats.frames + 1) }
                     // Preview/send at ~4 FPS to keep load modest
                     delay(250)
                 }
             } finally {
+                log.info("[Desktop] Closing gRPC stream and camera")
                 recvJob.cancel()
                 try { g?.stop() } catch (_: Throwable) {}
                 try { g?.release() } catch (_: Throwable) {}

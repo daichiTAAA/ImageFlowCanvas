@@ -214,7 +214,8 @@ services:
       context: ../../backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "8000:8000"     # FastAPI HTTP
+      - "50051:50051"   # gRPC bridge for Desktop
     environment:
       COMPOSE_PROJECT_NAME: imageflow
       DEPLOYMENT_ENV: docker
@@ -226,6 +227,9 @@ services:
       SECRET_KEY: your-secret-key-change-in-production
       TRITON_URL: triton:8000
       GRPC_GATEWAY_URL: grpc-gateway:8080
+      # Ensure backend gRPC bridge binds and forwards to correct upstreams
+      DESKTOP_GRPC_BIND_ADDR: 0.0.0.0:50051
+      CAMERA_STREAM_GRPC_ENDPOINT: camera-stream-grpc:9090
     volumes:
       - ../../backend/app:/app/app
     depends_on:

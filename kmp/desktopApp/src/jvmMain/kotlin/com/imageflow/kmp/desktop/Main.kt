@@ -64,7 +64,8 @@ private fun ImageFlowDesktopApp() {
                     currentScreen = AppScreen.PRODUCT_SEARCH
                 },
                 onStartInspectionClick = {
-                    viewModel.startInspection(InspectionType.STATIC_IMAGE)
+                    // Use REALTIME to avoid REST orchestration; stream via gRPC instead
+                    viewModel.startInspection(InspectionType.REALTIME)
                     currentScreen = AppScreen.INSPECTION_DETAIL
                 },
                 onViewHistoryClick = {
@@ -132,12 +133,35 @@ private fun ImageFlowDesktopApp() {
             ScreenWithTopBar(title = "検査詳細", onBack = { currentScreen = AppScreen.MAIN }) {
                 val settingsVm = remember { SettingsViewModel() }
                 val baseUrl by settingsVm.baseUrl.collectAsState()
+                val authToken by settingsVm.authToken.collectAsState()
+                val processCode by settingsVm.processCode.collectAsState()
                 val (grpcHost, grpcPort) = remember(baseUrl) { parseGrpcEndpoint(baseUrl) }
                 // Realtime preview + streaming to backend via gRPC
                 Column(Modifier.fillMaxSize()) {
+                    // Pick pipeline from inspection items: first by execution_order that has pipeline_id
+                    val selectedPipelineId = remember(uiState.inspectionItems) {
+                        uiState.inspectionItems
+                            .sortedBy { it.execution_order }
+                            .firstOrNull { !it.pipeline_id.isNullOrBlank() }
+                            ?.pipeline_id
+                    }
+                    val selectedPipelineParams = remember(uiState.inspectionItems) {
+                        uiState.inspectionItems
+                            .sortedBy { it.execution_order }
+                            .firstOrNull { !it.pipeline_id.isNullOrBlank() }
+                            ?.pipeline_params ?: emptyMap()
+                    }
                     RealtimeInspectionDesktop(
                         grpcHost = grpcHost,
                         grpcPort = grpcPort,
+                        pipelineId = selectedPipelineId,
+                        authToken = authToken,
+                        processingParams = buildMap {
+                            uiState.currentProduct?.productCode?.let { put("product_code", it) }
+                            processCode?.let { put("process_code", it) }
+                            // Include pipeline params from the selected item
+                            selectedPipelineParams.forEach { (k, v) -> put(k, v) }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         onDetectionsUpdated = { det, ms ->
                             viewModel.onRealtimeAiUpdate(det, ms)
@@ -227,10 +251,13 @@ private fun parseGrpcEndpoint(baseUrl: String?): Pair<String, Int> {
     return try {
         val url = java.net.URI(baseUrl ?: "http://127.0.0.1:8000")
         val host = url.host ?: "127.0.0.1"
-        val port = if (url.port != -1) url.port else 50051
+        // Always use dedicated gRPC port unless explicitly overridden via env
+        val envPort = System.getenv("IFC_GRPC_PORT")?.toIntOrNull()
+        val port = envPort ?: 50051
         host to port
     } catch (_: Throwable) {
-        "127.0.0.1" to 50051
+        val envPort = System.getenv("IFC_GRPC_PORT")?.toIntOrNull() ?: 50051
+        "127.0.0.1" to envPort
     }
 }
 

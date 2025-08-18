@@ -239,8 +239,11 @@ class MobileInspectionViewModel(
                         it.copy(errorMessage = "検査開始に失敗しました")
                     }
                 } else {
-                    // Orchestrate server-side execution lifecycle
-                    orchestrateServerExecution()
+                    // For REALTIME, do not trigger REST orchestration; gRPC streaming handles processing
+                    if (inspectionType != InspectionType.REALTIME) {
+                        // Orchestrate server-side execution lifecycle via REST
+                        orchestrateServerExecution()
+                    }
                 }
             } catch (e: Exception) {
                 updateUiState { 

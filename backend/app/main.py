@@ -23,6 +23,7 @@ from app.api import (
 from app.services.execution_worker import execution_worker
 from app.database import init_db
 from app.services.websocket_manager import ConnectionManager
+from app.grpc_server import get_grpc_server
 
 # ログ設定を早期に初期化
 logging.basicConfig(
@@ -126,6 +127,10 @@ async def startup_event():
         # バックグラウンドタスクとしてワーカーを起動
         asyncio.create_task(execution_worker.start())
         logger.info("Execution worker started successfully with direct gRPC execution")
+
+        # Start desktop gRPC bridge server in background
+        asyncio.create_task(get_grpc_server().start())
+        logger.info("Desktop gRPC bridge server starting in background")
     except Exception as e:
         logger.error(f"Error starting worker: {e}")
         # ワーカー開始失敗でもサーバーは起動を続ける
@@ -137,6 +142,11 @@ async def shutdown_event():
     logger.info("Stopping execution worker...")
     await execution_worker.stop()
     logger.info("Execution worker stopped")
+    # Stop gRPC server gracefully
+    try:
+        await get_grpc_server().stop()
+    except Exception as e:
+        logger.warning(f"Error stopping gRPC server: {e}")
 
 
 if __name__ == "__main__":

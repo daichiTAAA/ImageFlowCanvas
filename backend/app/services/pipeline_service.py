@@ -56,11 +56,28 @@ class PipelineService:
     async def get_pipeline(
         self, pipeline_id: str, db: AsyncSession
     ) -> Optional[Pipeline]:
-        """特定のパイプラインを取得"""
-        result = await db.execute(
-            select(PipelineModel).where(PipelineModel.id == pipeline_id)
-        )
-        model = result.scalar_one_or_none()
+        """特定のパイプラインを取得
+
+        備考:
+        - 既存クライアントの一部では、人間可読の識別子（例: "ai_detection"）を指定するケースがある。
+          この場合はUUIDではなくnameでの検索にフォールバックする。
+        """
+        # まずはUUIDとして検索を試み、失敗したらname一致で検索
+        model = None
+        try:
+            import uuid
+
+            _ = uuid.UUID(pipeline_id)
+            result = await db.execute(
+                select(PipelineModel).where(PipelineModel.id == pipeline_id)
+            )
+            model = result.scalar_one_or_none()
+        except Exception:
+            # UUIDに変換できない場合はnameで検索
+            result = await db.execute(
+                select(PipelineModel).where(PipelineModel.name == pipeline_id)
+            )
+            model = result.scalar_one_or_none()
 
         if not model:
             return None

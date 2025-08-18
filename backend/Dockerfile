@@ -37,8 +37,8 @@ COPY backend/app/ ./app/
 # 生成されたprotoファイルをコピー
 COPY backend/generated/python/ ./
 
-# ポート8000を公開
-EXPOSE 8000
+# ポートを公開: HTTP(8000) と gRPC(50051)
+EXPOSE 8000 50051
 
 ENV no_proxy="localhost,0.0.0.0"
 ENV NO_PROXY=${no_proxy}
