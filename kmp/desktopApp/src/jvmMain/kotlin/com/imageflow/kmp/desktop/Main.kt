@@ -144,6 +144,21 @@ private fun ImageFlowDesktopApp() {
                     tokenReady = ok
                 }
 
+                // Track per-item sticky OK and last OK snapshot (JPEG bytes)
+                data class OkSnap(val bytes: ByteArray, val detections: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>)
+                val okSnapshots = remember { mutableStateMapOf<String, OkSnap>() } // itemId -> snapshot
+                data class RtFrame(val bytes: ByteArray, val dets: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>, val sj: String?)
+                val realtimeByItem = remember { mutableStateMapOf<String, RtFrame>() }
+                val humanDecisions = remember { mutableStateMapOf<String, com.imageflow.kmp.models.HumanResult>() }
+                var currentIdx by remember(uiState.inspectionItems) { mutableStateOf(0) }
+                val orderedItems = remember(uiState.inspectionItems) { uiState.inspectionItems.sortedBy { it.execution_order } }
+                // Ensure currentIdx points to next item without human decision
+                LaunchedEffect(humanDecisions.size, orderedItems) {
+                    if (currentIdx >= orderedItems.size) return@LaunchedEffect
+                    val next = orderedItems.indexOfFirst { humanDecisions[it.id] == null }
+                    if (next >= 0) currentIdx = next
+                }
+
                 // Realtime preview + streaming to backend via gRPC
                 Column(Modifier.fillMaxSize()) {
                     if (processCode.isNullOrBlank()) {
@@ -214,29 +229,28 @@ private fun ImageFlowDesktopApp() {
                         }
                         return@ScreenWithTopBar
                     }
-                    // Pick pipeline from inspection items: first by execution_order that has pipeline_id
-                    val selectedPipelineId = remember(uiState.inspectionItems) {
-                        uiState.inspectionItems
-                            .sortedBy { it.execution_order }
-                            .firstOrNull { !it.pipeline_id.isNullOrBlank() }
-                            ?.pipeline_id
-                    }
-                    val selectedPipelineParams = remember(uiState.inspectionItems) {
-                        uiState.inspectionItems
-                            .sortedBy { it.execution_order }
-                            .firstOrNull { !it.pipeline_id.isNullOrBlank() }
-                            ?.pipeline_params ?: emptyMap()
+                    val selectedItem = orderedItems.getOrNull(currentIdx)
+                    val selectedPipelineId = selectedItem?.pipeline_id
+                    val orderLabel = buildString {
+                        append("項目 ")
+                        append((currentIdx + 1).coerceAtMost(orderedItems.size))
+                        append("/")
+                        append(orderedItems.size)
+                        selectedItem?.name?.let { append(" - ").append(it) }
                     }
                     RealtimeInspectionDesktop(
                         grpcHost = grpcHost,
                         grpcPort = grpcPort,
                         pipelineId = selectedPipelineId,
                         authToken = authToken,
+                        orderLabel = orderLabel,
+                        renderUi = false,
+                        targetItemId = selectedItem?.id,
                         processingParams = buildMap {
                             uiState.currentProduct?.productCode?.let { put("product_code", it) }
                             processCode?.let { put("process_code", it) }
                             // Include pipeline params from the selected item
-                            selectedPipelineParams.forEach { (k, v) -> put(k, v) }
+                            (selectedItem?.pipeline_params ?: emptyMap()).forEach { (k, v) -> put(k, v) }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         onDetectionsUpdated = { det, ms ->
@@ -245,16 +259,55 @@ private fun ImageFlowDesktopApp() {
                         },
                         onRealtimeUpdate = { det, ms, plId, details, serverJudgment ->
                             viewModel.onRealtimeAiUpdate(det, ms, plId, details, serverJudgment)
+                        },
+                        onOkSnapshot = { plId, jpeg, details ->
+                            val itemId = if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else selectedItem?.id
+                            if (!itemId.isNullOrBlank()) {
+                                if (humanDecisions[itemId] == null) {
+                                    okSnapshots[itemId] = OkSnap(jpeg, details)
+                                }
+                            }
+                        },
+                        onPreviewFrame = { plId, jpeg, details, sj ->
+                            val itemId = if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else selectedItem?.id
+                            if (!itemId.isNullOrBlank()) {
+                                realtimeByItem[itemId] = RtFrame(jpeg, details, sj)
+                            }
                         }
                     )
                     DesktopInspectionDetailPanel(
                         currentProduct = uiState.currentProduct,
                         inspectionState = inspectionState,
-                        progress = inspectionProgress.completionPercentage,
+                        progress = if (orderedItems.isNotEmpty()) humanDecisions.size.toFloat() / orderedItems.size.toFloat() else 0f,
                         lastAiResult = uiState.lastAiResult,
                         isLoading = uiState.isLoading,
                         errorMessage = uiState.errorMessage,
-                        inspectionItems = uiState.inspectionItems,
+                        inspectionItems = orderedItems,
+                        okSnapshots = okSnapshots.mapValues { it.value.bytes to it.value.detections },
+                        realtimeSnapshots = realtimeByItem.mapValues { it.value.bytes to it.value.dets to it.value.sj },
+                        perItemHuman = humanDecisions,
+                        currentIndex = currentIdx,
+                        onSelectItemIndex = { idx ->
+                            if (idx in orderedItems.indices) {
+                                currentIdx = idx
+                                // Clear realtime frames of other items to avoid confusion
+                                val curId = orderedItems[idx].id
+                                realtimeByItem.keys.toList().forEach { k -> if (k != curId) realtimeByItem.remove(k) }
+                            }
+                        },
+                        onItemHumanReview = { itemId, result ->
+                            humanDecisions[itemId] = result
+                            // If current item was confirmed, advance to next
+                            val idx = orderedItems.indexOfFirst { it.id == itemId }
+                            if (idx >= 0 && idx == currentIdx) {
+                                val next = orderedItems.indexOfFirst { humanDecisions[it.id] == null }
+                                if (next >= 0) {
+                                    currentIdx = next
+                                    val curId = orderedItems[next].id
+                                    realtimeByItem.keys.toList().forEach { k -> if (k != curId) realtimeByItem.remove(k) }
+                                }
+                            }
+                        },
                     )
                 }
             }

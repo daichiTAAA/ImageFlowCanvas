@@ -39,12 +39,18 @@ fun RealtimeInspectionDesktop(
     authToken: String? = null,
     processingParams: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier,
+    orderLabel: String? = null,
+    renderUi: Boolean = true,
+    targetItemId: String? = null,
     onDetectionsUpdated: ((detections: Int, processingTimeMs: Long) -> Unit)? = null,
-    onRealtimeUpdate: ((detections: Int, processingTimeMs: Long, pipelineId: String?, details: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>, serverJudgment: String?) -> Unit)? = null
+    onRealtimeUpdate: ((detections: Int, processingTimeMs: Long, pipelineId: String?, details: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>, serverJudgment: String?) -> Unit)? = null,
+    onOkSnapshot: ((pipelineId: String?, jpegBytes: ByteArray, details: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>) -> Unit)? = null,
+    onPreviewFrame: ((pipelineId: String?, jpegBytes: ByteArray, details: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>, serverJudgment: String?) -> Unit)? = null
 ) {
     val log = remember { LOG }
     var grabber by remember { mutableStateOf<FFmpegFrameGrabber?>(null) }
     var imagePanel by remember { mutableStateOf<RtPreviewPanel?>(null) }
+    var lastServerJudgment by remember { mutableStateOf<String?>(null) }
     var channel by remember { mutableStateOf<ManagedChannel?>(null) }
     var running by remember { mutableStateOf(true) } // 自動開始
     var stats by remember { mutableStateOf(Stats()) }
@@ -66,11 +72,15 @@ fun RealtimeInspectionDesktop(
     }
 
     Column(modifier = modifier.fillMaxWidth().background(Color.Black)) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (renderUi) Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("gRPC ${grpcHost}:${grpcPort}", color = Color.White)
             Spacer(Modifier.width(16.dp))
             Text("Frames: ${stats.frames} / Detections: ${stats.lastDetections}", color = Color.LightGray)
             Spacer(Modifier.weight(1f))
+            if (!orderLabel.isNullOrBlank()) {
+                AssistChip(label = { Text(orderLabel) }, onClick = { })
+                Spacer(Modifier.width(8.dp))
+            }
             // Minimal camera control chips
             AssistChip(label = { Text("Dev ${deviceIndex}") }, onClick = { deviceIndex = if (deviceIndex == 0) 1 else 0 })
             Spacer(Modifier.width(8.dp))
@@ -92,43 +102,13 @@ fun RealtimeInspectionDesktop(
             OutlinedButton(onClick = { running = !running }) { Text(if (running) "停止" else "開始") }
         }
 
-        Box(Modifier.fillMaxWidth().height(360.dp).background(Color.Black)) {
+        if (renderUi) Box(Modifier.fillMaxWidth().height(360.dp).background(Color.Black)) {
             if (imagePanel == null) imagePanel = RtPreviewPanel()
             SwingPanelHost(imagePanel)
-
-            // Help overlay if frames are not coming in (likely camera permission issue)
-            val now = remember { mutableStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    now.value = System.currentTimeMillis()
-                    delay(500)
-                }
-            }
-            val showOverlay = running && frameCount == 0 && startAt != 0L && (now.value - startAt) > 4000
-            if (showOverlay) {
-                PermissionHelpOverlay(
-                    onOpenSettings = { openPrivacyCameraSettings() },
-                    onRetryInit = {
-                        // Re-init grabber
-                        try { grabber?.stop() } catch (_: Throwable) {}
-                        try { grabber?.release() } catch (_: Throwable) {}
-                        grabber = null
-                        frameCount = 0
-                        startAt = 0L
-                        // Best-effort re-probe on background
-                        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-                            val g2 = openBestAvFoundationGrabber()
-                            withContext(Dispatchers.Main) {
-                                grabber = g2
-                            }
-                        }
-                    }
-                )
-            }
         }
     }
 
-    LaunchedEffect(running, deviceIndex, resolution, fps, pixelFmt, configVersion) {
+    LaunchedEffect(running, deviceIndex, resolution, fps, pixelFmt, configVersion, pipelineId) {
         if (!running) return@LaunchedEffect
         // 重い処理はIOに退避（UIブロック回避）
         withContext(Dispatchers.IO) {
@@ -165,6 +145,7 @@ fun RealtimeInspectionDesktop(
             } catch (_: Throwable) {}
 
             val requests = kotlinx.coroutines.flow.MutableSharedFlow<CameraStream.VideoFrame>(extraBufferCapacity = 2)
+            var latestJpeg: ByteArray? = null
             val recvJob = launch(Dispatchers.IO) {
                 try {
                     stub.processVideoStream(requests).collect { resp ->
@@ -185,6 +166,9 @@ fun RealtimeInspectionDesktop(
                             val serverPipelineId = if (resp.pipelineId.isNullOrBlank()) pipelineId else resp.pipelineId
                             onDetectionsUpdated?.invoke(resp.detectionsCount, resp.processingTimeMs)
                             val serverJudgment = try { resp.judgment } catch (_: Throwable) { null }
+                            lastServerJudgment = serverJudgment
+                            // Update overlay on preview
+                            if (renderUi) imagePanel?.setOverlay(details, serverJudgment)
                             onRealtimeUpdate?.invoke(
                                 resp.detectionsCount,
                                 resp.processingTimeMs,
@@ -192,6 +176,15 @@ fun RealtimeInspectionDesktop(
                                 details,
                                 serverJudgment
                             )
+                            // If server judgment is OK, emit snapshot bytes for persistence
+                            if ((serverPipelineId?.isNotBlank() == true || !targetItemId.isNullOrBlank()) && (serverJudgment?.equals("OK", ignoreCase = true) == true)) {
+                                latestJpeg?.let { jpg ->
+                                    try { onOkSnapshot?.invoke(serverPipelineId, jpg, details) } catch (_: Throwable) { }
+                                }
+                            }
+                            latestJpeg?.let { jpg ->
+                                try { onPreviewFrame?.invoke(serverPipelineId, jpg, details, serverJudgment) } catch (_: Throwable) { }
+                            }
                             // Note: ViewModel signature updated to accept server judgment; Main.kt will forward it
                         }
                     }
@@ -212,6 +205,7 @@ fun RealtimeInspectionDesktop(
                     SwingUtilities.invokeLater { imagePanel?.setImage(img) }
                     withContext(Dispatchers.Main) { frameCount += 1 }
                     val bytes = encodeJpeg(img)
+                    latestJpeg = bytes
                     val metaBuilder = CameraStream.VideoMetadata.newBuilder()
                         .setSourceId("desktop-usb-0")
                         .setWidth(img.width)
@@ -275,11 +269,21 @@ private fun SwingPanelHost(panel: JPanel?) {
 
 private class RtPreviewPanel : JPanel() {
     @Volatile private var image: BufferedImage? = null
+    @Volatile private var overlay: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection> = emptyList()
+    @Volatile private var serverJudgment: String? = null
+
     fun setImage(img: BufferedImage) { image = img; repaint() }
+    fun setOverlay(
+        detections: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>,
+        judgment: String?
+    ) { overlay = detections; serverJudgment = judgment; repaint() }
+
     override fun paintComponent(g: java.awt.Graphics) {
         super.paintComponent(g)
         val img = image ?: return
         val g2 = g as java.awt.Graphics2D
+        g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+
         val panelW = width.toDouble()
         val panelH = height.toDouble()
         val imgW = img.width.toDouble()
@@ -287,9 +291,56 @@ private class RtPreviewPanel : JPanel() {
         val scale = kotlin.math.min(panelW / imgW, panelH / imgH)
         val drawW = (imgW * scale).toInt()
         val drawH = (imgH * scale).toInt()
-        val x = (panelW - drawW) / 2.0
-        val y = (panelH - drawH) / 2.0
-        g2.drawImage(img, x.toInt(), y.toInt(), drawW, drawH, null)
+        val offX = (panelW - drawW) / 2.0
+        val offY = (panelH - drawH) / 2.0
+
+        // draw image
+        g2.drawImage(img, offX.toInt(), offY.toInt(), drawW, drawH, null)
+
+        // overlay: bounding boxes
+        val strokeW = (2.0 * kotlin.math.max(1.0, scale)).toFloat()
+        g2.stroke = java.awt.BasicStroke(strokeW)
+
+        fun drawLabel(x: Int, y: Int, text: String, bg: java.awt.Color) {
+            val fm = g2.fontMetrics
+            val pad = 4
+            val tw = fm.stringWidth(text) + pad * 2
+            val th = fm.height + pad
+            g2.color = java.awt.Color(bg.red, bg.green, bg.blue, 180)
+            g2.fillRect(x, (y - th).coerceAtLeast(0), tw, th)
+            g2.color = java.awt.Color.WHITE
+            g2.drawString(text, x + pad, (y - pad).coerceAtLeast(fm.ascent))
+        }
+
+        // draw detections
+        for (d in overlay) {
+            val x1 = (offX + d.x1 * scale).toInt()
+            val y1 = (offY + d.y1 * scale).toInt()
+            val w = ((d.x2 - d.x1) * scale).toInt()
+            val h = ((d.y2 - d.y1) * scale).toInt()
+            val color = java.awt.Color(0, 200, 255) // cyan-like
+            g2.color = color
+            g2.drawRect(x1, y1, w, h)
+            val label = buildString {
+                append(d.className)
+                append(" ")
+                append(String.format("%.0f%%", d.confidence * 100f))
+            }
+            drawLabel(x1, y1, label, color)
+        }
+
+        // server judgment badge
+        serverJudgment?.let { j ->
+            val jUpper = j.uppercase()
+            val (txt, bg) = when (jUpper) {
+                "OK" -> "OK" to java.awt.Color(0, 160, 0)
+                "NG" -> "NG" to java.awt.Color(200, 0, 0)
+                "PENDING" -> "PENDING" to java.awt.Color(200, 140, 0)
+                else -> jUpper to java.awt.Color(80, 80, 80)
+            }
+            g2.font = g2.font.deriveFont(14f)
+            drawLabel(offX.toInt() + 8, (offY + 24).toInt(), txt, bg)
+        }
     }
 }
 
