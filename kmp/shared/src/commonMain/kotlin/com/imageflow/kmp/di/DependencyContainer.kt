@@ -29,6 +29,8 @@ object DependencyContainer {
     private var apiBaseUrl: String = AppSettings.getBaseUrl() ?: PlatformDefaults.defaultApiBase()
     private var processCode: String = AppSettings.getProcessCode() ?: "DEFAULT"
     private var authToken: String? = AppSettings.getAuthToken()
+    private var authUser: String? = AppSettings.getAuthUsername()
+    private var authPass: String? = AppSettings.getAuthPassword()
     private val httpClient by lazy { createHttpClient() }
     // Rest client uses dynamic base supplier so changes reflect immediately
     private val restClient by lazy { BasicRestClient(httpClient) { apiBaseUrl } }
@@ -99,6 +101,17 @@ object DependencyContainer {
         try { AppSettings.setAuthToken(token) } catch (_: Exception) { }
     }
     fun currentAuthToken(): String? = authToken
+
+    fun currentAuthCredentials(): Pair<String?, String?> = authUser to authPass
+    fun configureAuthCredentials(username: String, password: String) {
+        authUser = username
+        authPass = password
+        try { AppSettings.setAuthCredentials(username, password) } catch (_: Exception) { }
+    }
+    fun clearAuthCredentials() {
+        authUser = null; authPass = null
+        try { AppSettings.clearAuthCredentials() } catch (_: Exception) { }
+    }
 }
 
 // Note: mock implementations were removed in favor of real Ktor-based services.

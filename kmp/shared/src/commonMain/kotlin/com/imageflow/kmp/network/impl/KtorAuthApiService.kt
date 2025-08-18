@@ -21,4 +21,11 @@ class KtorAuthApiService(
         }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
 
     override suspend fun logout(): ApiResult<Boolean> = ApiResult.Success(true)
+
+    override suspend fun me(): ApiResult<Boolean> =
+        runCatching {
+            // Returns 200 with user info if token valid; otherwise 401
+            rest.get("auth/me")
+            ApiResult.Success(true)
+        }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
 }

@@ -45,11 +45,19 @@ class SettingsViewModel {
     }
 
     fun apply() {
+        val previous = DependencyContainer.currentApiBase()
         val (normalized, err) = UrlUtils.validateAndNormalizeBaseUrl(_baseUrl.value)
         _validationError.value = err
         if (err == null && normalized != null) {
             _baseUrl.value = normalized
             DependencyContainer.configureApiBase(normalized)
+            // If base URL changed, clear token to avoid cross-origin token mismatch
+            if (previous.trimEnd('/') != normalized.trimEnd('/')) {
+                DependencyContainer.configureAuthToken(null)
+                _authToken.value = null
+                // Also clear cached processes; require re-login and reload
+                try { (this as? Any)?.let { } } catch (_: Exception) { }
+            }
         }
         // Apply process code immediately as well
         if (_processCode.value.isNotBlank()) {
@@ -68,6 +76,10 @@ class SettingsViewModel {
                 val token = res.data.access_token
                 DependencyContainer.configureAuthToken(token)
                 _authToken.value = token
+                // Save credentials for auto re-login (for dev convenience)
+                DependencyContainer.configureAuthCredentials(username, password)
+                // Prefetch processes so dropdown has data immediately after login
+                runCatching { loadProcesses() }
                 true
             }
             is ApiResult.Error -> { _validationError.value = res.message; false }
@@ -81,11 +93,46 @@ class SettingsViewModel {
     }
 
     suspend fun loadProcesses() {
+        // Ensure token is valid; if not, try auto re-login using stored credentials
+        ensureValidToken()
         val api = DependencyContainer.provideInspectionApiService()
         when (val res = api.listProcesses(pageSize = 200)) {
             is ApiResult.Success -> _processes.value = res.data.items
-            is ApiResult.Error -> { /* no-op */ }
-            is ApiResult.NetworkError -> { /* no-op */ }
+            is ApiResult.Error -> {
+                // no-op
+            }
+            is ApiResult.NetworkError -> {
+                val msg = res.message?.lowercase() ?: ""
+                if (msg.contains("401") || msg.contains("unauthorized")) {
+                    // Token likely expired/invalid -> clear and notify
+                    DependencyContainer.configureAuthToken(null)
+                    _authToken.value = null
+                    _validationError.value = "認証の有効期限が切れました。再度ログインしてください。"
+                }
+            }
+        }
+    }
+
+    private suspend fun ensureValidToken() {
+        val token = DependencyContainer.currentAuthToken()
+        if (token.isNullOrBlank()) return
+        val authApi = DependencyContainer.provideAuthApiService()
+        when (authApi.me()) {
+            is ApiResult.Success -> return
+            is ApiResult.Error, is ApiResult.NetworkError -> {
+                // Try auto re-login if we have stored credentials
+                val (u, p) = DependencyContainer.currentAuthCredentials()
+                if (!u.isNullOrBlank() && !p.isNullOrBlank()) {
+                    val ok = login(u, p)
+                    if (!ok) {
+                        DependencyContainer.configureAuthToken(null)
+                        _authToken.value = null
+                    }
+                } else {
+                    DependencyContainer.configureAuthToken(null)
+                    _authToken.value = null
+                }
+            }
         }
     }
 
