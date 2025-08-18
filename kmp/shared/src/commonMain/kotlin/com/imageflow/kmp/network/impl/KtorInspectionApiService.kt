@@ -95,4 +95,56 @@ class KtorInspectionApiService(
             val resp = json.decodeFromString<PaginatedResponse<ProcessMasterKmp>>(body)
             ApiResult.Success(resp)
         }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
+
+    override suspend fun createExecution(
+        targetId: String,
+        operatorId: String?,
+        qrCode: String?,
+        metadata: Map<String, String>
+    ): ApiResult<ExecuteInspectionResponseKmp> = runCatching {
+        val payload = buildString {
+            append("{")
+            append("\"target_id\":\"$targetId\"")
+            if (!operatorId.isNullOrBlank()) append(",\"operator_id\":\"$operatorId\"")
+            if (!qrCode.isNullOrBlank()) append(",\"qr_code\":\"$qrCode\"")
+            if (metadata.isNotEmpty()) {
+                val metaJson = metadata.entries.joinToString(prefix = "{", postfix = "}") { (k, v) -> "\"${k}\":\"${v}\"" }
+                append(",\"metadata\":$metaJson")
+            }
+            append("}")
+        }
+        val body = rest.postJson("inspection/executions", payload)
+        val resp = json.decodeFromString<ExecuteInspectionResponseKmp>(body)
+        ApiResult.Success(resp)
+    }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
+
+    override suspend fun listItemExecutions(executionId: String): ApiResult<List<InspectionItemExecutionKmp>> = runCatching {
+        val body = rest.get("inspection/executions/$executionId/items")
+        val resp = json.decodeFromString<List<InspectionItemExecutionKmp>>(body)
+        ApiResult.Success(resp)
+    }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
+
+    override suspend fun saveInspectionResult(
+        executionId: String,
+        itemExecutionId: String,
+        judgment: JudgmentResultKmp,
+        comment: String?,
+        metrics: Map<String, String>
+    ): ApiResult<InspectionResultKmp> = runCatching {
+        val payload = buildString {
+            append("{")
+            append("\"execution_id\":\"$executionId\",")
+            append("\"item_execution_id\":\"$itemExecutionId\",")
+            append("\"judgment\":\"$judgment\"")
+            if (!comment.isNullOrBlank()) append(",\"comment\":\"$comment\"")
+            if (metrics.isNotEmpty()) {
+                val metaJson = metrics.entries.joinToString(prefix = "{", postfix = "}") { (k, v) -> "\"${k}\":\"${v}\"" }
+                append(",\"metrics\":$metaJson")
+            }
+            append("}")
+        }
+        val body = rest.postJson("inspection/results", payload)
+        val resp = json.decodeFromString<InspectionResultKmp>(body)
+        ApiResult.Success(resp)
+    }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
 }

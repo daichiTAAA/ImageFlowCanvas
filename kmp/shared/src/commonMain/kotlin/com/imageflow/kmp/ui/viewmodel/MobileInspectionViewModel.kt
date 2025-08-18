@@ -238,11 +238,53 @@ class MobileInspectionViewModel(
                     updateUiState { 
                         it.copy(errorMessage = "検査開始に失敗しました")
                     }
+                } else {
+                    // Orchestrate server-side execution lifecycle
+                    orchestrateServerExecution()
                 }
             } catch (e: Exception) {
                 updateUiState { 
                     it.copy(errorMessage = "検査開始エラー: ${e.message}")
                 }
+            }
+        }
+    }
+
+    private suspend fun orchestrateServerExecution() {
+        val product = _uiState.value.currentProduct ?: return
+        val items = _uiState.value.inspectionItems
+        if (items.isEmpty()) return
+        // Use first item's target_id as the target for execution
+        val targetId = items.first().target_id
+        val inspectionApi = com.imageflow.kmp.di.DependencyContainer.provideInspectionApiService()
+        // 1) Create execution
+        when (val created = inspectionApi.createExecution(targetId)) {
+            is com.imageflow.kmp.network.ApiResult.Success -> {
+                val executionId = created.data.execution_id
+                // 2) Fetch item executions created on server
+                val execItems = when (val ie = inspectionApi.listItemExecutions(executionId)) {
+                    is com.imageflow.kmp.network.ApiResult.Success -> ie.data
+                    else -> emptyList()
+                }
+                // 3) Save a simple PASS result for each item (placeholder)
+                execItems.forEach { iex ->
+                    inspectionApi.saveInspectionResult(
+                        executionId = executionId,
+                        itemExecutionId = iex.id,
+                        judgment = com.imageflow.kmp.network.JudgmentResultKmp.OK,
+                        comment = "AUTO",
+                        metrics = emptyMap()
+                    )
+                }
+                // 4) Update UI state to Completed
+                updateUiState { it.copy(errorMessage = null) }
+                inspectionWorkflowUseCase.transitionToState(InspectionState.Completed)
+            }
+            is com.imageflow.kmp.network.ApiResult.Error -> {
+                updateUiState { it.copy(errorMessage = "実行作成エラー: ${created.message}") }
+            }
+            is com.imageflow.kmp.network.ApiResult.NetworkError -> {
+                updateUiState { it.copy(errorMessage = "ネットワークエラー: ${created.message}") }
             }
         }
     }

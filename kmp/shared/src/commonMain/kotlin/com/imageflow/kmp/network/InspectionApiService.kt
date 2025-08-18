@@ -41,6 +41,11 @@ interface InspectionApiService {
 
     // Process masters (工程)
     suspend fun listProcesses(page: Int = 1, pageSize: Int = 200): ApiResult<PaginatedResponse<ProcessMasterKmp>>
+
+    // Executions
+    suspend fun createExecution(targetId: String, operatorId: String? = null, qrCode: String? = null, metadata: Map<String, String> = emptyMap()): ApiResult<ExecuteInspectionResponseKmp>
+    suspend fun listItemExecutions(executionId: String): ApiResult<List<InspectionItemExecutionKmp>>
+    suspend fun saveInspectionResult(executionId: String, itemExecutionId: String, judgment: JudgmentResultKmp, comment: String? = null, metrics: Map<String, String> = emptyMap()): ApiResult<InspectionResultKmp>
 }
 
 @Serializable
@@ -71,6 +76,32 @@ data class ProcessMasterKmp(
     val id: String,
     val process_code: String,
     val process_name: String,
+)
+
+@Serializable
+data class ExecuteInspectionResponseKmp(
+    val execution_id: String
+)
+
+@Serializable
+data class InspectionItemExecutionKmp(
+    val id: String,
+    val execution_id: String,
+    val item_id: String,
+    val status: String,
+    val final_result: JudgmentResultKmp? = null
+)
+
+@Serializable
+enum class JudgmentResultKmp { OK, NG, PENDING }
+
+@Serializable
+data class InspectionResultKmp(
+    val id: String,
+    val execution_id: String,
+    val item_execution_id: String,
+    val judgment: JudgmentResultKmp,
+    val comment: String? = null
 )
 
 @Serializable

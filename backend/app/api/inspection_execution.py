@@ -44,6 +44,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _extract_user_id(current_user) -> Optional[uuid.UUID]:
+    try:
+        if isinstance(current_user, dict):
+            val = current_user.get("id")
+            return uuid.UUID(val) if isinstance(val, str) else val
+        val = getattr(current_user, "id", None)
+        return uuid.UUID(val) if isinstance(val, str) else val
+    except Exception:
+        return None
+
+
 @router.post(
     "/executions",
     response_model=ExecuteInspectionResponse,
@@ -75,7 +86,7 @@ async def create_inspection_execution(
         # 検査実行を作成
         execution = InspectionExecution(
             target_id=request.target_id,
-            operator_id=request.operator_id or current_user.id,
+            operator_id=request.operator_id or _extract_user_id(current_user),
             qr_code=request.qr_code,
             metadata=request.metadata or {},
             status=InspectionStatus.PENDING,
@@ -370,7 +381,7 @@ async def save_inspection_result(
                 comment=request.comment,
                 evidence_file_ids=request.evidence_file_ids or [],
                 metrics=request.metrics or {},
-                created_by=current_user.id,
+                created_by=_extract_user_id(current_user),
             )
             db.add(result)
             await db.commit()
@@ -383,6 +394,38 @@ async def save_inspection_result(
             item_execution.completed_at = datetime.utcnow()
 
         await db.commit()
+
+        # すべての項目が完了していれば Execution を COMPLETED へ
+        try:
+            exec_id = item_execution.execution_id
+            total_q = await db.execute(
+                select(func.count(InspectionItemExecution.id)).where(
+                    InspectionItemExecution.execution_id == exec_id
+                )
+            )
+            done_q = await db.execute(
+                select(func.count(InspectionItemExecution.id)).where(
+                    and_(
+                        InspectionItemExecution.execution_id == exec_id,
+                        InspectionItemExecution.status == InspectionItemStatus.ITEM_COMPLETED,
+                    )
+                )
+            )
+            total = total_q.scalar() or 0
+            done = done_q.scalar() or 0
+            if total > 0 and done == total:
+                exec_row = (
+                    await db.execute(
+                        select(InspectionExecution).where(InspectionExecution.id == exec_id)
+                    )
+                ).scalar_one_or_none()
+                if exec_row:
+                    exec_row.status = InspectionStatus.COMPLETED
+                    exec_row.completed_at = datetime.utcnow()
+                    await db.commit()
+        except Exception as _:
+            # completion 更新の失敗は本処理を妨げない
+            pass
 
         logger.info(f"Saved inspection result: {result.id}")
         return result
@@ -482,15 +525,20 @@ async def get_inspection_item_executions(
 ):
     """検査実行の項目実行一覧を取得"""
     try:
-        item_executions = await db.execute(
+        # Join to InspectionItem to sort by its execution_order
+        result = await db.execute(
             select(InspectionItemExecution)
-            .options(selectinload(InspectionItemExecution.item))
+            .options(
+                selectinload(InspectionItemExecution.item)
+                .selectinload(InspectionItem.target),
+                selectinload(InspectionItemExecution.item)
+                .selectinload(InspectionItem.criteria),
+            )
+            .join(InspectionItem, InspectionItem.id == InspectionItemExecution.item_id)
             .where(InspectionItemExecution.execution_id == execution_id)
-            .order_by(
-                InspectionItemExecution.item.has(execution_order=None)
-            )  # execution_orderでソート
+            .order_by(InspectionItem.execution_order.asc())
         )
-        item_executions = item_executions.scalars().all()
+        item_executions = result.scalars().all()
 
         return item_executions
 

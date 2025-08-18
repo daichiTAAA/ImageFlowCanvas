@@ -310,6 +310,7 @@ class InspectionExecutionBase(BaseModel):
     target_id: uuid.UUID
     operator_id: Optional[uuid.UUID] = None
     qr_code: Optional[str] = None
+    # ORM attribute is metadata_ (column name "metadata")
     metadata: Optional[Dict[str, Any]] = {}
 
 
@@ -318,8 +319,15 @@ class InspectionExecutionCreate(InspectionExecutionBase):
 
 
 class InspectionExecutionResponse(InspectionExecutionBase):
-    model_config = ConfigDict(from_attributes=True)
-    
+    # Map ORM attribute metadata_ -> JSON field "metadata"
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    metadata: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        validation_alias="metadata_",
+        serialization_alias="metadata",
+    )
+
     id: uuid.UUID
     status: InspectionStatus
     started_at: datetime
