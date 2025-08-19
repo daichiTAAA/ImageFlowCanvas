@@ -283,8 +283,9 @@ private fun ImageFlowDesktopApp() {
                             // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
                             val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
                             if (!itemId.isNullOrBlank()) {
-                                // If item has sticky OK snapshot, ignore further realtime updates for that item
-                                if (!okSnapshots.containsKey(itemId)) {
+                                // Keep realtime updating unless human OK is already confirmed for this item
+                                val humanOk = humanDecisions[itemId] == com.imageflow.kmp.models.HumanResult.OK
+                                if (!humanOk) {
                                     realtimeByItem[itemId] = RtFrame(jpeg, details, sj)
                                 }
                             }
