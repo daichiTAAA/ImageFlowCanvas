@@ -53,6 +53,9 @@ fun RealtimeInspectionDesktop(
     // no explicit RGB filter; enforce pixel_format at grabber level
     var lastServerJudgment by remember { mutableStateOf<String?>(null) }
     var channel by remember { mutableStateOf<ManagedChannel?>(null) }
+    // Keep latest processing params updated even if stream stays alive
+    val procParamsRef = remember { java.util.concurrent.atomic.AtomicReference<Map<String, String>>(processingParams) }
+    LaunchedEffect(processingParams) { procParamsRef.set(processingParams) }
     var running by remember { mutableStateOf(true) } // 自動開始
     var stats by remember { mutableStateOf(Stats()) }
     var frameCount by remember { mutableStateOf(0) }
@@ -217,9 +220,8 @@ fun RealtimeInspectionDesktop(
                     if (!pipelineId.isNullOrBlank()) {
                         metaBuilder.setPipelineId(pipelineId)
                     }
-                    if (processingParams.isNotEmpty()) {
-                        metaBuilder.putAllProcessingParams(processingParams)
-                    }
+                    val pp = procParamsRef.get()
+                    if (pp.isNotEmpty()) metaBuilder.putAllProcessingParams(pp)
                     val meta = metaBuilder.build()
                     val vf = CameraStream.VideoFrame.newBuilder()
                         .setFrameData(com.google.protobuf.ByteString.copyFrom(bytes))

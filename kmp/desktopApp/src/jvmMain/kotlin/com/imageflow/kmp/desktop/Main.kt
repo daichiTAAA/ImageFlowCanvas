@@ -233,10 +233,12 @@ private fun ImageFlowDesktopApp() {
                         selectedItem?.name?.let { append(" - ").append(it) }
                     }
                     androidx.compose.runtime.key(selectedItem?.id) {
+                    // Keep a single continuous stream: use a stable pipelineId (first item's pipeline)
+                    val stablePipelineId = remember(orderedItems) { orderedItems.firstOrNull()?.pipeline_id }
                     RealtimeInspectionDesktop(
                         grpcHost = grpcHost,
                         grpcPort = grpcPort,
-                        pipelineId = selectedPipelineId,
+                        pipelineId = stablePipelineId,
                         authToken = authToken,
                         orderLabel = orderLabel,
                         renderUi = false,
@@ -276,6 +278,9 @@ private fun ImageFlowDesktopApp() {
                     )
                     }
                     val processName = processes.firstOrNull { it.process_code == processCode }?.process_name
+                    // Emit scroll request when advancing after human OK
+                    var scrollSeq by remember { mutableStateOf(0) }
+                    var scrollTargetIndex by remember { mutableStateOf(currentIdx) }
                     DesktopInspectionDetailPanel(
                         currentProduct = uiState.currentProduct,
                         processCode = processCode,
@@ -290,12 +295,12 @@ private fun ImageFlowDesktopApp() {
                         realtimeSnapshots = realtimeByItem.mapValues { it.value.bytes to it.value.dets to it.value.sj },
                         perItemHuman = humanDecisions,
                         currentIndex = currentIdx,
+                        scrollRequestIndex = scrollTargetIndex,
+                        scrollRequestSeq = scrollSeq,
                         onSelectItemIndex = { idx ->
                             if (idx in orderedItems.indices) {
                                 currentIdx = idx
-                                // Clear realtime frames of other items to avoid confusion
-                                val curId = orderedItems[idx].id
-                                realtimeByItem.keys.toList().forEach { k -> if (k != curId) realtimeByItem.remove(k) }
+                                scrollTargetIndex = idx
                             }
                         },
                         onItemHumanReview = { itemId, result ->
@@ -306,8 +311,9 @@ private fun ImageFlowDesktopApp() {
                                 val next = orderedItems.indexOfFirst { humanDecisions[it.id] == null }
                                 if (next >= 0) {
                                     currentIdx = next
-                                    val curId = orderedItems[next].id
-                                    realtimeByItem.keys.toList().forEach { k -> if (k != curId) realtimeByItem.remove(k) }
+                                    scrollTargetIndex = next
+                                    // request UI to scroll to the next item
+                                    scrollSeq++
                                 }
                             }
                         },

@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -59,11 +60,14 @@ fun DesktopInspectionDetailPanel(
     realtimeSnapshots: Map<String, Pair<Pair<ByteArray, List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>>, String?>> = emptyMap(),
     perItemHuman: Map<String, com.imageflow.kmp.models.HumanResult> = emptyMap(),
     currentIndex: Int = 0,
+    // Optional: request programmatic scroll to a specific index (e.g., after human OK)
+    scrollRequestIndex: Int? = null,
+    scrollRequestSeq: Int = 0,
     onSelectItemIndex: (Int) -> Unit = {},
     onItemHumanReview: (String, com.imageflow.kmp.models.HumanResult) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth().padding(12.dp)) {
+    Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
         // Top: Product target (left) + Status (right)
         Row(Modifier.fillMaxWidth()) {
             Column(Modifier.weight(3f).padding(end = 8.dp)) {
@@ -92,11 +96,20 @@ fun DesktopInspectionDetailPanel(
                 val rt = cur?.let { realtimeSnapshots[it.id] }
                 Text("リアルタイム", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
+                val maxH = 200.dp
                 if (rt != null) {
                     // リアルタイムプレビューにはバウンディングボックスを表示しない
-                    SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = false)
+                    SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = false, maxHeightDp = maxH)
                 } else {
-                    Text("待機中", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Fallback: show any last frame to avoid flicker and keep size
+                    val any = realtimeSnapshots.values.firstOrNull()
+                    if (any != null) {
+                        SnapshotWithOverlay(bytes = any.first.first, detections = any.first.second, compact = false, showOverlay = false, maxHeightDp = maxH)
+                    } else {
+                        Box(Modifier.fillMaxWidth().height(maxH)) {
+                            Text("待機中", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
@@ -109,6 +122,7 @@ fun DesktopInspectionDetailPanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .onGloballyPositioned { viewportHeight = it.size.height.toFloat() }
         ) {
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
@@ -174,18 +188,39 @@ fun DesktopInspectionDetailPanel(
         }
         // Auto-select the item that is most visible in the viewport when scrolling
         LaunchedEffect(scrollState.value, itemRects.size, viewportHeight) {
+            // Only auto-select while user is scrolling to avoid fighting programmatic selection
+            if (!scrollState.isScrollInProgress) return@LaunchedEffect
             if (viewportHeight <= 0f || itemRects.isEmpty()) return@LaunchedEffect
             var bestIdx = currentIndex
             var bestVisible = -1f
             val ordered = inspectionItems.sortedBy { it.execution_order }
             ordered.forEachIndexed { idx, item ->
                 val r = itemRects[item.id] ?: return@forEachIndexed
-                val top = r.top
-                val bottom = r.bottom
+                // Convert content coordinates to viewport coordinates by subtracting scroll offset
+                val top = r.top - scrollState.value
+                val bottom = r.bottom - scrollState.value
                 val visible = (kotlin.math.min(bottom, viewportHeight) - kotlin.math.max(top, 0f)).coerceAtLeast(0f)
                 if (visible > bestVisible) { bestVisible = visible; bestIdx = idx }
             }
             if (bestIdx != currentIndex) onSelectItemIndex(bestIdx)
+        }
+        // Programmatic scroll to requested item (center-ish in view)
+        LaunchedEffect(scrollRequestSeq) {
+            val idx = scrollRequestIndex ?: return@LaunchedEffect
+            val ordered = inspectionItems.sortedBy { it.execution_order }
+            val item = ordered.getOrNull(idx) ?: return@LaunchedEffect
+            var attempts = 0
+            while (attempts < 12) { // try for ~200ms
+                val r = itemRects[item.id]
+                if (r != null && viewportHeight > 0f) {
+                    // Scroll to absolute content offset so the item appears near top with some margin
+                    val target = (r.top - viewportHeight * 0.1f).coerceAtLeast(0f).toInt().coerceIn(0, scrollState.maxValue)
+                    scrollState.animateScrollTo(target)
+                    break
+                }
+                attempts++
+                delay(16)
+            }
         }
         }
     }
