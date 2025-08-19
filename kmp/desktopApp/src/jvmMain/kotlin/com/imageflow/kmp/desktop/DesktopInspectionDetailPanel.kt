@@ -3,6 +3,12 @@ package com.imageflow.kmp.desktop
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.material3.Divider
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -92,136 +98,94 @@ fun DesktopInspectionDetailPanel(
             Column(Modifier.weight(2f)) {
                 val ordered = inspectionItems.sortedBy { it.execution_order }
                 val cur = if (currentIndex in ordered.indices) ordered[currentIndex] else null
-                val rt = cur?.let { realtimeSnapshots[it.id] }
+                val curId = cur?.id
+                val humanOk = curId?.let { perItemHuman[it] == com.imageflow.kmp.models.HumanResult.OK } == true
+                val okSnap = curId?.let { okSnapshots[it] }
+                val rt = curId?.let { realtimeSnapshots[it] }
                 Text("リアルタイム", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 val maxH = 200.dp
-                if (rt != null) {
-                    // リアルタイムプレビューにはバウンディングボックスを表示しない
-                    SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = false, maxHeightDp = maxH)
-                } else {
-                    // Fallback: show any last frame to avoid flicker and keep size
-                    val any = realtimeSnapshots.values.firstOrNull()
-                    if (any != null) {
-                        SnapshotWithOverlay(bytes = any.first.first, detections = any.first.second, compact = false, showOverlay = false, maxHeightDp = maxH)
-                    } else {
-                        Box(Modifier.fillMaxWidth().height(maxH)) {
-                            Text("待機中", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                when {
+                    // After human OK, show the sticky OK snapshot here; do not open stream
+                    humanOk && okSnap != null -> SnapshotWithOverlay(bytes = okSnap.first, detections = okSnap.second, compact = false, showOverlay = false, maxHeightDp = maxH)
+                    // Otherwise, show live preview for current item without overlays
+                    rt != null -> SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = false, maxHeightDp = maxH)
+                    else -> Box(Modifier.fillMaxWidth().height(maxH)) { Text("待機中", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }
         HorizontalDivider()
         Spacer(Modifier.height(8.dp))
-        // Items list (drum-roll: 全項目表示、現在項目を大きく、他は小さく)
-        val scrollState = rememberScrollState()
-        val itemRects = remember { mutableStateMapOf<String, Rect>() }
-        var viewportHeight by remember { mutableStateOf(0f) }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .onGloballyPositioned { viewportHeight = it.size.height.toFloat() }
-        ) {
-        Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
-            Text("検査項目 (${inspectionItems.size})", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(4.dp))
-            val activePipelineId = lastAiResult?.pipelineId
-            val ordered = inspectionItems.sortedBy { it.execution_order }
-            ordered.forEachIndexed { idx, item ->
-                val isCurrent = idx == currentIndex
-                // Header row for item: name + AI status chip and 目視OK
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coords -> itemRects[item.id] = coords.boundsInParent() }
-                        .padding(vertical = 4.dp)
-                        .clickable { onSelectItemIndex(idx) },
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    val nameStyle = MaterialTheme.typography.bodySmall
-                    Text("[${item.execution_order}] ${item.name} (${item.type})", color = MaterialTheme.colorScheme.onSurfaceVariant, style = nameStyle)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        val aiStatus = if (okSnapshots.containsKey(item.id)) "OK" else realtimeSnapshots[item.id]?.second
-                        if (aiStatus != null) {
-                            val (al, ac) = when (aiStatus.uppercase()) {
-                                "OK" -> "AI OK" to Color(0xFF2E7D32)
-                                "NG" -> "AI NG" to Color(0xFFC62828)
-                                else -> aiStatus.uppercase() to Color(0xFF616161)
-                            }
-                            AssistChip(onClick = {}, label = { Text(al, color = Color.White) }, colors = AssistChipDefaults.assistChipColors(containerColor = ac))
-                        }
-                        val humanOk = perItemHuman[item.id] == com.imageflow.kmp.models.HumanResult.OK
-                        val humanColor = if (humanOk) Color(0xFF2E7D32) else Color(0xFF616161)
-                        AssistChip(
-                            onClick = { onItemHumanReview(item.id, com.imageflow.kmp.models.HumanResult.OK) },
-                            label = { Text("目視OK", color = Color.White) },
-                            colors = AssistChipDefaults.assistChipColors(containerColor = humanColor)
-                        )
-                    }
+        // Items list as LazyColumn for reliable top-aligned auto-scroll
+        val listState = rememberLazyListState()
+        val ordered = inspectionItems.sortedBy { it.execution_order }
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                item(key = "header") {
+                    Text("検査項目 (${inspectionItems.size})", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(4.dp))
                 }
-                // Content row: show last OK image on the right (single panel)
-                Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-                    Column(Modifier.fillMaxWidth()) {
-                        val ok = okSnapshots[item.id]
-                        val rt = realtimeSnapshots[item.id]
-                        // Fixed sizing: remove dynamic size changes based on scroll
-                        val maxH = 240.dp
-                        when {
-                            ok != null -> {
-                                // Show last OK snapshot with overlay
-                                SnapshotWithOverlay(bytes = ok.first, detections = ok.second, compact = false, showOverlay = true, maxHeightDp = maxH)
+                itemsIndexed(ordered, key = { _, it -> it.id }) { idx, item ->
+                    // Header row for item: name + AI status chip and 目視OK
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { onSelectItemIndex(idx) },
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        val nameStyle = MaterialTheme.typography.bodySmall
+                        Text("[${item.execution_order}] ${item.name} (${item.type})", color = MaterialTheme.colorScheme.onSurfaceVariant, style = nameStyle)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val aiStatus = if (okSnapshots.containsKey(item.id)) "OK" else realtimeSnapshots[item.id]?.second
+                            if (aiStatus != null) {
+                                val (al, ac) = when (aiStatus.uppercase()) {
+                                    "OK" -> "AI OK" to Color(0xFF2E7D32)
+                                    "NG" -> "AI NG" to Color(0xFFC62828)
+                                    else -> aiStatus.uppercase() to Color(0xFF616161)
+                                }
+                                AssistChip(onClick = {}, label = { Text(al, color = Color.White) }, colors = AssistChipDefaults.assistChipColors(containerColor = ac))
                             }
-                            rt != null -> {
-                                // Fallback: show latest realtime frame for the item with overlay
-                                SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = true, maxHeightDp = maxH)
-                            }
-                            else -> {
-                                Text("OK画像なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val humanOk = perItemHuman[item.id] == com.imageflow.kmp.models.HumanResult.OK
+                            val humanColor = if (humanOk) Color(0xFF2E7D32) else Color(0xFF616161)
+                            AssistChip(
+                                onClick = { onItemHumanReview(item.id, com.imageflow.kmp.models.HumanResult.OK) },
+                                label = { Text("目視OK", color = Color.White) },
+                                colors = AssistChipDefaults.assistChipColors(containerColor = humanColor)
+                            )
+                        }
+                    }
+                    // Content row
+                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+                        Column(Modifier.fillMaxWidth()) {
+                            val ok = okSnapshots[item.id]
+                            val rt = realtimeSnapshots[item.id]
+                            val maxH = 240.dp
+                            when {
+                                ok != null -> SnapshotWithOverlay(bytes = ok.first, detections = ok.second, compact = false, showOverlay = true, maxHeightDp = maxH)
+                                rt != null -> SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = true, maxHeightDp = maxH)
+                                else -> Text("OK画像なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
+                    HorizontalDivider()
                 }
-                HorizontalDivider()
             }
         }
-        // Auto-select the item that is most visible in the viewport when scrolling
-        LaunchedEffect(scrollState.value, itemRects.size, viewportHeight) {
-            // Only auto-select while user is scrolling to avoid fighting programmatic selection
-            if (!scrollState.isScrollInProgress) return@LaunchedEffect
-            if (viewportHeight <= 0f || itemRects.isEmpty()) return@LaunchedEffect
-            var bestIdx = currentIndex
-            var bestVisible = -1f
-            val ordered = inspectionItems.sortedBy { it.execution_order }
-            ordered.forEachIndexed { idx, item ->
-                val r = itemRects[item.id] ?: return@forEachIndexed
-                // Convert content coordinates to viewport coordinates by subtracting scroll offset
-                val top = r.top - scrollState.value
-                val bottom = r.bottom - scrollState.value
-                val visible = (kotlin.math.min(bottom, viewportHeight) - kotlin.math.max(top, 0f)).coerceAtLeast(0f)
-                if (visible > bestVisible) { bestVisible = visible; bestIdx = idx }
-            }
-            if (bestIdx != currentIndex) onSelectItemIndex(bestIdx)
+        // Auto-select first visible item while user scrolls
+        LaunchedEffect(listState, currentIndex) {
+            snapshotFlow { listState.firstVisibleItemIndex }
+                .collectLatest { firstIdx ->
+                    if (listState.isScrollInProgress) {
+                        val idx = (firstIdx - 1).coerceIn(0, ordered.lastIndex)
+                        if (idx != currentIndex) onSelectItemIndex(idx)
+                    }
+                }
         }
-        // Programmatic scroll to requested item (center-ish in view)
+        // Programmatic scroll to requested item index (align to top)
         LaunchedEffect(scrollRequestSeq) {
             val idx = scrollRequestIndex ?: return@LaunchedEffect
-            val ordered = inspectionItems.sortedBy { it.execution_order }
-            val item = ordered.getOrNull(idx) ?: return@LaunchedEffect
-            var attempts = 0
-            while (attempts < 12) { // try for ~200ms
-                val r = itemRects[item.id]
-                if (r != null && viewportHeight > 0f) {
-                    // Scroll to absolute content offset so the item appears near top with some margin
-                    val target = (r.top - viewportHeight * 0.1f).coerceAtLeast(0f).toInt().coerceIn(0, scrollState.maxValue)
-                    scrollState.animateScrollTo(target)
-                    break
-                }
-                attempts++
-                delay(16)
-            }
-        }
+            listState.animateScrollToItem(index = 1 + idx, scrollOffset = 0)
         }
     }
 }

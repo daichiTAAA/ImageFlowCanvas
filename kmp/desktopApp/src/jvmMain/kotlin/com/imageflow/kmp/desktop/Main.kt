@@ -243,54 +243,58 @@ private fun ImageFlowDesktopApp() {
                         append(orderedItems.size)
                         selectedItem?.name?.let { append(" - ").append(it) }
                     }
-                    // Restart stream on every item change (even if pipeline stays the same)
-                    val streamKey = selectedItem?.id
-                    androidx.compose.runtime.key(streamKey) {
-                    RealtimeInspectionDesktop(
-                        grpcHost = grpcHost,
-                        grpcPort = grpcPort,
-                        pipelineId = selectedPipelineId,
-                        authToken = authToken,
-                        orderLabel = orderLabel,
-                        renderUi = false,
-                        targetItemId = selectedItem?.id,
-                        processingParams = buildMap {
-                            uiState.currentProduct?.productCode?.let { put("product_code", it) }
-                            processCode?.let { put("process_code", it) }
-                            // Pass explicit target item id to help server-side disambiguation
-                            selectedItem?.id?.let { put("target_item_id", it) }
-                            // Include pipeline params from the selected item
-                            (selectedItem?.pipeline_params ?: emptyMap()).forEach { (k, v) -> put(k, v) }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        onDetectionsUpdated = { det, ms ->
-                            // legacy counter-only path
-                            viewModel.onRealtimeAiUpdate(det, ms, selectedPipelineId)
-                        },
-                        onRealtimeUpdate = { det, ms, plId, details, serverJudgment ->
-                            viewModel.onRealtimeAiUpdate(det, ms, plId, details, serverJudgment)
-                        },
-                        onOkSnapshot = { plId, jpeg, details ->
-                            // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
-                            val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
-                            if (!itemId.isNullOrBlank()) {
-                                if (humanDecisions[itemId] == null) {
-                                    okSnapshots[itemId] = OkSnap(jpeg, details)
+                    // Only stream for items that are NOT human-OK
+                    val streamEnabled = selectedItem?.id?.let { humanDecisions[it] != com.imageflow.kmp.models.HumanResult.OK } == true
+                    if (streamEnabled) {
+                        // Restart stream on every item change (even if pipeline stays the same)
+                        val streamKey = selectedItem?.id
+                        androidx.compose.runtime.key(streamKey) {
+                            RealtimeInspectionDesktop(
+                                grpcHost = grpcHost,
+                                grpcPort = grpcPort,
+                                pipelineId = selectedPipelineId,
+                                authToken = authToken,
+                                orderLabel = orderLabel,
+                                renderUi = false,
+                                targetItemId = selectedItem?.id,
+                                processingParams = buildMap {
+                                    uiState.currentProduct?.productCode?.let { put("product_code", it) }
+                                    processCode?.let { put("process_code", it) }
+                                    // Pass explicit target item id to help server-side disambiguation
+                                    selectedItem?.id?.let { put("target_item_id", it) }
+                                    // Include pipeline params from the selected item
+                                    (selectedItem?.pipeline_params ?: emptyMap()).forEach { (k, v) -> put(k, v) }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                onDetectionsUpdated = { det, ms ->
+                                    // legacy counter-only path
+                                    viewModel.onRealtimeAiUpdate(det, ms, selectedPipelineId)
+                                },
+                                onRealtimeUpdate = { det, ms, plId, details, serverJudgment ->
+                                    viewModel.onRealtimeAiUpdate(det, ms, plId, details, serverJudgment)
+                                },
+                                onOkSnapshot = { plId, jpeg, details ->
+                                    // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
+                                    val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
+                                    if (!itemId.isNullOrBlank()) {
+                                        if (humanDecisions[itemId] == null) {
+                                            okSnapshots[itemId] = OkSnap(jpeg, details)
+                                        }
+                                    }
+                                },
+                                onPreviewFrame = { plId, jpeg, details, sj ->
+                                    // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
+                                    val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
+                                    if (!itemId.isNullOrBlank()) {
+                                        // Keep realtime updating unless human OK is already confirmed for this item
+                                        val humanOk = humanDecisions[itemId] == com.imageflow.kmp.models.HumanResult.OK
+                                        if (!humanOk) {
+                                            realtimeByItem[itemId] = RtFrame(jpeg, details, sj)
+                                        }
+                                    }
                                 }
-                            }
-                        },
-                        onPreviewFrame = { plId, jpeg, details, sj ->
-                            // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
-                            val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
-                            if (!itemId.isNullOrBlank()) {
-                                // Keep realtime updating unless human OK is already confirmed for this item
-                                val humanOk = humanDecisions[itemId] == com.imageflow.kmp.models.HumanResult.OK
-                                if (!humanOk) {
-                                    realtimeByItem[itemId] = RtFrame(jpeg, details, sj)
-                                }
-                            }
+                            )
                         }
-                    )
                     }
                     val processName = processes.firstOrNull { it.process_code == processCode }?.process_name
                     // Emit scroll request when advancing after human OK
@@ -320,6 +324,13 @@ private fun ImageFlowDesktopApp() {
                         },
                         onItemHumanReview = { itemId, result ->
                             humanDecisions[itemId] = result
+                            // Create sticky OK snapshot immediately from latest realtime if available
+                            if (result == com.imageflow.kmp.models.HumanResult.OK && okSnapshots[itemId] == null) {
+                                val rt = realtimeByItem[itemId]
+                                if (rt != null) {
+                                    okSnapshots[itemId] = OkSnap(rt.bytes, rt.dets)
+                                }
+                            }
                             // If current item was confirmed, advance to next
                             val idx = orderedItems.indexOfFirst { it.id == itemId }
                             if (idx >= 0 && idx == currentIdx) {
