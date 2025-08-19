@@ -172,16 +172,8 @@ fun DesktopInspectionDetailPanel(
                 }
             }
         }
-        // Auto-select first visible item while user scrolls
-        LaunchedEffect(listState, currentIndex) {
-            snapshotFlow { listState.firstVisibleItemIndex }
-                .collectLatest { firstIdx ->
-                    if (listState.isScrollInProgress) {
-                        val idx = (firstIdx - 1).coerceIn(0, ordered.lastIndex)
-                        if (idx != currentIndex) onSelectItemIndex(idx)
-                    }
-                }
-        }
+        // Note: We no longer auto-select based on scroll position to avoid
+        // fighting with programmatic selection after human OK.
         // Programmatic scroll to requested item index (align to top)
         LaunchedEffect(scrollRequestSeq) {
             val idx = scrollRequestIndex ?: return@LaunchedEffect
