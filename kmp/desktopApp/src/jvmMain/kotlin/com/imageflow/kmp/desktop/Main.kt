@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
@@ -131,12 +132,22 @@ private fun ImageFlowDesktopApp() {
         }
 
         AppScreen.INSPECTION_DETAIL -> {
-            ScreenWithTopBar(title = "検査詳細", onBack = { currentScreen = AppScreen.MAIN }) {
-                val settingsVm = remember { SettingsViewModel() }
-                val baseUrl by settingsVm.baseUrl.collectAsState()
-                val authToken by settingsVm.authToken.collectAsState()
-                val processCode by settingsVm.processCode.collectAsState()
-                val processes by settingsVm.processes.collectAsState()
+            val settingsVm = remember { SettingsViewModel() }
+            val baseUrl by settingsVm.baseUrl.collectAsState()
+            val authToken by settingsVm.authToken.collectAsState()
+            val processCode by settingsVm.processCode.collectAsState()
+            val processes by settingsVm.processes.collectAsState()
+            ScreenWithTopBar(
+                title = "検査詳細",
+                onBack = { currentScreen = AppScreen.MAIN },
+                rightInfo = {
+                    if (!processCode.isNullOrBlank()) {
+                        Row(modifier = Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("工程コード：${processCode!!}", style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                }
+            ) {
                 val (grpcHost, grpcPort) = remember(baseUrl) { parseGrpcEndpoint(baseUrl) }
                 // Ensure token is valid for every inspection session
                 var tokenReady by remember { mutableStateOf<Boolean?>(null) }
@@ -408,6 +419,7 @@ private fun parseGrpcEndpoint(baseUrl: String?): Pair<String, Int> {
 private fun ScreenWithTopBar(
     title: String,
     onBack: () -> Unit,
+    rightInfo: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     Scaffold(
@@ -421,6 +433,9 @@ private fun ScreenWithTopBar(
                             contentDescription = "戻る"
                         )
                     }
+                },
+                actions = {
+                    rightInfo?.invoke()
                 }
             )
         }

@@ -71,8 +71,7 @@ fun DesktopInspectionDetailPanel(
         // Top: Product target (left) + Status (right)
         Row(Modifier.fillMaxWidth()) {
             Column(Modifier.weight(3f).padding(end = 8.dp)) {
-                // Process info above target
-                Text("工程コード: ${processCode ?: "-"}", style = MaterialTheme.typography.titleSmall)
+                // 工程コードはトップバー右側に表示。ここでは工程名のみ任意表示。
                 if (!processName.isNullOrBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Text("工程名: ${processName}")
