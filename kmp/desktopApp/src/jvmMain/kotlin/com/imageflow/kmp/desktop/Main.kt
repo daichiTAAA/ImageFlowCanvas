@@ -232,6 +232,7 @@ private fun ImageFlowDesktopApp() {
                         append(orderedItems.size)
                         selectedItem?.name?.let { append(" - ").append(it) }
                     }
+                    androidx.compose.runtime.key(selectedItem?.id) {
                     RealtimeInspectionDesktop(
                         grpcHost = grpcHost,
                         grpcPort = grpcPort,
@@ -273,6 +274,7 @@ private fun ImageFlowDesktopApp() {
                             }
                         }
                     )
+                    }
                     val processName = processes.firstOrNull { it.process_code == processCode }?.process_name
                     DesktopInspectionDetailPanel(
                         currentProduct = uiState.currentProduct,
