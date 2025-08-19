@@ -137,11 +137,11 @@ fun DesktopInspectionDetailPanel(
                     Modifier
                         .fillMaxWidth()
                         .onGloballyPositioned { coords -> itemRects[item.id] = coords.boundsInParent() }
-                        .padding(vertical = if (isCurrent) 4.dp else 2.dp)
+                        .padding(vertical = 4.dp)
                         .clickable { onSelectItemIndex(idx) },
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    val nameStyle = if (isCurrent) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall
+                    val nameStyle = MaterialTheme.typography.bodySmall
                     Text("[${item.execution_order}] ${item.name} (${item.type})", color = MaterialTheme.colorScheme.onSurfaceVariant, style = nameStyle)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         val aiStatus = if (okSnapshots.containsKey(item.id)) "OK" else realtimeSnapshots[item.id]?.second
@@ -163,47 +163,23 @@ fun DesktopInspectionDetailPanel(
                     }
                 }
                 // Content row: show last OK image on the right (single panel)
-                Row(Modifier.fillMaxWidth().padding(bottom = if (isCurrent) 8.dp else 4.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
                     Column(Modifier.fillMaxWidth()) {
                         val ok = okSnapshots[item.id]
                         val rt = realtimeSnapshots[item.id]
-                        // Dynamic sizing: center-weighted with full-size guarantee for current item
-                        val storedRects = itemRects[item.id]
-                        val (visibleFraction, centerWeight) = if (storedRects != null && viewportHeight > 0f) {
-                            val top = storedRects.top - scrollState.value
-                            val bottom = storedRects.bottom - scrollState.value
-                            val visible = (kotlin.math.min(bottom, viewportHeight) - kotlin.math.max(top, 0f)).coerceAtLeast(0f)
-                            val fVis = (visible / storedRects.height).coerceIn(0f, 1f)
-                            val center = (top + bottom) / 2f
-                            val mid = viewportHeight / 2f
-                            val dist = kotlin.math.abs(center - mid)
-                            val fCen = (1f - (dist / (viewportHeight / 2f))).coerceIn(0f, 1f)
-                            fVis to fCen
-                        } else 0f to 0f
-                        val eased = if (isCurrent) {
-                            // Prefer full size when the current item's header is fully visible,
-                            // otherwise use the better of visibility and centeredness.
-                            if (visibleFraction > 0.98f) 1f else kotlin.math.max(visibleFraction, Math.pow(centerWeight.toDouble(), 0.6).toFloat())
-                        } else {
-                            Math.pow(centerWeight.toDouble(), 0.6).toFloat()
-                        }
-                        val baseMin = if (isCurrent) 240.dp else 140.dp
-                        val baseMax = if (isCurrent) 320.dp else 220.dp
-                        val maxH = with(LocalDensity.current) {
-                            val minPx = baseMin.toPx(); val maxPx = baseMax.toPx()
-                            ((minPx + (maxPx - minPx) * eased) / this.density).dp
-                        }
+                        // Fixed sizing: remove dynamic size changes based on scroll
+                        val maxH = 240.dp
                         when {
                             ok != null -> {
                                 // Show last OK snapshot with overlay
-                                SnapshotWithOverlay(bytes = ok.first, detections = ok.second, compact = !isCurrent, showOverlay = true, maxHeightDp = maxH)
+                                SnapshotWithOverlay(bytes = ok.first, detections = ok.second, compact = false, showOverlay = true, maxHeightDp = maxH)
                             }
                             rt != null -> {
                                 // Fallback: show latest realtime frame for the item with overlay
-                                SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = !isCurrent, showOverlay = true, maxHeightDp = maxH)
+                                SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = true, maxHeightDp = maxH)
                             }
                             else -> {
-                                Text(if (isCurrent) "OK画像なし" else "", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("OK画像なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
