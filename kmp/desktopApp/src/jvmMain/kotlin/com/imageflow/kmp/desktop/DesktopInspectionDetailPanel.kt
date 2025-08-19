@@ -22,6 +22,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.clickable
@@ -38,6 +39,8 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 @Composable
 fun DesktopInspectionDetailPanel(
     currentProduct: ProductInfo?,
+    processCode: String? = null,
+    processName: String? = null,
     inspectionState: InspectionState,
     progress: Float,
     lastAiResult: AiInspectionResult?,
@@ -56,6 +59,13 @@ fun DesktopInspectionDetailPanel(
         // Top: Product target (left) + Status (right)
         Row(Modifier.fillMaxWidth()) {
             Column(Modifier.weight(3f).padding(end = 8.dp)) {
+                // Process info above target
+                Text("工程コード: ${processCode ?: "-"}", style = MaterialTheme.typography.titleSmall)
+                if (!processName.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text("工程名: ${processName}")
+                }
+                Spacer(Modifier.height(6.dp))
                 Text("検査対象", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 if (currentProduct != null) {
@@ -67,20 +77,6 @@ fun DesktopInspectionDetailPanel(
                     Text("型式未選択", color = MaterialTheme.colorScheme.error)
                 }
             }
-            Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                Text("状態", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
-                val pct = (progress * 100).toInt()
-                Text("${stateLabel(inspectionState)} / ${pct}%")
-                if (isLoading) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("処理中...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                errorMessage?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text("エラー: ${it}", color = MaterialTheme.colorScheme.error)
-                }
-            }
             // Realtime preview area (current item only)
             Column(Modifier.weight(2f)) {
                 val ordered = inspectionItems.sortedBy { it.execution_order }
@@ -89,7 +85,8 @@ fun DesktopInspectionDetailPanel(
                 Text("リアルタイム", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 if (rt != null) {
-                    SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false)
+                    // リアルタイムプレビューにはバウンディングボックスを表示しない
+                    SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = false, showOverlay = false)
                 } else {
                     Text("待機中", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -128,23 +125,24 @@ fun DesktopInspectionDetailPanel(
                         )
                     }
                 }
-                // Content row: last OK (left) | AI result (right)
+                // Content row: show last OK image on the right (single panel)
                 Row(Modifier.fillMaxWidth().padding(bottom = if (isCurrent) 8.dp else 4.dp)) {
-                    // Last OK (left)
-                    Column(Modifier.weight(1f).padding(end = 4.dp)) {
+                    Column(Modifier.fillMaxWidth()) {
                         val ok = okSnapshots[item.id]
-                        if (ok != null) SnapshotWithOverlay(bytes = ok.first, detections = ok.second, compact = !isCurrent)
-                        else Text(if (isCurrent) "OK画像なし" else "", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    // AI result (right)
-                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                        if (isCurrent && !activePipelineId.isNullOrBlank() && item.pipeline_id == activePipelineId && lastAiResult != null) {
-                            Text("判定: ${lastAiResult.overallResult}")
-                            Text("信頼度: ${(lastAiResult.confidence * 100).toInt()}%")
-                            Text("処理時間: ${lastAiResult.processingTimeMs}ms")
-                            Text("検出: ${lastAiResult.detectedDefects.size}件", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else if (isCurrent) {
-                            Text("AI結果なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val rt = realtimeSnapshots[item.id]
+                        val maxH = if (isCurrent) 280.dp else 180.dp
+                        when {
+                            ok != null -> {
+                                // Show last OK snapshot with overlay
+                                SnapshotWithOverlay(bytes = ok.first, detections = ok.second, compact = !isCurrent, showOverlay = true, maxHeightDp = maxH)
+                            }
+                            rt != null -> {
+                                // Fallback: show latest realtime frame for the item with overlay
+                                SnapshotWithOverlay(bytes = rt.first.first, detections = rt.first.second, compact = !isCurrent, showOverlay = true, maxHeightDp = maxH)
+                            }
+                            else -> {
+                                Text(if (isCurrent) "OK画像なし" else "", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
@@ -171,7 +169,9 @@ private fun stateLabel(state: InspectionState): String = when (state) {
 private fun SnapshotWithOverlay(
     bytes: ByteArray,
     detections: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>,
-    compact: Boolean = false
+    compact: Boolean = false,
+    showOverlay: Boolean = true,
+    maxHeightDp: Dp? = null
 ) {
     val img = remember(bytes) {
         kotlin.runCatching { org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()
@@ -184,33 +184,54 @@ private fun SnapshotWithOverlay(
         val boxW = maxWidth
         val scale = with(density) { boxW.toPx() / imgW.toFloat() }
         val boxHdp = with(density) { (imgH.toFloat() * scale).toDp() }
-        val h = if (compact) boxHdp * 0.6f else boxHdp
+        var h = if (compact) boxHdp * 0.6f else boxHdp
+        maxHeightDp?.let { limit -> if (h > limit) h = limit }
         Box(Modifier.width(boxW).height(h)) {
             Image(bitmap = img, contentDescription = "OK snapshot", modifier = Modifier.matchParentSize())
-            Canvas(Modifier.matchParentSize()) {
-                val sx = size.width / imgW.toFloat()
-                val sy = size.height / imgH.toFloat()
-                detections.forEach { d ->
-                    val x = d.x1 * sx
-                    val y = d.y1 * sy
-                    val w = (d.x2 - d.x1) * sx
-                    val h = (d.y2 - d.y1) * sy
-                    drawRect(
-                        color = Color(0xFF00C8FF),
-                        topLeft = Offset(x, y),
-                        size = Size(w, h),
-                        style = Stroke(width = 2f)
-                    )
+            if (showOverlay) {
+                // Compute actual draw area (letterboxing aware): scale = min, with offsets
+                Canvas(Modifier.matchParentSize()) {
+                    val scale = kotlin.math.min(size.width / imgW.toFloat(), size.height / imgH.toFloat())
+                    val drawW = imgW * scale
+                    val drawH = imgH * scale
+                    val offX = (size.width - drawW) / 2f
+                    val offY = (size.height - drawH) / 2f
+                    detections.forEach { d ->
+                        val x = offX + d.x1 * scale
+                        val y = offY + d.y1 * scale
+                        val w = (d.x2 - d.x1) * scale
+                        val h = (d.y2 - d.y1) * scale
+                        drawRect(
+                            color = Color(0xFFC62828), // red for better contrast
+                            topLeft = Offset(x, y),
+                            size = Size(w, h),
+                            style = Stroke(width = 2f)
+                        )
+                    }
                 }
-            }
-            // Simple labels placed above top-left of each box
-            detections.forEach { d ->
-                val sx = with(density) { (boxW.toPx() / imgW.toFloat()) }
-                val sy = sx
-                val xdp = with(density) { (d.x1 * sx).toDp() }
-                val ydp = with(density) { (d.y1 * sy).toDp() }
-                Box(Modifier.offset(xdp, ydp).padding(2.dp)) {
-                    AssistChip(onClick = {}, label = { Text("${d.className} ${"%.0f".format(d.confidence * 100)}%") })
+                // Place labels using same offsets/scale as above
+                val scale = kotlin.math.min(with(density) { (boxW.toPx()) } / imgW.toFloat(), with(density) { (h.toPx()) } / imgH.toFloat())
+                val drawW = imgW * scale
+                val drawH = imgH * scale
+                val offX = (with(density) { boxW.toPx() } - drawW) / 2f
+                val offY = (with(density) { h.toPx() } - drawH) / 2f
+                detections.forEach { d ->
+                    val xdp = with(density) { (offX + d.x1 * scale).toDp() }
+                    val ydp = with(density) { (offY + d.y1 * scale).toDp() }
+                    Box(
+                        Modifier
+                            .offset(xdp, ydp)
+                            .padding(2.dp)
+                            .border(1.dp, Color(0xFFFFCDD2))
+                            .background(Color(0x44000000))  // higher transparency
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "${d.className} ${"%.0f".format(d.confidence * 100)}%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
             }
         }

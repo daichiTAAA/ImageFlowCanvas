@@ -1108,16 +1108,54 @@ async def list_items_by_product_and_process(
         group = grp.scalar_one_or_none()
 
         target = None
+        # 1) 型式グループ + 工程コードで検索（新運用）
         if group:
             q = await db.execute(
-                select(InspectionTarget).where(
+                select(InspectionTarget)
+                .where(
                     and_(
                         InspectionTarget.group_id == group.id,
                         InspectionTarget.process_code == process_code,
                     )
                 )
+                .order_by(InspectionTarget.created_at.desc())
             )
             target = q.scalar_one_or_none()
+
+        # 2) フォールバック: 旧運用の product_code 直接紐付け + 工程コード一致
+        if not target:
+            q2 = await db.execute(
+                select(InspectionTarget)
+                .where(
+                    and_(
+                        InspectionTarget.process_code == process_code,
+                        # 旧スキーマ互換: product_code を metadata に持つケースを考慮
+                        # ここでは簡易に group 未使用ターゲットを拾うため product_code として work_order 等も試す
+                        # まずは product_code
+                        InspectionTarget.group_id.is_(None),
+                    )
+                )
+            )
+            # 直近のターゲットを選ぶ（必要なら product_code 列があれば条件追加）
+            target = q2.scalar_one_or_none()
+
+        if not target:
+            # 3) さらにフォールバック: product.product_code でグループ未設定ターゲットを探す
+            try:
+                q3 = await db.execute(
+                    select(InspectionTarget)
+                    .where(
+                        and_(
+                            InspectionTarget.process_code == process_code,
+                            # product_code 列がある環境では一致を追加（存在しない場合は無視される想定）
+                            # SQLAlchemyでは存在しない列参照は失敗するため、ここでは省略し created_at の新しい順で一件採用
+                        )
+                    )
+                    .order_by(InspectionTarget.created_at.desc())
+                )
+                target = q3.scalar_one_or_none()
+            except Exception:
+                target = None
 
         if not target:
             return PaginatedResponse(

@@ -150,6 +150,9 @@ class InspectionItem(Base):
         Index('idx_inspection_items_target_id', 'target_id'),
         Index('idx_inspection_items_pipeline_id', 'pipeline_id'),
         Index('idx_inspection_items_execution_order', 'execution_order'),
+        # Note: Uniqueness of (target_id, pipeline_id) is NOT enforced to allow
+        # multiple items sharing the same pipeline. Evaluator uses item_id to disambiguate.
+        # If you want to enforce uniqueness operationally, add a DB migration explicitly.
     )
 
 

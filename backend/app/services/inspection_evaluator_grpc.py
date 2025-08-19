@@ -132,15 +132,82 @@ class EvaluationCore:
             return ok(ok_min and ok_max), {"detected": str(det_count), "min": str(mn or ""), "max": str(mx or "")}
         return ok(det_count == 0), {"detected": str(det_count)}
 
+    async def resolve_criteria_by_item(self, item_id: str):
+        """Resolve criteria directly from an item_id regardless of pipeline.
+        Returns dict with keys: criteria_id, item_id, judgment_type, spec or None.
+        """
+        if not item_id:
+            return None
+        import uuid
+        try:
+            item_uuid = uuid.UUID(item_id)
+        except Exception:
+            return None
+        async with AsyncSessionLocal() as session:
+            item = (
+                await session.execute(
+                    select(InspectionItem).where(InspectionItem.id == item_uuid)
+                )
+            ).scalars().first()
+            if not item or not item.criteria_id:
+                return None
+            crit = (
+                await session.execute(
+                    select(InspectionCriteria).where(InspectionCriteria.id == item.criteria_id)
+                )
+            ).scalars().first()
+            if not crit:
+                return None
+            return {
+                "criteria_id": str(crit.id),
+                "item_id": str(item.id),
+                "judgment_type": crit.judgment_type,
+                "spec": crit.spec,
+            }
+
 
 class InspectionEvaluatorServicer(evaluator_pb2_grpc.InspectionEvaluatorServicer):
     def __init__(self):
         self.core = EvaluationCore()
 
     async def EvaluateDetections(self, request, context):
-        criteria = await self.core.resolve_criteria(
-            request.product_code, request.process_code, request.pipeline_id
-        )
+        # Prefer explicit target item id in request body
+        item_override: Optional[str] = getattr(request, 'item_id', None) or None
+        try:
+            logger.info(
+                "[evaluator-backend] EvaluateDetections: req.item_id=%s pc=%s pr=%s pl=%s det=%s",
+                item_override,
+                getattr(request, 'product_code', None),
+                getattr(request, 'process_code', None),
+                getattr(request, 'pipeline_id', None),
+                len(getattr(request, 'detections', []) or []),
+            )
+        except Exception:
+            pass
+
+        criteria = None
+        if item_override:
+            criteria = await self.core.resolve_criteria_by_item(item_override)
+            if criteria:
+                try:
+                    logger.info(
+                        "[evaluator-backend] criteria resolved by item_id: item=%s criteria=%s",
+                        criteria.get("item_id"), criteria.get("criteria_id")
+                    )
+                except Exception:
+                    pass
+        if not criteria:
+            criteria = await self.core.resolve_criteria(
+                request.product_code, request.process_code, request.pipeline_id
+            )
+            if criteria:
+                try:
+                    logger.info(
+                        "[evaluator-backend] criteria resolved by pipeline: item=%s criteria=%s",
+                        criteria.get("item_id"), criteria.get("criteria_id")
+                    )
+                except Exception:
+                    pass
         if not criteria:
             return evaluator_pb2.EvaluationResponse(
                 judgment="PENDING", pipeline_id=request.pipeline_id
@@ -188,4 +255,3 @@ def get_evaluator_server() -> InspectionEvaluatorServer:
     if _server_singleton is None:
         _server_singleton = InspectionEvaluatorServer()
     return _server_singleton
-

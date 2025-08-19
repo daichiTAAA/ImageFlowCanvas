@@ -14,6 +14,8 @@ message EvaluationRequest {
   string process_code = 2;    // 工程コード
   string pipeline_id = 3;     // パイプラインUUID（文字列）
   repeated Detection detections = 4; // 推論結果
+  // Optional: explicit inspection item to evaluate against
+  string item_id = 5;         // 指定時はこの項目の基準を優先
 }
 
 message EvaluationResponse {
@@ -24,4 +26,3 @@ message EvaluationResponse {
   map<string, string> metrics = 5; // 任意メトリクス（検出数等）
   string reason = 6;          // 判定根拠の簡易説明
 }
-

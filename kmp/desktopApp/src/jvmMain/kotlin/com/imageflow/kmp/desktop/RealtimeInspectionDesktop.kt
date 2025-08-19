@@ -26,7 +26,7 @@ import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.FFmpegFrameFilter
 import org.bytedeco.javacv.Java2DFrameConverter
 import org.bytedeco.javacv.Frame
-import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_0RGB
+import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGR0
 import org.slf4j.LoggerFactory
 import javax.swing.SwingUtilities
 private val LOG = LoggerFactory.getLogger("RealtimeInspection")
@@ -50,6 +50,7 @@ fun RealtimeInspectionDesktop(
     val log = remember { LOG }
     var grabber by remember { mutableStateOf<FFmpegFrameGrabber?>(null) }
     var imagePanel by remember { mutableStateOf<RtPreviewPanel?>(null) }
+    // no explicit RGB filter; enforce pixel_format at grabber level
     var lastServerJudgment by remember { mutableStateOf<String?>(null) }
     var channel by remember { mutableStateOf<ManagedChannel?>(null) }
     var running by remember { mutableStateOf(true) } // 自動開始
@@ -59,7 +60,7 @@ fun RealtimeInspectionDesktop(
     var configVersion by remember { mutableStateOf(0) }
     // Simple camera controls
     var deviceIndex by remember { mutableStateOf(0) }
-    var pixelFmt by remember { mutableStateOf(PixelFmt.BGR0) }
+    var pixelFmt by remember { mutableStateOf(PixelFmt.RGB0) }
     var resolution by remember { mutableStateOf(Res(1280, 720)) }
     var fps by remember { mutableStateOf(30) }
 
@@ -128,15 +129,17 @@ fun RealtimeInspectionDesktop(
             // Print device list to logs (helps on macOS to pick the right index)
             try { listAvFoundationDevices() } catch (_: Throwable) {}
 
-            val g = openBestAvFoundationGrabber() ?: FFmpegFrameGrabber("0").apply {
-                format = "avfoundation"
-                frameRate = 30.0
-                imageWidth = 1280
-                imageHeight = 720
-                pixelFormat = AV_PIX_FMT_0RGB
-                audioChannels = 0
-                try { start() } catch (_: Throwable) {}
-            }
+            val g = initGrabber(deviceIndex, resolution, fps, pixelFmt)
+                ?: FFmpegFrameGrabber(deviceIndex.toString()).apply {
+                    format = "avfoundation"
+                    imageWidth = resolution.w
+                    imageHeight = resolution.h
+                    audioChannels = 0
+                    setOption("video_device_index", deviceIndex.toString())
+                    // Fallback pixel_format
+                    setOption("pixel_format", pixelFmt.ffmpegOpt)
+                    try { start() } catch (_: Throwable) {}
+                }
             grabber = g
             val converter = Java2DFrameConverter()
             // Warm-up: drop initial frames to stabilize timebase
@@ -196,10 +199,11 @@ fun RealtimeInspectionDesktop(
             try {
                 withContext(Dispatchers.Main) { startAt = System.currentTimeMillis(); frameCount = 0 }
                 while (isActive && running) {
-                    val frame: Frame? = try { g?.grab() } catch (t: Throwable) {
+                    val raw: Frame? = try { g?.grab() } catch (t: Throwable) {
                         log.warn("grab failed: {}", t.message)
                         null
                     }
+                    val frame: Frame? = raw
                     val img0 = frame?.let { converter.convert(it) }
                     val img = img0?.let { ensureRgb(it) } ?: continue
                     SwingUtilities.invokeLater { imagePanel?.setImage(img) }
@@ -318,7 +322,7 @@ private class RtPreviewPanel : JPanel() {
             val y1 = (offY + d.y1 * scale).toInt()
             val w = ((d.x2 - d.x1) * scale).toInt()
             val h = ((d.y2 - d.y1) * scale).toInt()
-            val color = java.awt.Color(0, 200, 255) // cyan-like
+            val color = java.awt.Color(200, 0, 0) // red for visibility
             g2.color = color
             g2.drawRect(x1, y1, w, h)
             val label = buildString {
@@ -358,7 +362,7 @@ private fun openBestAvFoundationGrabber(): FFmpegFrameGrabber? {
             g.frameRate = 30.0
             g.imageWidth = 1280
             g.imageHeight = 720
-            g.pixelFormat = AV_PIX_FMT_0RGB
+            g.pixelFormat = AV_PIX_FMT_BGR0
             g.audioChannels = 0
             g.start()
             val frame = g.grab()
@@ -397,8 +401,8 @@ private fun initGrabber(deviceIndex: Int, res: Res, fps: Int?, fmt: PixelFmt): F
         g.imageWidth = res.w
         g.imageHeight = res.h
         g.audioChannels = 0
-        // Do not force pixel_format; let device choose and convert later via filter
-        // g.setOption("pixel_format", fmt.ffmpegOpt)
+        // Enforce pixel format to avoid red/blue channel swap on macOS
+        g.setOption("pixel_format", fmt.ffmpegOpt)
         g.setOption("video_size", "${res.w}x${res.h}")
         if (fps != null) {
             val fpsStr = String.format(java.util.Locale.US, "%.6f", if (fps == 30) 30.000030 else fps.toDouble())

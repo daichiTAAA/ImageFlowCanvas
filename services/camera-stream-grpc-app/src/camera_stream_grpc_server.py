@@ -32,6 +32,8 @@ from imageflow.v1 import filter_pb2
 from imageflow.v1 import filter_pb2_grpc
 from imageflow.v1 import common_pb2
 from grpc_health.v1 import health_pb2, health_pb2_grpc
+from imageflow.v1 import evaluator_pb2
+from imageflow.v1 import evaluator_pb2_grpc
 
 # Setup logging
 logging.basicConfig(
@@ -60,12 +62,16 @@ class CameraStreamProcessorImplementation(
                 "filter-grpc-service.image-processing.svc.cluster.local:9090"
             )
             backend_default = "http://backend-service.default.svc.cluster.local:8000"
+            evaluator_default = (
+                "inspection-evaluator-grpc-service.image-processing.svc.cluster.local:9090"
+            )
         elif self.deployment_env == "docker":
             # Docker Compose service names
             resize_default = "resize-grpc:9090"
             ai_detection_default = "ai-detection-grpc:9090"
             filter_default = "filter-grpc:9090"
             backend_default = "http://backend:8000"
+            evaluator_default = "inspection-evaluator-grpc:9090"
         else:
             # Nomad with direct IP addressing
             nomad_ip = os.getenv("NOMAD_IP", "192.168.5.15")
@@ -73,6 +79,7 @@ class CameraStreamProcessorImplementation(
             ai_detection_default = f"{nomad_ip}:9091"
             filter_default = f"{nomad_ip}:9093"
             backend_default = f"http://{nomad_ip}:8000"
+            evaluator_default = f"{nomad_ip}:9094"
 
         # gRPC service endpoints with environment-aware defaults
         self.grpc_services = {
@@ -92,6 +99,13 @@ class CameraStreamProcessorImplementation(
                 "endpoint": os.getenv("FILTER_GRPC_ENDPOINT", filter_default),
                 "client_class": filter_pb2_grpc.FilterServiceStub,
                 "timeout": 30.0,
+            },
+            "evaluator": {
+                "endpoint": os.getenv(
+                    "EVALUATOR_GRPC_ENDPOINT", evaluator_default
+                ),
+                "client_class": evaluator_pb2_grpc.InspectionEvaluatorStub,
+                "timeout": 10.0,
             },
         }
 
@@ -302,6 +316,23 @@ class CameraStreamProcessorImplementation(
                         processed_frame.status = (
                             camera_stream_pb2.STREAM_PROCESSING_STATUS_SUCCESS
                         )
+                        # Populate pipeline id always for downstream mapping
+                        if pipeline_id:
+                            processed_frame.pipeline_id = pipeline_id
+
+                        # Try to evaluate detections via inspection-evaluator service
+                        try:
+                            eval_judgment, eval_item_id, eval_criteria_id = self._evaluate_detections(
+                                video_frame, list(result.get("detections", []))
+                            )
+                            if eval_judgment:
+                                processed_frame.judgment = eval_judgment
+                            if eval_item_id:
+                                processed_frame.item_id = eval_item_id
+                            if eval_criteria_id:
+                                processed_frame.criteria_id = eval_criteria_id
+                        except Exception as e:
+                            logger.warning(f"Evaluator call failed: {e}")
                     else:
                         processed_frame.status = (
                             camera_stream_pb2.STREAM_PROCESSING_STATUS_FAILED
@@ -339,6 +370,36 @@ class CameraStreamProcessorImplementation(
             processed_frame.status = camera_stream_pb2.STREAM_PROCESSING_STATUS_FAILED
             processed_frame.error_message = str(e)
             return processed_frame
+
+    def _evaluate_detections(self, video_frame, detections_list: List[ai_detection_pb2.Detection]):
+        """
+        Call the inspection-evaluator to obtain server-side judgment.
+        Returns (judgment, item_id, criteria_id) or (None, None, None) on failure.
+        """
+        if "evaluator" not in self.clients:
+            return (None, None, None)
+        try:
+            client = self.clients["evaluator"]
+            product_code = video_frame.metadata.processing_params.get("product_code", "")
+            process_code = video_frame.metadata.processing_params.get("process_code", "")
+            pipeline_id = video_frame.metadata.pipeline_id or ""
+            # Build request
+            target_item_id = video_frame.metadata.processing_params.get("target_item_id", "")
+            req = evaluator_pb2.EvaluationRequest(
+                product_code=product_code,
+                process_code=process_code,
+                pipeline_id=pipeline_id,
+                detections=detections_list,
+                item_id=target_item_id or "",
+            )
+            resp = client.EvaluateDetections(req, timeout=self.grpc_services["evaluator"]["timeout"])
+            logger.debug(
+                f"Evaluator resp: judgment={resp.judgment} item_id={resp.item_id} criteria_id={resp.criteria_id}"
+            )
+            return (resp.judgment or None, resp.item_id or None, resp.criteria_id or None)
+        except Exception as e:
+            logger.warning(f"EvaluateDetections error: {e}")
+            return (None, None, None)
 
     def _should_skip_frame(self, video_frame):
         """

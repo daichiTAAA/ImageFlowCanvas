@@ -55,6 +55,7 @@ class InspectionTarget(Base):
 
 class InspectionItem(Base):
     __tablename__ = "inspection_items"
+    __table_args__ = ()
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     target_id = Column(UUID(as_uuid=True), ForeignKey('inspection_targets.id'))
     pipeline_id = Column(UUID(as_uuid=True))
@@ -134,6 +135,35 @@ class EvaluatorCore:
                 "spec": crit.spec,
             }
 
+    async def resolve_criteria_by_item(self, item_id: str):
+        if not item_id:
+            return None
+        try:
+            item_uuid = uuid.UUID(item_id)
+        except Exception:
+            return None
+        async with self.SessionFactory() as session:
+            item = (
+                await session.execute(
+                    select(InspectionItem).where(InspectionItem.id == item_uuid)
+                )
+            ).scalars().first()
+            if not item or not item.criteria_id:
+                return None
+            crit = (
+                await session.execute(
+                    select(InspectionCriteria).where(InspectionCriteria.id == item.criteria_id)
+                )
+            ).scalars().first()
+            if not crit:
+                return None
+            return {
+                "criteria_id": str(crit.id),
+                "item_id": str(item.id),
+                "judgment_type": crit.judgment_type,
+                "spec": crit.spec,
+            }
+
     def evaluate(self, detections, criteria: dict):
         det_count = len(detections)
         jt = (criteria.get("judgment_type") or "").upper()
@@ -183,15 +213,33 @@ class InspectionEvaluatorServicer(evaluator_pb2_grpc.InspectionEvaluatorServicer
     async def EvaluateDetections(self, request, context):
         try:
             logger.info(
-                "EvaluateDetections req pc=%s pr=%s pl=%s det=%d",
+                "EvaluateDetections req item_id=%s pc=%s pr=%s pl=%s det=%d",
+                getattr(request, 'item_id', None),
                 request.product_code,
                 request.process_code,
                 request.pipeline_id,
                 len(request.detections),
             )
-            criteria = await self.core.resolve_criteria(
-                request.product_code, request.process_code, request.pipeline_id
-            )
+            # Prefer explicit target item id from request body
+            item_override = request.item_id if hasattr(request, 'item_id') else None
+
+            criteria = None
+            if item_override:
+                criteria = await self.core.resolve_criteria_by_item(item_override)
+                if criteria:
+                    logger.info(
+                        "Resolved by item_id: item=%s criteria=%s",
+                        criteria.get("item_id"), criteria.get("criteria_id")
+                    )
+            if not criteria:
+                criteria = await self.core.resolve_criteria(
+                    request.product_code, request.process_code, request.pipeline_id
+                )
+                if criteria:
+                    logger.info(
+                        "Resolved by pipeline: item=%s criteria=%s",
+                        criteria.get("item_id"), criteria.get("criteria_id")
+                    )
             if not criteria:
                 logger.info("No criteria resolved -> PENDING judgment")
                 return evaluator_pb2.EvaluationResponse(

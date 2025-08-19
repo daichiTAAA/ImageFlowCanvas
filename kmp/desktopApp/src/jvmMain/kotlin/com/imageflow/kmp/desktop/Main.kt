@@ -24,7 +24,8 @@ fun main() = application {
     Window(onCloseRequest = ::exitApplication, title = "ImageFlow Desktop", state = windowState) {
         // Enforce a reasonable minimum window size
         LaunchedEffect(Unit) {
-            window.minimumSize = java.awt.Dimension(1100, 720)
+            // Allow smaller handheld-like screens. Minimum ~360x240.
+            window.minimumSize = java.awt.Dimension(360, 240)
         }
         MaterialTheme {
             ImageFlowDesktopApp()
@@ -135,6 +136,7 @@ private fun ImageFlowDesktopApp() {
                 val baseUrl by settingsVm.baseUrl.collectAsState()
                 val authToken by settingsVm.authToken.collectAsState()
                 val processCode by settingsVm.processCode.collectAsState()
+                val processes by settingsVm.processes.collectAsState()
                 val (grpcHost, grpcPort) = remember(baseUrl) { parseGrpcEndpoint(baseUrl) }
                 // Ensure token is valid for every inspection session
                 var tokenReady by remember { mutableStateOf<Boolean?>(null) }
@@ -192,16 +194,8 @@ private fun ImageFlowDesktopApp() {
                     }
 
                     if (tokenReady == null) {
-                        androidx.compose.material3.Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                androidx.compose.material3.Text("認証確認中...")
-                            }
-                        }
-                        return@ScreenWithTopBar
+                        // Show a small banner but keep the screen composed to avoid tearing down the stream
+                        androidx.compose.material3.AssistChip(onClick = {}, label = { Text("認証確認中...") }, modifier = Modifier.padding(8.dp))
                     }
                     if (tokenReady == false) {
                         androidx.compose.material3.Card(
@@ -249,6 +243,8 @@ private fun ImageFlowDesktopApp() {
                         processingParams = buildMap {
                             uiState.currentProduct?.productCode?.let { put("product_code", it) }
                             processCode?.let { put("process_code", it) }
+                            // Pass explicit target item id to help server-side disambiguation
+                            selectedItem?.id?.let { put("target_item_id", it) }
                             // Include pipeline params from the selected item
                             (selectedItem?.pipeline_params ?: emptyMap()).forEach { (k, v) -> put(k, v) }
                         },
@@ -261,7 +257,8 @@ private fun ImageFlowDesktopApp() {
                             viewModel.onRealtimeAiUpdate(det, ms, plId, details, serverJudgment)
                         },
                         onOkSnapshot = { plId, jpeg, details ->
-                            val itemId = if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else selectedItem?.id
+                            // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
+                            val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
                             if (!itemId.isNullOrBlank()) {
                                 if (humanDecisions[itemId] == null) {
                                     okSnapshots[itemId] = OkSnap(jpeg, details)
@@ -269,14 +266,18 @@ private fun ImageFlowDesktopApp() {
                             }
                         },
                         onPreviewFrame = { plId, jpeg, details, sj ->
-                            val itemId = if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else selectedItem?.id
+                            // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
+                            val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
                             if (!itemId.isNullOrBlank()) {
                                 realtimeByItem[itemId] = RtFrame(jpeg, details, sj)
                             }
                         }
                     )
+                    val processName = processes.firstOrNull { it.process_code == processCode }?.process_name
                     DesktopInspectionDetailPanel(
                         currentProduct = uiState.currentProduct,
+                        processCode = processCode,
+                        processName = processName,
                         inspectionState = inspectionState,
                         progress = if (orderedItems.isNotEmpty()) humanDecisions.size.toFloat() / orderedItems.size.toFloat() else 0f,
                         lastAiResult = uiState.lastAiResult,
