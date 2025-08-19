@@ -243,8 +243,8 @@ private fun ImageFlowDesktopApp() {
                         append(orderedItems.size)
                         selectedItem?.name?.let { append(" - ").append(it) }
                     }
-                    // Switch pipeline per item: restart stream ONLY when pipeline changes
-                    val streamKey = selectedPipelineId
+                    // Restart stream on every item change (even if pipeline stays the same)
+                    val streamKey = selectedItem?.id
                     androidx.compose.runtime.key(streamKey) {
                     RealtimeInspectionDesktop(
                         grpcHost = grpcHost,
@@ -283,7 +283,10 @@ private fun ImageFlowDesktopApp() {
                             // Prefer explicitly selected item id; fallback to pipeline mapping only if needed
                             val itemId = selectedItem?.id ?: if (!plId.isNullOrBlank()) uiState.inspectionItems.firstOrNull { it.pipeline_id == plId }?.id else null
                             if (!itemId.isNullOrBlank()) {
-                                realtimeByItem[itemId] = RtFrame(jpeg, details, sj)
+                                // If item has sticky OK snapshot, ignore further realtime updates for that item
+                                if (!okSnapshots.containsKey(itemId)) {
+                                    realtimeByItem[itemId] = RtFrame(jpeg, details, sj)
+                                }
                             }
                         }
                     )
