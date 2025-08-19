@@ -167,7 +167,23 @@ fun DesktopInspectionDetailPanel(
                     Column(Modifier.fillMaxWidth()) {
                         val ok = okSnapshots[item.id]
                         val rt = realtimeSnapshots[item.id]
-                        val maxH = if (isCurrent) 280.dp else 180.dp
+                        // Dynamic sizing by visible fraction (computed during scroll)
+                        val frac = remember { mutableStateOf(0f) }
+                        val storedRects = itemRects[item.id]
+                        if (storedRects != null && viewportHeight > 0f) {
+                            val top = storedRects.top - scrollState.value
+                            val bottom = storedRects.bottom - scrollState.value
+                            val visible = (kotlin.math.min(bottom, viewportHeight) - kotlin.math.max(top, 0f)).coerceAtLeast(0f)
+                            val f = (visible / storedRects.height).coerceIn(0f, 1f)
+                            frac.value = f
+                        }
+                        val eased = Math.pow(frac.value.toDouble(), 0.6).toFloat()
+                        val baseMin = if (isCurrent) 240.dp else 140.dp
+                        val baseMax = if (isCurrent) 320.dp else 220.dp
+                        val maxH = with(LocalDensity.current) {
+                            val minPx = baseMin.toPx(); val maxPx = baseMax.toPx()
+                            ((minPx + (maxPx - minPx) * eased) / this.density).dp
+                        }
                         when {
                             ok != null -> {
                                 // Show last OK snapshot with overlay

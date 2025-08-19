@@ -112,10 +112,18 @@ fun RealtimeInspectionDesktop(
         }
     }
 
+    // Always call latest callbacks even if this LaunchedEffect doesn't restart
+    val onDetectionsUpdatedState = rememberUpdatedState(onDetectionsUpdated)
+    val onRealtimeUpdateState = rememberUpdatedState(onRealtimeUpdate)
+    val onOkSnapshotState = rememberUpdatedState(onOkSnapshot)
+    val onPreviewFrameState = rememberUpdatedState(onPreviewFrame)
+
     LaunchedEffect(running, deviceIndex, resolution, fps, pixelFmt, configVersion, pipelineId) {
         if (!running) return@LaunchedEffect
         // 重い処理はIOに退避（UIブロック回避）
         withContext(Dispatchers.IO) {
+            // Cooldown to allow previous camera/stream to release when pipeline changes
+            try { delay(200) } catch (_: Throwable) {}
             channel = ManagedChannelBuilder.forAddress(grpcHost, grpcPort)
                 .usePlaintext()
                 .build()
@@ -132,17 +140,31 @@ fun RealtimeInspectionDesktop(
             // Print device list to logs (helps on macOS to pick the right index)
             try { listAvFoundationDevices() } catch (_: Throwable) {}
 
-            val g = initGrabber(deviceIndex, resolution, fps, pixelFmt)
-                ?: FFmpegFrameGrabber(deviceIndex.toString()).apply {
-                    format = "avfoundation"
-                    imageWidth = resolution.w
-                    imageHeight = resolution.h
-                    audioChannels = 0
-                    setOption("video_device_index", deviceIndex.toString())
-                    // Fallback pixel_format
-                    setOption("pixel_format", pixelFmt.ffmpegOpt)
-                    try { start() } catch (_: Throwable) {}
+            // Retry camera init a few times to handle rapid re-initialization between pipelines
+            var g: FFmpegFrameGrabber? = null
+            var tries = 0
+            while (tries < 3 && g == null) {
+                tries++
+                try {
+                    g = initGrabber(deviceIndex, resolution, fps, pixelFmt)
+                        ?: FFmpegFrameGrabber(deviceIndex.toString()).apply {
+                            format = "avfoundation"
+                            imageWidth = resolution.w
+                            imageHeight = resolution.h
+                            audioChannels = 0
+                            setOption("video_device_index", deviceIndex.toString())
+                            setOption("pixel_format", pixelFmt.ffmpegOpt)
+                            start()
+                        }
+                } catch (t: Throwable) {
+                    log.warn("Camera init retry {} failed: {}", tries, t.message)
+                    try { g?.stop() } catch (_: Throwable) {}
+                    try { g?.release() } catch (_: Throwable) {}
+                    g = null
+                    try { delay(150) } catch (_: Throwable) {}
                 }
+            }
+            if (g == null) throw IllegalStateException("Failed to initialize camera after retries")
             grabber = g
             val converter = Java2DFrameConverter()
             // Warm-up: drop initial frames to stabilize timebase
@@ -170,12 +192,12 @@ fun RealtimeInspectionDesktop(
                             }
                             // Prefer server-side fields if available
                             val serverPipelineId = if (resp.pipelineId.isNullOrBlank()) pipelineId else resp.pipelineId
-                            onDetectionsUpdated?.invoke(resp.detectionsCount, resp.processingTimeMs)
+                            onDetectionsUpdatedState.value?.invoke(resp.detectionsCount, resp.processingTimeMs)
                             val serverJudgment = try { resp.judgment } catch (_: Throwable) { null }
                             lastServerJudgment = serverJudgment
                             // Update overlay on preview
                             if (renderUi) imagePanel?.setOverlay(details, serverJudgment)
-                            onRealtimeUpdate?.invoke(
+                            onRealtimeUpdateState.value?.invoke(
                                 resp.detectionsCount,
                                 resp.processingTimeMs,
                                 serverPipelineId,
@@ -185,11 +207,11 @@ fun RealtimeInspectionDesktop(
                             // If server judgment is OK, emit snapshot bytes for persistence
                             if ((serverPipelineId?.isNotBlank() == true || !targetItemId.isNullOrBlank()) && (serverJudgment?.equals("OK", ignoreCase = true) == true)) {
                                 latestJpeg?.let { jpg ->
-                                    try { onOkSnapshot?.invoke(serverPipelineId, jpg, details) } catch (_: Throwable) { }
+                                    try { onOkSnapshotState.value?.invoke(serverPipelineId, jpg, details) } catch (_: Throwable) { }
                                 }
                             }
                             latestJpeg?.let { jpg ->
-                                try { onPreviewFrame?.invoke(serverPipelineId, jpg, details, serverJudgment) } catch (_: Throwable) { }
+                                try { onPreviewFrameState.value?.invoke(serverPipelineId, jpg, details, serverJudgment) } catch (_: Throwable) { }
                             }
                             // Note: ViewModel signature updated to accept server judgment; Main.kt will forward it
                         }

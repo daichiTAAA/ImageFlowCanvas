@@ -233,12 +233,13 @@ private fun ImageFlowDesktopApp() {
                         selectedItem?.name?.let { append(" - ").append(it) }
                     }
                     androidx.compose.runtime.key(selectedItem?.id) {
-                    // Keep a single continuous stream: use a stable pipelineId (first item's pipeline)
-                    val stablePipelineId = remember(orderedItems) { orderedItems.firstOrNull()?.pipeline_id }
+                    // Switch pipeline per item: restart stream when pipeline changes
+                    val streamKey = selectedPipelineId
+                    androidx.compose.runtime.key(streamKey) {
                     RealtimeInspectionDesktop(
                         grpcHost = grpcHost,
                         grpcPort = grpcPort,
-                        pipelineId = stablePipelineId,
+                        pipelineId = selectedPipelineId,
                         authToken = authToken,
                         orderLabel = orderLabel,
                         renderUi = false,
@@ -276,6 +277,7 @@ private fun ImageFlowDesktopApp() {
                             }
                         }
                     )
+                    }
                     }
                     val processName = processes.firstOrNull { it.process_code == processCode }?.process_name
                     // Emit scroll request when advancing after human OK
