@@ -407,3 +407,6 @@ signing.properties
 
 # Kotlin/Compose build cache
 .kotlin/
+
+# Gradle distributions (temporary build files)
+kmp/gradle-*/

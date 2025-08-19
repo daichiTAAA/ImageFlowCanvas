@@ -177,20 +177,24 @@ fun DesktopInspectionDetailPanel(
         // Programmatic scroll to requested item index (align to top)
         LaunchedEffect(scrollRequestSeq) {
             val idx = scrollRequestIndex ?: return@LaunchedEffect
-            // Wait a tick for the list to compose items (robust on Desktop)
-            kotlinx.coroutines.yield()
-            // Ensure the target index exists before animating
+            // Validate the index is within range
+            if (idx < 0 || idx >= ordered.size) return@LaunchedEffect
+            
+            val target = 1 + idx  // Account for the header item
+            
+            // Wait for LazyColumn to compose enough items including the target
             var tries = 0
-            while (tries < 30) {
+            while (tries < 50) { // Increase retry count for robustness
                 val total = listState.layoutInfo.totalItemsCount
-                if (total >= 1 + (ordered.size)) break
+                if (total > target) break // We need at least target+1 items (including header)
                 tries++
-                delay(16)
+                delay(20) // Slightly longer delay for more reliable composition
             }
-            val target = 1 + idx
-            // Force position instantly first, then animate to absorb any small layout diff
-            runCatching { listState.scrollToItem(index = target, scrollOffset = 0) }
-            listState.animateScrollToItem(index = target, scrollOffset = 0)
+            
+            // Use animateScrollToItem only - cleaner and more reliable
+            runCatching {
+                listState.animateScrollToItem(index = target, scrollOffset = 0)
+            }
         }
     }
 }
