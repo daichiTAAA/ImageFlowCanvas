@@ -123,7 +123,7 @@ fun RealtimeInspectionDesktop(
         // 重い処理はIOに退避（UIブロック回避）
         withContext(Dispatchers.IO) {
             // Cooldown to allow previous camera/stream to release when pipeline changes
-            try { delay(200) } catch (_: Throwable) {}
+            try { delay(500) } catch (_: Throwable) {}
             channel = ManagedChannelBuilder.forAddress(grpcHost, grpcPort)
                 .usePlaintext()
                 .build()
@@ -146,6 +146,7 @@ fun RealtimeInspectionDesktop(
             while (tries < 3 && g == null) {
                 tries++
                 try {
+                    // Try requested pixel format first
                     g = initGrabber(deviceIndex, resolution, fps, pixelFmt)
                         ?: FFmpegFrameGrabber(deviceIndex.toString()).apply {
                             format = "avfoundation"
@@ -156,6 +157,11 @@ fun RealtimeInspectionDesktop(
                             setOption("pixel_format", pixelFmt.ffmpegOpt)
                             start()
                         }
+                    // If still null, try the opposite pixel format as a fallback
+                    if (g == null) {
+                        val altFmt = if (pixelFmt == PixelFmt.RGB0) PixelFmt.BGR0 else PixelFmt.RGB0
+                        g = initGrabber(deviceIndex, resolution, fps, altFmt)
+                    }
                 } catch (t: Throwable) {
                     log.warn("Camera init retry {} failed: {}", tries, t.message)
                     try { g?.stop() } catch (_: Throwable) {}
@@ -235,6 +241,10 @@ fun RealtimeInspectionDesktop(
                     withContext(Dispatchers.Main) { frameCount += 1 }
                     val bytes = encodeJpeg(img)
                     latestJpeg = bytes
+                    // Emit a preview frame even before server returns any detections
+                    try {
+                        onPreviewFrameState.value?.invoke(pipelineId, bytes, emptyList(), lastServerJudgment)
+                    } catch (_: Throwable) { }
                     val metaBuilder = CameraStream.VideoMetadata.newBuilder()
                         .setSourceId("desktop-usb-0")
                         .setWidth(img.width)

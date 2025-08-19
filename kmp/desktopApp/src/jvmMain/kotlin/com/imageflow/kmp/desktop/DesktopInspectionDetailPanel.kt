@@ -167,17 +167,26 @@ fun DesktopInspectionDetailPanel(
                     Column(Modifier.fillMaxWidth()) {
                         val ok = okSnapshots[item.id]
                         val rt = realtimeSnapshots[item.id]
-                        // Dynamic sizing by visible fraction (computed during scroll)
-                        val frac = remember { mutableStateOf(0f) }
+                        // Dynamic sizing: center-weighted with full-size guarantee for current item
                         val storedRects = itemRects[item.id]
-                        if (storedRects != null && viewportHeight > 0f) {
+                        val (visibleFraction, centerWeight) = if (storedRects != null && viewportHeight > 0f) {
                             val top = storedRects.top - scrollState.value
                             val bottom = storedRects.bottom - scrollState.value
                             val visible = (kotlin.math.min(bottom, viewportHeight) - kotlin.math.max(top, 0f)).coerceAtLeast(0f)
-                            val f = (visible / storedRects.height).coerceIn(0f, 1f)
-                            frac.value = f
+                            val fVis = (visible / storedRects.height).coerceIn(0f, 1f)
+                            val center = (top + bottom) / 2f
+                            val mid = viewportHeight / 2f
+                            val dist = kotlin.math.abs(center - mid)
+                            val fCen = (1f - (dist / (viewportHeight / 2f))).coerceIn(0f, 1f)
+                            fVis to fCen
+                        } else 0f to 0f
+                        val eased = if (isCurrent) {
+                            // Prefer full size when the current item's header is fully visible,
+                            // otherwise use the better of visibility and centeredness.
+                            if (visibleFraction > 0.98f) 1f else kotlin.math.max(visibleFraction, Math.pow(centerWeight.toDouble(), 0.6).toFloat())
+                        } else {
+                            Math.pow(centerWeight.toDouble(), 0.6).toFloat()
                         }
-                        val eased = Math.pow(frac.value.toDouble(), 0.6).toFloat()
                         val baseMin = if (isCurrent) 240.dp else 140.dp
                         val baseMax = if (isCurrent) 320.dp else 220.dp
                         val maxH = with(LocalDensity.current) {
