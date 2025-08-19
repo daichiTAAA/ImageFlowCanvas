@@ -12,6 +12,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,6 +36,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInParent
 import com.imageflow.kmp.models.AiInspectionResult
 import com.imageflow.kmp.models.ProductInfo
 import com.imageflow.kmp.state.InspectionState
@@ -95,7 +103,15 @@ fun DesktopInspectionDetailPanel(
         HorizontalDivider()
         Spacer(Modifier.height(8.dp))
         // Items list (drum-roll: 全項目表示、現在項目を大きく、他は小さく)
-        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        val scrollState = rememberScrollState()
+        val itemRects = remember { mutableStateMapOf<String, Rect>() }
+        var viewportHeight by remember { mutableStateOf(0f) }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned { viewportHeight = it.size.height.toFloat() }
+        ) {
+        Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
             Text("検査項目 (${inspectionItems.size})", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             val activePipelineId = lastAiResult?.pipelineId
@@ -103,7 +119,14 @@ fun DesktopInspectionDetailPanel(
             ordered.forEachIndexed { idx, item ->
                 val isCurrent = idx == currentIndex
                 // Header row for item: name + AI status chip and 目視OK
-                Row(Modifier.fillMaxWidth().padding(vertical = if (isCurrent) 4.dp else 2.dp).clickable { onSelectItemIndex(idx) }, horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { coords -> itemRects[item.id] = coords.boundsInParent() }
+                        .padding(vertical = if (isCurrent) 4.dp else 2.dp)
+                        .clickable { onSelectItemIndex(idx) },
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     val nameStyle = if (isCurrent) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall
                     Text("[${item.execution_order}] ${item.name} (${item.type})", color = MaterialTheme.colorScheme.onSurfaceVariant, style = nameStyle)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -148,6 +171,22 @@ fun DesktopInspectionDetailPanel(
                 }
                 HorizontalDivider()
             }
+        }
+        // Auto-select the item that is most visible in the viewport when scrolling
+        LaunchedEffect(scrollState.value, itemRects.size, viewportHeight) {
+            if (viewportHeight <= 0f || itemRects.isEmpty()) return@LaunchedEffect
+            var bestIdx = currentIndex
+            var bestVisible = -1f
+            val ordered = inspectionItems.sortedBy { it.execution_order }
+            ordered.forEachIndexed { idx, item ->
+                val r = itemRects[item.id] ?: return@forEachIndexed
+                val top = r.top
+                val bottom = r.bottom
+                val visible = (kotlin.math.min(bottom, viewportHeight) - kotlin.math.max(top, 0f)).coerceAtLeast(0f)
+                if (visible > bestVisible) { bestVisible = visible; bestIdx = idx }
+            }
+            if (bestIdx != currentIndex) onSelectItemIndex(bestIdx)
+        }
         }
     }
 }

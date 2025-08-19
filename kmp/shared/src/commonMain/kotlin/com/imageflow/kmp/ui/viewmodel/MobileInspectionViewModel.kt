@@ -173,7 +173,23 @@ class MobileInspectionViewModel(
                             isQrScanningActive = false
                         )
                     }
-                    // Fetch inspection items configured on Web for this product with selected process code
+                    // Ensure token is valid before fetching items (handles 401 then auto-login)
+                    runCatching {
+                        val auth = com.imageflow.kmp.di.DependencyContainer.provideAuthApiService()
+                        when (auth.me()) {
+                            is com.imageflow.kmp.network.ApiResult.Success -> {}
+                            is com.imageflow.kmp.network.ApiResult.Error, is com.imageflow.kmp.network.ApiResult.NetworkError -> {
+                                val (u, p) = com.imageflow.kmp.di.DependencyContainer.currentAuthCredentials()
+                                if (!u.isNullOrBlank() && !p.isNullOrBlank()) {
+                                    val ok = auth.login(u, p)
+                                    if (ok is com.imageflow.kmp.network.ApiResult.Success) {
+                                        com.imageflow.kmp.di.DependencyContainer.configureAuthToken(ok.data.access_token)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Fetch inspection items configured on Web for this product with selected process code (retry after auth if needed)
                     runCatching {
                         val selectedProcess = com.imageflow.kmp.di.DependencyContainer.currentProcessCode()
                         val items = inspectionWorkflowUseCase.getInspectionItemsForProduct(productInfo.id, processCode = selectedProcess)
