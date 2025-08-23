@@ -402,12 +402,14 @@ class InspectionResultUpdate(BaseModel):
 
 class InspectionResultResponse(InspectionResultBase):
     model_config = ConfigDict(from_attributes=True)
-
+    
     id: uuid.UUID
     confidence_score: Optional[float] = None
     processing_time_ms: Optional[int] = None
     created_at: datetime
     created_by: Optional[uuid.UUID] = None
+    # 追加情報: 実行に紐づく工程コード（JOINで解決）
+    process_code: Optional[str] = None
 
 
 # ページネーション用汎用スキーマ

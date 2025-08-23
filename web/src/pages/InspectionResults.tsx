@@ -210,6 +210,9 @@ export function InspectionResults() {
   const [codeToProductName, setCodeToProductName] = useState<
     Record<string, string>
   >({});
+  // 工程マスタ一覧
+  const [processes, setProcesses] = useState<any[]>([]);
+  // 結果タブはAPIが process_code を返すためマップは不要
 
   // フィルタ状態
   const [filters, setFilters] = useState({
@@ -218,6 +221,7 @@ export function InspectionResults() {
     fromDate: null as Date | null,
     toDate: null as Date | null,
     instructionId: "",
+    processCode: "",
   });
 
   // ページネーション
@@ -253,6 +257,15 @@ export function InspectionResults() {
         );
       }
     })();
+    // 工程マスタ一覧
+    (async () => {
+      try {
+        const resp = await inspectionApi.listProcesses({ page_size: 200 });
+        setProcesses(resp.items || []);
+      } catch (e) {
+        console.warn('Failed to load processes', e);
+      }
+    })();
   }, []);
 
   const loadExecutions = async () => {
@@ -266,7 +279,10 @@ export function InspectionResults() {
         from_date: filters.fromDate?.toISOString(),
         to_date: filters.toDate?.toISOString(),
       });
-      setExecutions(response.items);
+      const filtered = (response.items || []).filter((e: any) =>
+        !filters.processCode || e?.instruction?.process_code === filters.processCode
+      );
+      setExecutions(filtered);
       setTotalPages(response.total_pages);
     } catch (error) {
       setError("検査実行履歴の読み込みに失敗しました");
@@ -287,7 +303,9 @@ export function InspectionResults() {
         from_date: filters.fromDate?.toISOString(),
         to_date: filters.toDate?.toISOString(),
       });
-      setResults(response.items);
+      const items = response.items || [];
+      const filtered = items.filter((r: any) => !filters.processCode || (r as any).process_code === filters.processCode);
+      setResults(filtered);
       setTotalPages(response.total_pages);
     } catch (error) {
       setError("検査結果の読み込みに失敗しました");
@@ -454,14 +472,21 @@ export function InspectionResults() {
                 />
               </Grid>
               <Grid item xs={12} md={2}>
-                <TextField
-                  label="製品コード"
-                  value={filters.instructionId}
-                  onChange={(e) =>
-                    handleFilterChange("instructionId", e.target.value)
-                  }
-                  fullWidth
-                />
+                <FormControl fullWidth>
+                  <InputLabel>工程コード</InputLabel>
+                  <Select
+                    value={filters.processCode}
+                    onChange={(e) => handleFilterChange('processCode', e.target.value)}
+                    label="工程コード"
+                  >
+                    <MenuItem value="">すべて</MenuItem>
+                    {(processes || []).map((p: any) => (
+                      <MenuItem key={p.process_code} value={p.process_code}>
+                        {p.process_name} ({p.process_code})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} md={2}>
                 <Button
@@ -494,7 +519,7 @@ export function InspectionResults() {
                   <TableHead>
                     <TableRow>
                       <TableCell>実行ID</TableCell>
-                      <TableCell>検査指示</TableCell>
+                      <TableCell>工程コード</TableCell>
                       <TableCell>型式コード</TableCell>
                       <TableCell>型式名</TableCell>
                       <TableCell>機番</TableCell>
@@ -511,11 +536,11 @@ export function InspectionResults() {
                       <TableRow key={execution.id} hover>
                         <TableCell>{execution.id.slice(0, 8)}...</TableCell>
                         <TableCell>
-                          {execution.instruction?.name || "-"}
+                          {(execution as any)?.target?.process_code || (execution as any)?.instruction?.process_code || "-"}
                         </TableCell>
                         <TableCell>
                           {execution.metadata?.product_code ||
-                            execution.instruction?.product_code ||
+                            (execution as any)?.instruction?.product_code ||
                             "-"}
                         </TableCell>
                         <TableCell>
@@ -583,6 +608,7 @@ export function InspectionResults() {
                     <TableRow>
                       <TableCell>結果ID</TableCell>
                       <TableCell>実行ID</TableCell>
+                      <TableCell>工程コード</TableCell>
                       <TableCell>判定結果</TableCell>
                       <TableCell>信頼度</TableCell>
                       <TableCell>処理時間</TableCell>
@@ -597,6 +623,9 @@ export function InspectionResults() {
                         <TableCell>{result.id.slice(0, 8)}...</TableCell>
                         <TableCell>
                           {result.execution_id.slice(0, 8)}...
+                        </TableCell>
+                        <TableCell>
+                          {(result as any).process_code || '-'}
                         </TableCell>
                         <TableCell>
                           <JudgmentChip judgment={result.judgment} />

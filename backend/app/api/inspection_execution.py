@@ -458,6 +458,24 @@ async def save_inspection_result(
             # completion 更新の失敗は本処理を妨げない
             pass
 
+        # process_code をレスポンスに含める（execution -> instruction から取得）
+        try:
+            exec_row = (
+                await db.execute(
+                    select(InspectionExecution)
+                    .options(selectinload(InspectionExecution.instruction))
+                    .where(InspectionExecution.id == result.execution_id)
+                )
+            ).scalar_one_or_none()
+            proc = (
+                getattr(exec_row.instruction, "process_code", None)
+                if exec_row and exec_row.instruction
+                else None
+            )
+            setattr(result, "process_code", proc)
+        except Exception:
+            pass
+
         logger.info(f"Saved inspection result: {result.id}")
         return result
 
@@ -487,8 +505,14 @@ async def list_inspection_results(
 ):
     """検査結果一覧を取得"""
     try:
-        # ベースクエリ
-        query = select(InspectionResult)
+        # ベースクエリ（execution->instruction を事前ロードして process_code を解決可能に）
+        query = (
+            select(InspectionResult)
+            .options(
+                selectinload(InspectionResult.execution)
+                .selectinload(InspectionExecution.instruction)
+            )
+        )
         count_query = select(func.count(InspectionResult.id))
 
         # フィルタ条件
@@ -529,7 +553,20 @@ async def list_inspection_results(
 
         # データ取得
         result = await db.execute(query)
-        results = result.scalars().all()
+        rows = result.scalars().all()
+        # process_code を各行に動的属性として付与（Pydantic 側で返却）
+        results = []
+        for r in rows:
+            try:
+                proc = None
+                if getattr(r, "execution", None) and getattr(
+                    r.execution, "instruction", None
+                ):
+                    proc = getattr(r.execution.instruction, "process_code", None)
+                setattr(r, "process_code", proc)
+            except Exception:
+                pass
+            results.append(r)
 
         return PaginatedResponse(
             items=results,
@@ -560,6 +597,7 @@ async def get_inspection_item_executions(
         result = await db.execute(
             select(InspectionItemExecution)
             .options(
+                # Return related item with instruction and criteria for UI context
                 selectinload(InspectionItemExecution.item).selectinload(
                     InspectionItem.instruction
                 ),
