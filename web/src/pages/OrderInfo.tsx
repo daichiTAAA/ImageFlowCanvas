@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Button, Card, CardContent, Typography, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Paper, Alert, Grid, TextField } from '@mui/material'
+import { Box, Button, Card, CardContent, Typography, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Paper, Alert, Grid, TextField, FormControl, InputLabel, Select, MenuItem } from '@mui/material'
 import { inspectionApi } from '../services/api'
 
 interface OrderInfoRow {
@@ -12,6 +12,7 @@ interface OrderInfoRow {
   monthlySequence: number
   status?: string
   createdAt?: number
+  qrRawData?: string
 }
 
 export const OrderInfo: React.FC = () => {
@@ -20,6 +21,8 @@ export const OrderInfo: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState({ productCode: '', machineNumber: '' })
   const [codeNameOptions, setCodeNameOptions] = useState<Array<{ product_code: string; product_name: string }>>([])
+  const [processes, setProcesses] = useState<Array<{ process_code: string; process_name: string }>>([])
+  const [selectedProcessCode, setSelectedProcessCode] = useState<string>('')
 
   const load = async () => {
     try {
@@ -48,6 +51,14 @@ export const OrderInfo: React.FC = () => {
       } catch (e) {
         console.warn('Failed to load product code-name master', e)
       }
+      try {
+        const proc = await inspectionApi.listProcesses({ page_size: 200 })
+        const items = (proc.items || []).map((p: any) => ({ process_code: p.process_code, process_name: p.process_name }))
+        setProcesses(items)
+        if (items.length && !selectedProcessCode) setSelectedProcessCode(items[0].process_code)
+      } catch (e) {
+        console.warn('Failed to load processes', e)
+      }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -59,6 +70,10 @@ export const OrderInfo: React.FC = () => {
         setError('型式コード・型式名マスタに登録がありません。先に登録してください。')
         return
       }
+      if (!processes.length) {
+        setError('工程マスタに登録がありません。先に登録してください。')
+        return
+      }
       // pick one from master
       const pick = codeNameOptions[Math.floor(Math.random() * codeNameOptions.length)]
       const now = new Date()
@@ -67,12 +82,14 @@ export const OrderInfo: React.FC = () => {
       const suffix = Math.floor(Math.random() * 900 + 100)
       const payload = {
         workOrderId: `WORK-${Date.now().toString().slice(-6)}`,
-        instructionId: `INST-${(suffix % 99)+1}`,
+        // 紐付け: 指示IDは工程コードとは別のIDだが、工程コードと結びつく形で生成
+        // 例: INST-<procCode>-<NN> とし、procCode は qrRawData にも保存
+        instructionId: `INST-${(selectedProcessCode || processes[0].process_code)}-${(suffix % 99) + 1}`,
         productCode: pick.product_code,
         machineNumber: `MACHINE-${(suffix % 999).toString().padStart(3,'0')}`,
         productionDate,
         monthlySequence: (suffix % 50) + 1,
-        qrRawData: undefined,
+        qrRawData: JSON.stringify({ process_code: selectedProcessCode || processes[0].process_code }),
       }
       await inspectionApi.createOrder(payload)
       await load()
@@ -99,7 +116,24 @@ export const OrderInfo: React.FC = () => {
             <Grid item xs={12} md={3}>
               <TextField size="small" label="機番" value={filter.machineNumber} onChange={(e)=> setFilter(prev => ({...prev, machineNumber: e.target.value}))} fullWidth />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="proc-label">工程コード</InputLabel>
+                <Select
+                  labelId="proc-label"
+                  label="工程コード"
+                  value={selectedProcessCode}
+                  onChange={(e) => setSelectedProcessCode(String(e.target.value))}
+                >
+                  {processes.map((p) => (
+                    <MenuItem key={p.process_code} value={p.process_code}>
+                      {p.process_name} ({p.process_code})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={3}>
               <Box display="flex" gap={1} justifyContent="flex-end">
                 <Button variant="outlined" onClick={load} disabled={loading}>再読込</Button>
                 <Button variant="contained" onClick={createDummy} disabled={loading}>ダミー順序情報を作成</Button>
@@ -114,6 +148,7 @@ export const OrderInfo: React.FC = () => {
             <TableRow>
               <TableCell>指図ID</TableCell>
               <TableCell>指示ID</TableCell>
+              <TableCell>工程コード</TableCell>
               <TableCell>型式コード</TableCell>
               <TableCell>機番</TableCell>
               <TableCell>生産日</TableCell>
@@ -121,19 +156,28 @@ export const OrderInfo: React.FC = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.map((r) => (
+            {rows.map((r) => {
+              let proc = ''
+              try {
+                if (r.qrRawData) {
+                  const obj = JSON.parse(r.qrRawData)
+                  proc = obj?.process_code || ''
+                }
+              } catch {}
+              return (
               <TableRow key={r.id}>
                 <TableCell>{r.workOrderId}</TableCell>
                 <TableCell>{r.instructionId}</TableCell>
+                <TableCell>{proc || '-'}</TableCell>
                 <TableCell>{r.productCode}</TableCell>
                 <TableCell>{r.machineNumber}</TableCell>
                 <TableCell>{r.productionDate}</TableCell>
                 <TableCell>{r.monthlySequence}</TableCell>
               </TableRow>
-            ))}
+            )})}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6}><Typography color="textSecondary">順序情報がありません</Typography></TableCell>
+                <TableCell colSpan={7}><Typography color="textSecondary">順序情報がありません</Typography></TableCell>
               </TableRow>
             )}
           </TableBody>

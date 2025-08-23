@@ -30,6 +30,7 @@ import {
   MenuItem,
   FormControlLabel,
 } from "@mui/material";
+import Autocomplete from "@mui/material/Autocomplete";
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -116,6 +117,8 @@ export function InspectionMasters() {
   >([]);
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
+  // Pipeline list for item dialog
+  const [pipelines, setPipelines] = useState<any[]>([]);
 
   // 検査基準のバリデーション（保存ボタン制御用）
   const isCriteriaValid = React.useMemo(() => {
@@ -161,6 +164,7 @@ export function InspectionMasters() {
     loadGroups();
     loadCriterias();
     loadProcesses();
+    loadPipelines();
     loadCodeNames();
   }, []);
 
@@ -218,6 +222,15 @@ export function InspectionMasters() {
       setProcesses(resp.items || []);
     } catch (e) {
       console.error("Failed to load processes", e);
+    }
+  };
+
+  const loadPipelines = async () => {
+    try {
+      const list = await inspectionApi.getPipelines();
+      setPipelines(list || []);
+    } catch (e) {
+      console.error('Failed to load pipelines', e);
     }
   };
 
@@ -1144,10 +1157,14 @@ export function InspectionMasters() {
                 メンバー（型式コード/名）
               </Typography>
               <Box display="flex" gap={1} mt={1}>
-                <TextField
-                  label="型式コード product_code を追加"
-                  value={memberInput}
-                  onChange={(e) => setMemberInput(e.target.value)}
+                <Autocomplete
+                  options={codeNameRows as any}
+                  getOptionLabel={(opt: any) => `${opt.product_name} (${opt.product_code})`}
+                  value={(codeNameRows as any).find((o: any) => o.product_code === memberInput) || null}
+                  onChange={(_, val: any | null) => setMemberInput(val?.product_code || "")}
+                  renderInput={(params) => (
+                    <TextField {...params} label="型式コードを選択" fullWidth />
+                  )}
                   fullWidth
                 />
                 <Button
@@ -1167,6 +1184,12 @@ export function InspectionMasters() {
                       ...prev,
                       [editingGroup.id!]: codes,
                     }));
+                    try {
+                      const ns = await inspectionApi.getProductTypeNamesBatch(codes);
+                      const cn: Record<string, string> = { ...codeNameMap };
+                      (ns || []).forEach((e: any) => { cn[e.product_code] = e.product_name; });
+                      setCodeNameMap(cn);
+                    } catch {}
                   }}
                 >
                   追加
@@ -1846,14 +1869,16 @@ export function InspectionMasters() {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField
-                label="パイプラインID"
-                value={editingItem?.pipeline_id || ""}
-                onChange={(e) =>
-                  setEditingItem((prev) =>
-                    prev ? { ...prev, pipeline_id: e.target.value } : prev
-                  )
+              <Autocomplete
+                options={pipelines as any}
+                getOptionLabel={(p: any) => (p?.name ? `${p.name} (${p.id})` : (p?.id || ''))}
+                value={(pipelines as any).find((p: any) => String(p.id) === String(editingItem?.pipeline_id)) || null}
+                onChange={(_, val: any | null) =>
+                  setEditingItem((prev) => (prev ? { ...prev, pipeline_id: val?.id || undefined } : prev))
                 }
+                renderInput={(params) => (
+                  <TextField {...params} label="パイプライン" placeholder="選択" fullWidth />
+                )}
                 fullWidth
               />
             </Grid>
