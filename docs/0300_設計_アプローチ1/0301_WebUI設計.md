@@ -34,7 +34,7 @@ ImageFlowCanvasシステムにおけるWebUIは以下の役割を担います：
 
 ### 1.2.3. Kotlin Multiplatformアプリとの連携基盤
 - **パイプライン共有**: WebUIで定義したパイプラインをKotlin Multiplatformアプリで利用
-- **検査マスタ管理**: 検査対象・項目の一元管理
+- **検査マスタ管理**: 検査指示・項目の一元管理
 - **製品マスタ管理**: 製品情報・QRコード・トレーサビリティデータの統合管理
 - **結果統合表示**: Kotlin Multiplatformアプリからの検査結果・映像を統合表示
 
@@ -134,7 +134,7 @@ graph TD
 
 # 4. 検査マスタ設定・統合管理
 
-## 4.1. 検査対象マスタ管理
+## 4.1. 検査指示マスタ管理
 
 ### 4.1.1. 製品・部品マスタ
 - **製品情報管理**: 製品コード・名称・バージョン・説明
@@ -610,13 +610,13 @@ graph TD
 
 ## 7.1. 検査項目の追加/編集
 
-- 画面: 検査マスタ管理 → 検査対象/検査項目
+- 画面: 検査マスタ管理 → 検査指示/検査項目
 - 追加: 検査項目の新規追加ダイアログを提供（名称/説明/タイプ/順序/必須/パイプラインID/パラメータ）。
 - 保存後: 対象製品に紐づく項目一覧を更新。`execution_order` 順で表示。
-- 連携ルール: `InspectionTarget.product_code` は製品 `product_code`（＝ProductMaster.product_code）と一致させる（端末アプリが `GET /v1/inspection/products/{product_id}/items` で取得）。
-  - 追加: 型式グループを用いた設定（推奨）。`InspectionTarget.group_id` により、複数の型式コードをまとめて同一の検査項目を適用できる。
+- 連携ルール: `inspectionInstruction.product_code` は製品 `product_code`（＝ProductMaster.product_code）と一致させる（端末アプリが `GET /v1/inspection/products/{product_id}/items` で取得）。
+  - 追加: 型式グループを用いた設定（推奨）。`inspectionInstruction.group_id` により、複数の型式コードをまとめて同一の検査項目を適用できる。
 
-## 7.2. 検査対象（ターゲット）入力項目（拡張）
+## 7.2. 検査指示（ターゲット）入力項目（拡張）
 
 - `product_code`: 型式コード（単体指定時に使用）
 - `product_name`: 型式名（表示名、任意）
@@ -637,7 +637,7 @@ graph TD
 ## 7.5. WebUI 変更（検査マスタ = 型式グループ + 工程）
 
 ### 7.5.1. 検査マスタ管理 画面
-- 検査マスタ（旧: 検査対象）一覧
+- 検査マスタ（旧: 検査指示）一覧
   - 列: 型式グループ（name / group_code）、工程（process_code / process_name）、バージョン
   - フィルタ: group, process, キーワード
 - 作成/編集ダイアログ

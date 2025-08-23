@@ -69,7 +69,7 @@ function formatLocalDateTime(value?: string | number): string {
 
 interface InspectionExecution {
   id: string;
-  target_id: string;
+  instruction_id: string;
   operator_id?: string;
   status: string;
   qr_code?: string;
@@ -77,7 +77,7 @@ interface InspectionExecution {
   completed_at?: string;
   error_message?: string;
   metadata?: Record<string, any>;
-  target?: {
+  instruction?: {
     id: string;
     name: string;
     product_name?: string;
@@ -196,14 +196,20 @@ export function InspectionResults() {
     InspectionItemExecution[]
   >([]);
   // item_execution_id -> evidence_file_ids
-  const [execResultsByItem, setExecResultsByItem] = useState<Record<string, string[]>>({});
+  const [execResultsByItem, setExecResultsByItem] = useState<
+    Record<string, string[]>
+  >({});
   // item_execution_id -> ObjectURL (auth-safe thumbnail)
-  const [thumbUrlsByItem, setThumbUrlsByItem] = useState<Record<string, string>>({});
+  const [thumbUrlsByItem, setThumbUrlsByItem] = useState<
+    Record<string, string>
+  >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailDialog, setDetailDialog] = useState(false);
   // 型式コード -> 型式名（code-nameマスタ）マップ
-  const [codeToProductName, setCodeToProductName] = useState<Record<string, string>>({});
+  const [codeToProductName, setCodeToProductName] = useState<
+    Record<string, string>
+  >({});
 
   // フィルタ状態
   const [filters, setFilters] = useState({
@@ -211,7 +217,7 @@ export function InspectionResults() {
     judgment: "",
     fromDate: null as Date | null,
     toDate: null as Date | null,
-    targetId: "",
+    instructionId: "",
   });
 
   // ページネーション
@@ -231,7 +237,9 @@ export function InspectionResults() {
     // 型式コード・型式名マスタから、型式コード -> 型式名 を構築
     (async () => {
       try {
-        const res = await inspectionApi.listProductTypeNames({ page_size: 500 });
+        const res = await inspectionApi.listProductTypeNames({
+          page_size: 500,
+        });
         const items = res.items || [];
         const map: Record<string, string> = {};
         items.forEach((e: any) => {
@@ -239,7 +247,10 @@ export function InspectionResults() {
         });
         setCodeToProductName(map);
       } catch (e) {
-        console.warn("Failed to load product code-name master for code->name map", e);
+        console.warn(
+          "Failed to load product code-name master for code->name map",
+          e
+        );
       }
     })();
   }, []);
@@ -251,7 +262,7 @@ export function InspectionResults() {
         page,
         page_size: pageSize,
         status: filters.status || undefined,
-        target_id: filters.targetId || undefined,
+        instruction_id: filters.instructionId || undefined,
         from_date: filters.fromDate?.toISOString(),
         to_date: filters.toDate?.toISOString(),
       });
@@ -272,7 +283,7 @@ export function InspectionResults() {
         page,
         page_size: pageSize,
         judgment: filters.judgment || undefined,
-        target_id: filters.targetId || undefined,
+        instruction_id: filters.instructionId || undefined,
         from_date: filters.fromDate?.toISOString(),
         to_date: filters.toDate?.toISOString(),
       });
@@ -445,9 +456,9 @@ export function InspectionResults() {
               <Grid item xs={12} md={2}>
                 <TextField
                   label="製品コード"
-                  value={filters.targetId}
+                  value={filters.instructionId}
                   onChange={(e) =>
-                    handleFilterChange("targetId", e.target.value)
+                    handleFilterChange("instructionId", e.target.value)
                   }
                   fullWidth
                 />
@@ -483,7 +494,7 @@ export function InspectionResults() {
                   <TableHead>
                     <TableRow>
                       <TableCell>実行ID</TableCell>
-                      <TableCell>検査対象</TableCell>
+                      <TableCell>検査指示</TableCell>
                       <TableCell>型式コード</TableCell>
                       <TableCell>型式名</TableCell>
                       <TableCell>機番</TableCell>
@@ -499,21 +510,25 @@ export function InspectionResults() {
                     {executions.map((execution) => (
                       <TableRow key={execution.id} hover>
                         <TableCell>{execution.id.slice(0, 8)}...</TableCell>
-                        <TableCell>{execution.target?.name || "-"}</TableCell>
+                        <TableCell>
+                          {execution.instruction?.name || "-"}
+                        </TableCell>
                         <TableCell>
                           {execution.metadata?.product_code ||
-                            execution.target?.product_code ||
+                            execution.instruction?.product_code ||
                             "-"}
                         </TableCell>
                         <TableCell>
                           {(() => {
                             const code =
                               execution.metadata?.product_code ||
-                              (execution as any)?.target?.product_code;
-                            const nameFromCode = code ? codeToProductName[code] : undefined;
+                              (execution as any)?.instruction?.product_code;
+                            const nameFromCode = code
+                              ? codeToProductName[code]
+                              : undefined;
                             return (
                               nameFromCode ||
-                              execution.target?.product_name ||
+                              execution.instruction?.product_name ||
                               execution.metadata?.product_name ||
                               "-"
                             );
@@ -646,7 +661,7 @@ export function InspectionResults() {
           fullWidth
         >
           <DialogTitle>
-            検査詳細 - {selectedExecution?.target?.name}
+            検査詳細 - {selectedExecution?.instruction?.name}
           </DialogTitle>
           <DialogContent>
             {selectedExecution && (
@@ -662,14 +677,14 @@ export function InspectionResults() {
                         <strong>実行ID:</strong> {selectedExecution.id}
                       </Typography>
                       <Typography>
-                        <strong>検査対象:</strong>{" "}
-                        {selectedExecution.target?.name}
+                        <strong>検査指示:</strong>{" "}
+                        {selectedExecution.instruction?.name}
                       </Typography>
                       <Typography>
                         <strong>型式コード:</strong>{" "}
                         {selectedExecution.metadata?.product_code ||
-                          selectedExecution.target?.product_code ||
-                          selectedExecution.target?.group_name ||
+                          selectedExecution.instruction?.product_code ||
+                          selectedExecution.instruction?.group_name ||
                           "-"}
                       </Typography>
                       <Typography>
@@ -677,11 +692,14 @@ export function InspectionResults() {
                         {(() => {
                           const code =
                             selectedExecution.metadata?.product_code ||
-                            (selectedExecution as any)?.target?.product_code;
-                          const nameFromCode = code ? codeToProductName[code] : undefined;
+                            (selectedExecution as any)?.instruction
+                              ?.product_code;
+                          const nameFromCode = code
+                            ? codeToProductName[code]
+                            : undefined;
                           return (
                             nameFromCode ||
-                            selectedExecution.target?.product_name ||
+                            selectedExecution.instruction?.product_name ||
                             selectedExecution.metadata?.product_name ||
                             "-"
                           );
@@ -819,16 +837,41 @@ export function InspectionResults() {
                                   )}
                                 </TableCell>
                                 <TableCell>
-                                  {execResultsByItem[itemExecution.id] && execResultsByItem[itemExecution.id].length > 0 ? (
+                                  {execResultsByItem[itemExecution.id] &&
+                                  execResultsByItem[itemExecution.id].length >
+                                    0 ? (
                                     thumbUrlsByItem[itemExecution.id] ? (
                                       <img
                                         src={thumbUrlsByItem[itemExecution.id]}
                                         alt="結果画像"
-                                        style={{ maxWidth: 96, maxHeight: 64, objectFit: "cover", borderRadius: 4, cursor: "pointer" }}
-                                        onClick={() => openEvidence(execResultsByItem[itemExecution.id][0])}
+                                        style={{
+                                          maxWidth: 96,
+                                          maxHeight: 64,
+                                          objectFit: "cover",
+                                          borderRadius: 4,
+                                          cursor: "pointer",
+                                        }}
+                                        onClick={() =>
+                                          openEvidence(
+                                            execResultsByItem[
+                                              itemExecution.id
+                                            ][0]
+                                          )
+                                        }
                                       />
                                     ) : (
-                                      <Button size="small" onClick={() => openEvidence(execResultsByItem[itemExecution.id][0])}>表示</Button>
+                                      <Button
+                                        size="small"
+                                        onClick={() =>
+                                          openEvidence(
+                                            execResultsByItem[
+                                              itemExecution.id
+                                            ][0]
+                                          )
+                                        }
+                                      >
+                                        表示
+                                      </Button>
                                     )
                                   ) : (
                                     "-"

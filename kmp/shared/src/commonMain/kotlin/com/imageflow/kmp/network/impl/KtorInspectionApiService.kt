@@ -104,14 +104,14 @@ class KtorInspectionApiService(
         }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
 
     override suspend fun createExecution(
-        targetId: String,
+        instructionId: String,
         operatorId: String?,
         qrCode: String?,
         metadata: Map<String, String>
     ): ApiResult<ExecuteInspectionResponseKmp> = runCatching {
         val payload = buildString {
             append("{")
-            append("\"target_id\":\"$targetId\"")
+            append("\"instruction_id\":\"$instructionId\"")
             if (!operatorId.isNullOrBlank()) append(",\"operator_id\":\"$operatorId\"")
             if (!qrCode.isNullOrBlank()) append(",\"qr_code\":\"$qrCode\"")
             if (metadata.isNotEmpty()) {

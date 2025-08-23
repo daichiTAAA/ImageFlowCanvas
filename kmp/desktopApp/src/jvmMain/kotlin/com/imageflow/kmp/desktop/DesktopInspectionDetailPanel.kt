@@ -80,7 +80,7 @@ fun DesktopInspectionDetailPanel(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        // Top: Product target (left) + Status (right)
+        // Top: Product instruction (left) + Status (right)
         Row(Modifier.fillMaxWidth()) {
             Column(Modifier.weight(3f).padding(end = 8.dp)) {
                 // 工程コードはトップバー右側に表示。ここでは工程名のみ任意表示。
@@ -89,7 +89,7 @@ fun DesktopInspectionDetailPanel(
                     Text("工程名: ${processName}")
                 }
                 Spacer(Modifier.height(6.dp))
-                Text("検査対象", style = MaterialTheme.typography.titleSmall)
+                Text("検査指示", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 if (currentProduct != null) {
                     Text("型式コード: ${currentProduct.productCode}", fontWeight = FontWeight.SemiBold)
@@ -211,20 +211,20 @@ fun DesktopInspectionDetailPanel(
             // Validate the index is within range
             if (idx < 0 || idx >= ordered.size) return@LaunchedEffect
             
-            val target = 1 + idx  // Account for the header item
+            val instruction = 1 + idx  // Account for the header item
             
-            // Wait for LazyColumn to compose enough items including the target
+            // Wait for LazyColumn to compose enough items including the instruction
             var tries = 0
             while (tries < 50) { // Increase retry count for robustness
                 val total = listState.layoutInfo.totalItemsCount
-                if (total > target) break // We need at least target+1 items (including header)
+                if (total > instruction) break // We need at least instruction+1 items (including header)
                 tries++
                 delay(20) // Slightly longer delay for more reliable composition
             }
             
             // Use animateScrollToItem only - cleaner and more reliable
             runCatching {
-                listState.animateScrollToItem(index = target, scrollOffset = 0)
+                listState.animateScrollToItem(index = instruction, scrollOffset = 0)
             }
         }
     }

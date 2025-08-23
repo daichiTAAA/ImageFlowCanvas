@@ -36,29 +36,29 @@ class InspectionMasterServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.CreateInspectionTarget = channel.unary_unary(
-                '/imageflow.v1.InspectionMasterService/CreateInspectionTarget',
-                request_serializer=imageflow_dot_v1_dot_inspection__pb2.CreateInspectionTargetRequest.SerializeToString,
-                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.FromString,
+        self.CreateinspectionInstruction = channel.unary_unary(
+                '/imageflow.v1.InspectionMasterService/CreateinspectionInstruction',
+                request_serializer=imageflow_dot_v1_dot_inspection__pb2.CreateinspectionInstructionRequest.SerializeToString,
+                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.FromString,
                 _registered_method=True)
-        self.GetInspectionTarget = channel.unary_unary(
-                '/imageflow.v1.InspectionMasterService/GetInspectionTarget',
-                request_serializer=imageflow_dot_v1_dot_inspection__pb2.GetInspectionTargetRequest.SerializeToString,
-                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.FromString,
+        self.GetinspectionInstruction = channel.unary_unary(
+                '/imageflow.v1.InspectionMasterService/GetinspectionInstruction',
+                request_serializer=imageflow_dot_v1_dot_inspection__pb2.GetinspectionInstructionRequest.SerializeToString,
+                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.FromString,
                 _registered_method=True)
-        self.ListInspectionTargets = channel.unary_unary(
-                '/imageflow.v1.InspectionMasterService/ListInspectionTargets',
-                request_serializer=imageflow_dot_v1_dot_inspection__pb2.ListInspectionTargetsRequest.SerializeToString,
-                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.ListInspectionTargetsResponse.FromString,
+        self.ListinspectionInstructions = channel.unary_unary(
+                '/imageflow.v1.InspectionMasterService/ListinspectionInstructions',
+                request_serializer=imageflow_dot_v1_dot_inspection__pb2.ListinspectionInstructionsRequest.SerializeToString,
+                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.ListinspectionInstructionsResponse.FromString,
                 _registered_method=True)
-        self.UpdateInspectionTarget = channel.unary_unary(
-                '/imageflow.v1.InspectionMasterService/UpdateInspectionTarget',
-                request_serializer=imageflow_dot_v1_dot_inspection__pb2.UpdateInspectionTargetRequest.SerializeToString,
-                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.FromString,
+        self.UpdateinspectionInstruction = channel.unary_unary(
+                '/imageflow.v1.InspectionMasterService/UpdateinspectionInstruction',
+                request_serializer=imageflow_dot_v1_dot_inspection__pb2.UpdateinspectionInstructionRequest.SerializeToString,
+                response_deserializer=imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.FromString,
                 _registered_method=True)
-        self.DeleteInspectionTarget = channel.unary_unary(
-                '/imageflow.v1.InspectionMasterService/DeleteInspectionTarget',
-                request_serializer=imageflow_dot_v1_dot_inspection__pb2.DeleteInspectionTargetRequest.SerializeToString,
+        self.DeleteinspectionInstruction = channel.unary_unary(
+                '/imageflow.v1.InspectionMasterService/DeleteinspectionInstruction',
+                request_serializer=imageflow_dot_v1_dot_inspection__pb2.DeleteinspectionInstructionRequest.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 _registered_method=True)
         self.CreateInspectionItem = channel.unary_unary(
@@ -117,32 +117,32 @@ class InspectionMasterServiceServicer(object):
     """検査マスタサービス
     """
 
-    def CreateInspectionTarget(self, request, context):
-        """検査対象の管理
+    def CreateinspectionInstruction(self, request, context):
+        """検査指示の管理
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetInspectionTarget(self, request, context):
+    def GetinspectionInstruction(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ListInspectionTargets(self, request, context):
+    def ListinspectionInstructions(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def UpdateInspectionTarget(self, request, context):
+    def UpdateinspectionInstruction(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def DeleteInspectionTarget(self, request, context):
+    def DeleteinspectionInstruction(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -213,29 +213,29 @@ class InspectionMasterServiceServicer(object):
 
 def add_InspectionMasterServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'CreateInspectionTarget': grpc.unary_unary_rpc_method_handler(
-                    servicer.CreateInspectionTarget,
-                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.CreateInspectionTargetRequest.FromString,
-                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.SerializeToString,
+            'CreateinspectionInstruction': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateinspectionInstruction,
+                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.CreateinspectionInstructionRequest.FromString,
+                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.SerializeToString,
             ),
-            'GetInspectionTarget': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetInspectionTarget,
-                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.GetInspectionTargetRequest.FromString,
-                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.SerializeToString,
+            'GetinspectionInstruction': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetinspectionInstruction,
+                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.GetinspectionInstructionRequest.FromString,
+                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.SerializeToString,
             ),
-            'ListInspectionTargets': grpc.unary_unary_rpc_method_handler(
-                    servicer.ListInspectionTargets,
-                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.ListInspectionTargetsRequest.FromString,
-                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.ListInspectionTargetsResponse.SerializeToString,
+            'ListinspectionInstructions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListinspectionInstructions,
+                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.ListinspectionInstructionsRequest.FromString,
+                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.ListinspectionInstructionsResponse.SerializeToString,
             ),
-            'UpdateInspectionTarget': grpc.unary_unary_rpc_method_handler(
-                    servicer.UpdateInspectionTarget,
-                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.UpdateInspectionTargetRequest.FromString,
-                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.SerializeToString,
+            'UpdateinspectionInstruction': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateinspectionInstruction,
+                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.UpdateinspectionInstructionRequest.FromString,
+                    response_serializer=imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.SerializeToString,
             ),
-            'DeleteInspectionTarget': grpc.unary_unary_rpc_method_handler(
-                    servicer.DeleteInspectionTarget,
-                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.DeleteInspectionTargetRequest.FromString,
+            'DeleteinspectionInstruction': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteinspectionInstruction,
+                    request_deserializer=imageflow_dot_v1_dot_inspection__pb2.DeleteinspectionInstructionRequest.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
             'CreateInspectionItem': grpc.unary_unary_rpc_method_handler(
@@ -301,7 +301,7 @@ class InspectionMasterService(object):
     """
 
     @staticmethod
-    def CreateInspectionTarget(request,
+    def CreateinspectionInstruction(request,
             target,
             options=(),
             channel_credentials=None,
@@ -314,9 +314,9 @@ class InspectionMasterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/imageflow.v1.InspectionMasterService/CreateInspectionTarget',
-            imageflow_dot_v1_dot_inspection__pb2.CreateInspectionTargetRequest.SerializeToString,
-            imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.FromString,
+            '/imageflow.v1.InspectionMasterService/CreateinspectionInstruction',
+            imageflow_dot_v1_dot_inspection__pb2.CreateinspectionInstructionRequest.SerializeToString,
+            imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.FromString,
             options,
             channel_credentials,
             insecure,
@@ -328,7 +328,7 @@ class InspectionMasterService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetInspectionTarget(request,
+    def GetinspectionInstruction(request,
             target,
             options=(),
             channel_credentials=None,
@@ -341,9 +341,9 @@ class InspectionMasterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/imageflow.v1.InspectionMasterService/GetInspectionTarget',
-            imageflow_dot_v1_dot_inspection__pb2.GetInspectionTargetRequest.SerializeToString,
-            imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.FromString,
+            '/imageflow.v1.InspectionMasterService/GetinspectionInstruction',
+            imageflow_dot_v1_dot_inspection__pb2.GetinspectionInstructionRequest.SerializeToString,
+            imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.FromString,
             options,
             channel_credentials,
             insecure,
@@ -355,7 +355,7 @@ class InspectionMasterService(object):
             _registered_method=True)
 
     @staticmethod
-    def ListInspectionTargets(request,
+    def ListinspectionInstructions(request,
             target,
             options=(),
             channel_credentials=None,
@@ -368,9 +368,9 @@ class InspectionMasterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/imageflow.v1.InspectionMasterService/ListInspectionTargets',
-            imageflow_dot_v1_dot_inspection__pb2.ListInspectionTargetsRequest.SerializeToString,
-            imageflow_dot_v1_dot_inspection__pb2.ListInspectionTargetsResponse.FromString,
+            '/imageflow.v1.InspectionMasterService/ListinspectionInstructions',
+            imageflow_dot_v1_dot_inspection__pb2.ListinspectionInstructionsRequest.SerializeToString,
+            imageflow_dot_v1_dot_inspection__pb2.ListinspectionInstructionsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -382,7 +382,7 @@ class InspectionMasterService(object):
             _registered_method=True)
 
     @staticmethod
-    def UpdateInspectionTarget(request,
+    def UpdateinspectionInstruction(request,
             target,
             options=(),
             channel_credentials=None,
@@ -395,9 +395,9 @@ class InspectionMasterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/imageflow.v1.InspectionMasterService/UpdateInspectionTarget',
-            imageflow_dot_v1_dot_inspection__pb2.UpdateInspectionTargetRequest.SerializeToString,
-            imageflow_dot_v1_dot_inspection__pb2.InspectionTarget.FromString,
+            '/imageflow.v1.InspectionMasterService/UpdateinspectionInstruction',
+            imageflow_dot_v1_dot_inspection__pb2.UpdateinspectionInstructionRequest.SerializeToString,
+            imageflow_dot_v1_dot_inspection__pb2.inspectionInstruction.FromString,
             options,
             channel_credentials,
             insecure,
@@ -409,7 +409,7 @@ class InspectionMasterService(object):
             _registered_method=True)
 
     @staticmethod
-    def DeleteInspectionTarget(request,
+    def DeleteinspectionInstruction(request,
             target,
             options=(),
             channel_credentials=None,
@@ -422,8 +422,8 @@ class InspectionMasterService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/imageflow.v1.InspectionMasterService/DeleteInspectionTarget',
-            imageflow_dot_v1_dot_inspection__pb2.DeleteInspectionTargetRequest.SerializeToString,
+            '/imageflow.v1.InspectionMasterService/DeleteinspectionInstruction',
+            imageflow_dot_v1_dot_inspection__pb2.DeleteinspectionInstructionRequest.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options,
             channel_credentials,

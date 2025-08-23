@@ -24,7 +24,7 @@ from app.database import AsyncSessionLocal
 from app.models.inspection import (
     ProductTypeGroupMember,
     ProductTypeGroup,
-    InspectionTarget,
+    inspectionInstruction,
     InspectionItem,
     InspectionCriteria,
 )
@@ -32,7 +32,9 @@ from app.models.inspection import (
 logger = logging.getLogger(__name__)
 
 
-class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorServicer):
+class BackendCameraStreamProcessor(
+    camera_stream_pb2_grpc.CameraStreamProcessorServicer
+):
     """
     gRPC server-side implementation that accepts frames from Desktop and
     proxies processing to the existing upstream camera-stream gRPC service.
@@ -43,7 +45,9 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
         if os.getenv("NOMAD_ALLOC_ID"):
             endpoint = os.getenv("CAMERA_STREAM_GRPC_ENDPOINT", "192.168.5.15:9094")
         elif os.getenv("COMPOSE_PROJECT_NAME") or os.getenv("DOCKER_BUILDKIT"):
-            endpoint = os.getenv("CAMERA_STREAM_GRPC_ENDPOINT", "camera-stream-grpc:9090")
+            endpoint = os.getenv(
+                "CAMERA_STREAM_GRPC_ENDPOINT", "camera-stream-grpc:9090"
+            )
         else:
             endpoint = os.getenv(
                 "CAMERA_STREAM_GRPC_ENDPOINT",
@@ -60,7 +64,9 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
         logger.info(f"Desktop gRPC bridge upstream endpoint: {endpoint}")
 
         # Auth config
-        self._jwt_secret = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        self._jwt_secret = os.getenv(
+            "SECRET_KEY", "your-secret-key-change-in-production"
+        )
         self._jwt_algo = os.getenv("JWT_ALGORITHM", "HS256")
         # Use in-process judgment queue for offloading aggregation
 
@@ -70,7 +76,10 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
             md = dict(context.invocation_metadata())
             authz = md.get("authorization") or md.get("Authorization")
             if not authz or not authz.lower().startswith("bearer "):
-                context.abort(grpc.StatusCode.UNAUTHENTICATED, "Missing or invalid Authorization metadata")
+                context.abort(
+                    grpc.StatusCode.UNAUTHENTICATED,
+                    "Missing or invalid Authorization metadata",
+                )
             token = authz.split(" ", 1)[1].strip()
             payload = jwt.decode(token, self._jwt_secret, algorithms=[self._jwt_algo])
             sub = payload.get("sub")
@@ -141,7 +150,9 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
             async for processed in upstream_call:
                 frame_count += 1
                 if frame_count % 30 == 1:
-                    logger.debug(f"[gRPC] Relaying processed frame #{frame_count} from upstream")
+                    logger.debug(
+                        f"[gRPC] Relaying processed frame #{frame_count} from upstream"
+                    )
                 # Pair with original metadata
                 try:
                     meta = await asyncio.wait_for(meta_queue.get(), timeout=1.0)
@@ -153,14 +164,20 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
                 yield enriched
         except grpc.RpcError as e:
             # Attempt one reconnection for transient errors
-            logger.warning(f"[gRPC] Upstream RPC error: code={e.code()} details={e.details()}; attempting reconnection")
+            logger.warning(
+                f"[gRPC] Upstream RPC error: code={e.code()} details={e.details()}; attempting reconnection"
+            )
             await self._ensure_upstream()
-            context.abort(grpc.StatusCode.UNAVAILABLE, f"Upstream stream failed: {e.details()}")
+            context.abort(
+                grpc.StatusCode.UNAVAILABLE, f"Upstream stream failed: {e.details()}"
+            )
         except Exception as e:
             logger.exception(f"[gRPC] Bridge processing error: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"Bridge processing error: {e}")
 
-    async def _evaluate_and_enrich(self, processed: camera_stream_pb2.ProcessedFrame, meta: dict) -> camera_stream_pb2.ProcessedFrame:
+    async def _evaluate_and_enrich(
+        self, processed: camera_stream_pb2.ProcessedFrame, meta: dict
+    ) -> camera_stream_pb2.ProcessedFrame:
         """(Deprecated) Local evaluation. Kept as fallback."""
         try:
             pp = meta.get("processing_params", {}) or {}
@@ -178,7 +195,9 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
                     pipeline_uuid = None
 
                 async with AsyncSessionLocal() as session:
-                    criteria = await self._find_criteria(session, product_code, process_code, pipeline_uuid)
+                    criteria = await self._find_criteria(
+                        session, product_code, process_code, pipeline_uuid
+                    )
                     if criteria is not None:
                         judgment = self._judge_by_criteria(processed, criteria)
 
@@ -230,48 +249,77 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
                 jd.class_name = f"JUDGMENT:{judgment}"
                 jd.confidence = 1.0
                 jd.bbox.x1 = jd.bbox.y1 = jd.bbox.x2 = jd.bbox.y2 = 0.0
-            
+
             return enriched
         except Exception as e:
             logger.warning(f"[gRPC] Enrichment failed, forwarding original frame: {e}")
             return processed
 
-    async def _find_criteria(self, session, product_code: str, process_code: str, pipeline_uuid) -> dict | None:
+    async def _find_criteria(
+        self, session, product_code: str, process_code: str, pipeline_uuid
+    ) -> dict | None:
         # Resolve group from product_code
-        grp_row = (await session.execute(
-            select(ProductTypeGroupMember, ProductTypeGroup)
-            .join(ProductTypeGroup, ProductTypeGroupMember.group_id == ProductTypeGroup.id)
-            .where(ProductTypeGroupMember.product_code == product_code)
-        )).first()
+        grp_row = (
+            await session.execute(
+                select(ProductTypeGroupMember, ProductTypeGroup)
+                .join(
+                    ProductTypeGroup,
+                    ProductTypeGroupMember.group_id == ProductTypeGroup.id,
+                )
+                .where(ProductTypeGroupMember.product_code == product_code)
+            )
+        ).first()
         if not grp_row:
             return None
         group_id = grp_row[0].group_id
 
-        # Find target for group + process
-        tgt_row = (await session.execute(
-            select(InspectionTarget)
-            .where(
-                (InspectionTarget.group_id == group_id) & (InspectionTarget.process_code == process_code)
+        # Find instruction for group + process
+        tgt_row = (
+            (
+                await session.execute(
+                    select(inspectionInstruction)
+                    .where(
+                        (inspectionInstruction.group_id == group_id)
+                        & (inspectionInstruction.process_code == process_code)
+                    )
+                    .order_by(inspectionInstruction.created_at.desc())
+                )
             )
-            .order_by(InspectionTarget.created_at.desc())
-        )).scalars().first()
+            .scalars()
+            .first()
+        )
         if not tgt_row:
             return None
 
         # Find item by pipeline_id
         if pipeline_uuid is None:
             return None
-        item = (await session.execute(
-            select(InspectionItem).where(
-                (InspectionItem.target_id == tgt_row.id) & (InspectionItem.pipeline_id == pipeline_uuid)
+        item = (
+            (
+                await session.execute(
+                    select(InspectionItem).where(
+                        (InspectionItem.instruction_id == tgt_row.id)
+                        & (InspectionItem.pipeline_id == pipeline_uuid)
+                    )
+                )
             )
-        )).scalars().first()
+            .scalars()
+            .first()
+        )
         if not item or not item.criteria_id:
             return None
 
-        crit = (await session.execute(
-            select(InspectionCriteria).where(InspectionCriteria.id == item.criteria_id)
-        )).scalars().first()
+        crit = (
+            (
+                await session.execute(
+                    select(InspectionCriteria).where(
+                        InspectionCriteria.id == item.criteria_id
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not crit:
             return None
         # Return meta IDs for enrichment
@@ -282,7 +330,9 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
             "item_id": str(item.id),
         }
 
-    def _judge_by_criteria(self, processed: camera_stream_pb2.ProcessedFrame, criteria: dict) -> str:
+    def _judge_by_criteria(
+        self, processed: camera_stream_pb2.ProcessedFrame, criteria: dict
+    ) -> str:
         det_count = len(processed.detections)
         jt = (criteria.get("judgment_type") or "").upper()
         spec = criteria.get("spec") or {}
@@ -324,10 +374,13 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
         # Default fallback
         return decision(det_count == 0)
 
-    async def _evaluate_via_service(self, processed: camera_stream_pb2.ProcessedFrame, meta: dict) -> camera_stream_pb2.ProcessedFrame:
+    async def _evaluate_via_service(
+        self, processed: camera_stream_pb2.ProcessedFrame, meta: dict
+    ) -> camera_stream_pb2.ProcessedFrame:
         """Call inspection-evaluator-grpc; fallback to local if stubs/endpoint unavailable."""
         try:
             from imageflow.v1 import evaluator_pb2, evaluator_pb2_grpc
+
             # Prepare request
             pp = meta.get("processing_params", {}) or {}
             product_code = pp.get("product_code", "")
@@ -341,7 +394,9 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
                     ai_detection_pb2.Detection(
                         class_name=d.class_name,
                         confidence=d.confidence,
-                        bbox=ai_detection_pb2.BoundingBox(x1=d.bbox.x1, y1=d.bbox.y1, x2=d.bbox.x2, y2=d.bbox.y2),
+                        bbox=ai_detection_pb2.BoundingBox(
+                            x1=d.bbox.x1, y1=d.bbox.y1, x2=d.bbox.x2, y2=d.bbox.y2
+                        ),
                     )
                     for d in processed.detections
                 ],
@@ -397,15 +452,17 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
                 exec_id = pp.get("execution_id")
                 item_exec_id = pp.get("item_execution_id")
                 if resp.judgment and exec_id and item_exec_id:
-                    await judgment_queue.publish({
-                        "execution_id": exec_id,
-                        "item_execution_id": item_exec_id,
-                        "judgment": resp.judgment,
-                        "criteria_id": resp.criteria_id,
-                        "item_id": resp.item_id,
-                        "pipeline_id": resp.pipeline_id,
-                        "metrics": dict(resp.metrics),
-                    })
+                    await judgment_queue.publish(
+                        {
+                            "execution_id": exec_id,
+                            "item_execution_id": item_exec_id,
+                            "judgment": resp.judgment,
+                            "criteria_id": resp.criteria_id,
+                            "item_id": resp.item_id,
+                            "pipeline_id": resp.pipeline_id,
+                            "metrics": dict(resp.metrics),
+                        }
+                    )
             except Exception as pe:
                 logger.warning(f"[gRPC] Emit judgment event failed: {pe}")
             return enriched
@@ -417,22 +474,31 @@ class BackendCameraStreamProcessor(camera_stream_pb2_grpc.CameraStreamProcessorS
 
 class DesktopGrpcServer:
     def __init__(self, bind_addr: str | None = None):
-        self.bind_addr = bind_addr or os.getenv("DESKTOP_GRPC_BIND_ADDR", "0.0.0.0:50051")
+        self.bind_addr = bind_addr or os.getenv(
+            "DESKTOP_GRPC_BIND_ADDR", "0.0.0.0:50051"
+        )
         self._server: grpc.aio.Server | None = None
 
     async def start(self):
-        self._server = grpc_aio.server(options=[
-            ("grpc.keepalive_time_ms", 30000),
-            ("grpc.keepalive_timeout_ms", 5000),
-            ("grpc.keepalive_permit_without_calls", True),
-        ])
+        self._server = grpc_aio.server(
+            options=[
+                ("grpc.keepalive_time_ms", 30000),
+                ("grpc.keepalive_timeout_ms", 5000),
+                ("grpc.keepalive_permit_without_calls", True),
+            ]
+        )
         camera_stream_pb2_grpc.add_CameraStreamProcessorServicer_to_server(
             BackendCameraStreamProcessor(), self._server
         )
         # Optional TLS: provide cert/key via env to enable secure port
         cert_path = os.getenv("DESKTOP_GRPC_TLS_CERT")
         key_path = os.getenv("DESKTOP_GRPC_TLS_KEY")
-        if cert_path and key_path and os.path.exists(cert_path) and os.path.exists(key_path):
+        if (
+            cert_path
+            and key_path
+            and os.path.exists(cert_path)
+            and os.path.exists(key_path)
+        ):
             with open(cert_path, "rb") as f:
                 cert_chain = f.read()
             with open(key_path, "rb") as f:

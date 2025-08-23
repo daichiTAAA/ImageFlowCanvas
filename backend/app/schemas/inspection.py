@@ -1,6 +1,7 @@
 """
 検査関連のPydanticスキーマ
 """
+
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any, Union, Generic, TypeVar
 from datetime import datetime
@@ -127,8 +128,8 @@ class HumanResult(BaseModel):
     judged_at: datetime
 
 
-# 検査対象スキーマ
-class InspectionTargetBase(BaseModel):
+# 検査指示スキーマ
+class inspectionInstructionBase(BaseModel):
     name: str = Field(..., max_length=255)
     description: Optional[str] = None
     # group_id + process_code を主キーとする
@@ -141,12 +142,12 @@ class InspectionTargetBase(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
-class InspectionTargetCreate(InspectionTargetBase):
+class inspectionInstructionCreate(inspectionInstructionBase):
     group_id: uuid.UUID
     process_code: str
 
 
-class InspectionTargetUpdate(BaseModel):
+class inspectionInstructionUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     product_name: Optional[str] = Field(None, max_length=255)
@@ -157,7 +158,7 @@ class InspectionTargetUpdate(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
-class InspectionTargetResponse(InspectionTargetBase):
+class inspectionInstructionResponse(inspectionInstructionBase):
     # Map ORM attribute metadata_ -> JSON field "metadata"
     # Ensure pydantic reads from attribute name and serializes with field name
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -168,7 +169,7 @@ class InspectionTargetResponse(InspectionTargetBase):
         validation_alias="metadata_",
         serialization_alias="metadata",
     )
-    
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
@@ -196,7 +197,7 @@ class InspectionCriteriaUpdate(BaseModel):
 
 class InspectionCriteriaResponse(InspectionCriteriaBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
@@ -287,7 +288,7 @@ class ProductCodeNameResponse(ProductCodeNameBase):
 
 # 検査項目スキーマ
 class InspectionItemBase(BaseModel):
-    target_id: uuid.UUID
+    instruction_id: uuid.UUID
     name: str = Field(..., max_length=255)
     description: Optional[str] = None
     type: InspectionType
@@ -303,7 +304,7 @@ class InspectionItemCreate(InspectionItemBase):
 
 
 class InspectionItemUpdate(BaseModel):
-    target_id: Optional[uuid.UUID] = None
+    instruction_id: Optional[uuid.UUID] = None
     name: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     type: Optional[InspectionType] = None
@@ -316,19 +317,19 @@ class InspectionItemUpdate(BaseModel):
 
 class InspectionItemResponse(InspectionItemBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
     created_by: Optional[uuid.UUID] = None
     # リレーションフィールド
-    target: Optional[InspectionTargetResponse] = None
+    instruction: Optional[inspectionInstructionResponse] = None
     criteria: Optional[InspectionCriteriaResponse] = None
 
 
 # 検査実行スキーマ
 class InspectionExecutionBase(BaseModel):
-    target_id: uuid.UUID
+    instruction_id: uuid.UUID
     operator_id: Optional[uuid.UUID] = None
     qr_code: Optional[str] = None
     # ORM attribute is metadata_ (column name "metadata")
@@ -355,13 +356,13 @@ class InspectionExecutionResponse(InspectionExecutionBase):
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
     # リレーションフィールド
-    target: Optional[InspectionTargetResponse] = None
+    instruction: Optional[inspectionInstructionResponse] = None
 
 
 # 検査項目実行スキーマ
 class InspectionItemExecutionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: uuid.UUID
     execution_id: uuid.UUID
     item_id: uuid.UUID
@@ -401,7 +402,7 @@ class InspectionResultUpdate(BaseModel):
 
 class InspectionResultResponse(InspectionResultBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: uuid.UUID
     confidence_score: Optional[float] = None
     processing_time_ms: Optional[int] = None
@@ -410,7 +411,8 @@ class InspectionResultResponse(InspectionResultBase):
 
 
 # ページネーション用汎用スキーマ
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class PaginatedResponse(BaseModel, Generic[T]):
     items: List[T]
@@ -422,7 +424,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 # gRPC用リクエスト・レスポンススキーマ
 class ExecuteInspectionRequest(BaseModel):
-    target_id: uuid.UUID
+    instruction_id: uuid.UUID
     operator_id: Optional[uuid.UUID] = None
     qr_code: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = {}

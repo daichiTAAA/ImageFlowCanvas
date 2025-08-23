@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from imageflow.v1 import evaluator_pb2, evaluator_pb2_grpc, ai_detection_pb2  # type: ignore
+
     HAS_EVAL_STUBS = True
 except Exception as e:
     logger.warning(f"Evaluator gRPC stubs not available: {e}")
@@ -28,17 +29,20 @@ from app.database import AsyncSessionLocal
 from app.models.inspection import (
     ProductTypeGroupMember,
     ProductTypeGroup,
-    InspectionTarget,
+    inspectionInstruction,
     InspectionItem,
     InspectionCriteria,
 )
 
 
 class EvaluationCore:
-    async def resolve_criteria(self, product_code: str, process_code: str, pipeline_id: Optional[str]):
+    async def resolve_criteria(
+        self, product_code: str, process_code: str, pipeline_id: Optional[str]
+    ):
         if not (product_code and process_code and pipeline_id):
             return None
         import uuid
+
         try:
             pipeline_uuid = uuid.UUID(pipeline_id)
         except Exception:
@@ -47,7 +51,10 @@ class EvaluationCore:
             grp_row = (
                 await session.execute(
                     select(ProductTypeGroupMember, ProductTypeGroup)
-                    .join(ProductTypeGroup, ProductTypeGroupMember.group_id == ProductTypeGroup.id)
+                    .join(
+                        ProductTypeGroup,
+                        ProductTypeGroupMember.group_id == ProductTypeGroup.id,
+                    )
                     .where(ProductTypeGroupMember.product_code == product_code)
                 )
             ).first()
@@ -56,32 +63,46 @@ class EvaluationCore:
             group_id = grp_row[0].group_id
 
             tgt = (
-                await session.execute(
-                    select(InspectionTarget)
-                    .where(
-                        (InspectionTarget.group_id == group_id)
-                        & (InspectionTarget.process_code == process_code)
+                (
+                    await session.execute(
+                        select(inspectionInstruction)
+                        .where(
+                            (inspectionInstruction.group_id == group_id)
+                            & (inspectionInstruction.process_code == process_code)
+                        )
+                        .order_by(inspectionInstruction.created_at.desc())
                     )
-                    .order_by(InspectionTarget.created_at.desc())
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if not tgt:
                 return None
             item = (
-                await session.execute(
-                    select(InspectionItem).where(
-                        (InspectionItem.target_id == tgt.id)
-                        & (InspectionItem.pipeline_id == pipeline_uuid)
+                (
+                    await session.execute(
+                        select(InspectionItem).where(
+                            (InspectionItem.instruction_id == tgt.id)
+                            & (InspectionItem.pipeline_id == pipeline_uuid)
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if not item or not item.criteria_id:
                 return None
             crit = (
-                await session.execute(
-                    select(InspectionCriteria).where(InspectionCriteria.id == item.criteria_id)
+                (
+                    await session.execute(
+                        select(InspectionCriteria).where(
+                            InspectionCriteria.id == item.criteria_id
+                        )
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if not crit:
                 return None
             return {
@@ -101,7 +122,9 @@ class EvaluationCore:
 
         if jt == "BINARY":
             expected = spec.get("binary", {}).get("expected_value", True)
-            return ok((det_count == 0) if expected else (det_count > 0)), {"detected": str(det_count)}
+            return ok((det_count == 0) if expected else (det_count > 0)), {
+                "detected": str(det_count)
+            }
         if jt == "THRESHOLD":
             th = spec.get("threshold", {}).get("threshold")
             op = (spec.get("threshold", {}).get("operator") or "").upper()
@@ -117,11 +140,18 @@ class EvaluationCore:
                 "EQUAL": v == t,
                 "NOT_EQUAL": v != t,
             }.get(op, v <= t)
-            return ok(decision), {"detected": str(det_count), "threshold": str(t), "operator": op}
+            return ok(decision), {
+                "detected": str(det_count),
+                "threshold": str(t),
+                "operator": op,
+            }
         if jt == "CATEGORICAL":
             allowed = set(spec.get("categorical", {}).get("allowed_categories", []))
             all_allowed = all((d.class_name in allowed) for d in detections)
-            return ok(all_allowed), {"allowed": ",".join(allowed), "detected": str(det_count)}
+            return ok(all_allowed), {
+                "allowed": ",".join(allowed),
+                "detected": str(det_count),
+            }
         if jt == "NUMERICAL":
             num = spec.get("numerical", {})
             v = float(det_count)
@@ -129,7 +159,11 @@ class EvaluationCore:
             mx = num.get("max_value")
             ok_min = True if mn is None else v >= float(mn)
             ok_max = True if mx is None else v <= float(mx)
-            return ok(ok_min and ok_max), {"detected": str(det_count), "min": str(mn or ""), "max": str(mx or "")}
+            return ok(ok_min and ok_max), {
+                "detected": str(det_count),
+                "min": str(mn or ""),
+                "max": str(mx or ""),
+            }
         return ok(det_count == 0), {"detected": str(det_count)}
 
     async def resolve_criteria_by_item(self, item_id: str):
@@ -139,23 +173,34 @@ class EvaluationCore:
         if not item_id:
             return None
         import uuid
+
         try:
             item_uuid = uuid.UUID(item_id)
         except Exception:
             return None
         async with AsyncSessionLocal() as session:
             item = (
-                await session.execute(
-                    select(InspectionItem).where(InspectionItem.id == item_uuid)
+                (
+                    await session.execute(
+                        select(InspectionItem).where(InspectionItem.id == item_uuid)
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if not item or not item.criteria_id:
                 return None
             crit = (
-                await session.execute(
-                    select(InspectionCriteria).where(InspectionCriteria.id == item.criteria_id)
+                (
+                    await session.execute(
+                        select(InspectionCriteria).where(
+                            InspectionCriteria.id == item.criteria_id
+                        )
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if not crit:
                 return None
             return {
@@ -171,16 +216,16 @@ class InspectionEvaluatorServicer(evaluator_pb2_grpc.InspectionEvaluatorServicer
         self.core = EvaluationCore()
 
     async def EvaluateDetections(self, request, context):
-        # Prefer explicit target item id in request body
-        item_override: Optional[str] = getattr(request, 'item_id', None) or None
+        # Prefer explicit instruction item id in request body
+        item_override: Optional[str] = getattr(request, "item_id", None) or None
         try:
             logger.info(
                 "[evaluator-backend] EvaluateDetections: req.item_id=%s pc=%s pr=%s pl=%s det=%s",
                 item_override,
-                getattr(request, 'product_code', None),
-                getattr(request, 'process_code', None),
-                getattr(request, 'pipeline_id', None),
-                len(getattr(request, 'detections', []) or []),
+                getattr(request, "product_code", None),
+                getattr(request, "process_code", None),
+                getattr(request, "pipeline_id", None),
+                len(getattr(request, "detections", []) or []),
             )
         except Exception:
             pass
@@ -192,7 +237,8 @@ class InspectionEvaluatorServicer(evaluator_pb2_grpc.InspectionEvaluatorServicer
                 try:
                     logger.info(
                         "[evaluator-backend] criteria resolved by item_id: item=%s criteria=%s",
-                        criteria.get("item_id"), criteria.get("criteria_id")
+                        criteria.get("item_id"),
+                        criteria.get("criteria_id"),
                     )
                 except Exception:
                     pass
@@ -204,7 +250,8 @@ class InspectionEvaluatorServicer(evaluator_pb2_grpc.InspectionEvaluatorServicer
                 try:
                     logger.info(
                         "[evaluator-backend] criteria resolved by pipeline: item=%s criteria=%s",
-                        criteria.get("item_id"), criteria.get("criteria_id")
+                        criteria.get("item_id"),
+                        criteria.get("criteria_id"),
                     )
                 except Exception:
                     pass
@@ -219,13 +266,15 @@ class InspectionEvaluatorServicer(evaluator_pb2_grpc.InspectionEvaluatorServicer
             item_id=criteria["item_id"],
             pipeline_id=request.pipeline_id,
             metrics=metrics,
-            reason=f"detected={metrics.get('detected')}"
+            reason=f"detected={metrics.get('detected')}",
         )
 
 
 class InspectionEvaluatorServer:
     def __init__(self, bind_addr: Optional[str] = None):
-        self.bind_addr = bind_addr or os.getenv("EVALUATOR_GRPC_BIND_ADDR", "0.0.0.0:50052")
+        self.bind_addr = bind_addr or os.getenv(
+            "EVALUATOR_GRPC_BIND_ADDR", "0.0.0.0:50052"
+        )
         self._server: Optional[grpc_aio.Server] = None
 
     async def start(self):

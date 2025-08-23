@@ -903,16 +903,16 @@ message ErrorDetails {
 # 11. 検査マスタと製品のマッピング仕様
 
 ## 11.1. 目的
-Webで設定した検査項目（InspectionTarget/InspectionItem）を、端末アプリが選択した製品（ProductMaster）に連動させて取得するためのサーバー側規約とAPIを定義する。
+Webで設定した検査項目（inspectionInstruction/InspectionItem）を、端末アプリが選択した製品（ProductMaster）に連動させて取得するためのサーバー側規約とAPIを定義する。
 
 ## 11.2. マッピング規約
 - 第一候補（推奨）: 型式グループ
   - 製品の `product_code`（＝ProductMaster.product_code） が所属する `ProductTypeGroup` を検索
-  - `InspectionTarget.group_id` ≡ `ProductTypeGroup.id` のターゲットに紐づく項目を採用
+  - `inspectionInstruction.group_id` ≡ `ProductTypeGroup.id` のターゲットに紐づく項目を採用
 - フォールバック: 型式コード単体
-  - `InspectionTarget.product_code` ≡ 製品 `product_code`（＝ProductMaster.product_code）
+  - `inspectionInstruction.product_code` ≡ 製品 `product_code`（＝ProductMaster.product_code）
 - さらなるフォールバック: 作業指図単位
-  - `InspectionTarget.product_code` ≡ `ProductMaster.work_order_id`
+  - `inspectionInstruction.product_code` ≡ `ProductMaster.work_order_id`
 - いずれも不一致の場合: 空配列を返す（404は返さない）
 
 ## 11.3. API
@@ -931,19 +931,19 @@ Webで設定した検査項目（InspectionTarget/InspectionItem）を、端末�
 
 ## 11.5. セキュリティ/運用
 - 認証必須（JWT）。
-- マッピング規約の変更が必要な場合は、`InspectionTarget` に製品FKを直接持たせる選択肢もある（将来拡張）。
+- マッピング規約の変更が必要な場合は、`inspectionInstruction` に製品FKを直接持たせる選択肢もある（将来拡張）。
   
 ## 11.6. Backend 変更（検査マスタのキーを型式グループ + 工程へ）
 
 ### 11.6.1. モデル
 - ProductTypeGroup: 追加 `group_code`（unique）
 - ProcessMaster（新規）: `process_code`（PK相当）, `process_name`
-- InspectionTarget: 廃止/非推奨 `product_code`、必須 `group_id`, 追加 `process_code`
+- inspectionInstruction: 廃止/非推奨 `product_code`、必須 `group_id`, 追加 `process_code`
 
 ### 11.6.2. ルータ
 - `inspection_masters`
-  - targets 作成/更新で `group_id`, `process_code` を必須に変更
-  - items, criterias は従来通り target に紐付く
+  - instructions 作成/更新で `group_id`, `process_code` を必須に変更
+  - items, criterias は従来通り instruction に紐付く
   - 製品→項目解決: product_id → product_code → group_id → (group_id, process_code) で特定
 - `processes`（新規）
   - CRUD を提供
@@ -952,7 +952,7 @@ Webで設定した検査項目（InspectionTarget/InspectionItem）を、端末�
 - Alembic 等で以下を追加:
   - `product_code_groups.group_code`（ユニーク制約）
   - `process_masters` 新規作成
-  - `inspection_targets.process_code` 追加、`product_code` を非推奨（段階的削除）
+  - `inspection_instructions.process_code` 追加、`product_code` を非推奨（段階的削除）
 
 ### 11.6.4. 後方互換
 - 旧 API/データの読み取りは可能（group/工程未設定時は従来ロジックにフォールバック）

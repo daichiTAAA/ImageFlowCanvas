@@ -8,12 +8,12 @@ import "google/protobuf/empty.proto";
 
 // 検査マスタサービス
 service InspectionMasterService {
-  // 検査対象の管理
-  rpc CreateInspectionTarget(CreateInspectionTargetRequest) returns (InspectionTarget);
-  rpc GetInspectionTarget(GetInspectionTargetRequest) returns (InspectionTarget);
-  rpc ListInspectionTargets(ListInspectionTargetsRequest) returns (ListInspectionTargetsResponse);
-  rpc UpdateInspectionTarget(UpdateInspectionTargetRequest) returns (InspectionTarget);
-  rpc DeleteInspectionTarget(DeleteInspectionTargetRequest) returns (google.protobuf.Empty);
+  // 検査指示の管理
+  rpc CreateinspectionInstruction(CreateinspectionInstructionRequest) returns (inspectionInstruction);
+  rpc GetinspectionInstruction(GetinspectionInstructionRequest) returns (inspectionInstruction);
+  rpc ListinspectionInstructions(ListinspectionInstructionsRequest) returns (ListinspectionInstructionsResponse);
+  rpc UpdateinspectionInstruction(UpdateinspectionInstructionRequest) returns (inspectionInstruction);
+  rpc DeleteinspectionInstruction(DeleteinspectionInstructionRequest) returns (google.protobuf.Empty);
 
   // 検査項目の管理
   rpc CreateInspectionItem(CreateInspectionItemRequest) returns (InspectionItem);
@@ -46,8 +46,8 @@ service InspectionExecutionService {
 
 // データ構造定義
 
-// 検査対象（製品・部品情報）
-message InspectionTarget {
+// 検査指示（製品・部品情報）
+message inspectionInstruction {
   string id = 1;
   string name = 2;
   string description = 3;
@@ -62,7 +62,7 @@ message InspectionTarget {
 // 検査項目
 message InspectionItem {
   string id = 1;
-  string target_id = 2;  // 検査対象ID
+  string instruction_id = 2;  // 検査指示ID
   string name = 3;
   string description = 4;
   InspectionType type = 5;
@@ -91,7 +91,7 @@ message InspectionCriteria {
 // 検査実行
 message InspectionExecution {
   string id = 1;
-  string target_id = 2;  // 検査対象ID
+  string instruction_id = 2;  // 検査指示ID
   string operator_id = 3;  // 検査実施者ID
   InspectionStatus status = 4;
   string qr_code = 5;  // QRコード情報
@@ -187,8 +187,8 @@ message ThresholdSpec {
 
 // リクエスト・レスポンス定義
 
-// 検査対象のリクエスト
-message CreateInspectionTargetRequest {
+// 検査指示のリクエスト
+message CreateinspectionInstructionRequest {
   string name = 1;
   string description = 2;
   string product_code = 3;
@@ -196,24 +196,24 @@ message CreateInspectionTargetRequest {
   map<string, string> metadata = 5;
 }
 
-message GetInspectionTargetRequest {
+message GetinspectionInstructionRequest {
   string id = 1;
 }
 
-message ListInspectionTargetsRequest {
+message ListinspectionInstructionsRequest {
   int32 page = 1;
   int32 page_size = 2;
   string search_query = 3;
 }
 
-message ListInspectionTargetsResponse {
-  repeated InspectionTarget targets = 1;
+message ListinspectionInstructionsResponse {
+  repeated inspectionInstruction instructions = 1;
   int32 total_count = 2;
   int32 page = 3;
   int32 page_size = 4;
 }
 
-message UpdateInspectionTargetRequest {
+message UpdateinspectionInstructionRequest {
   string id = 1;
   string name = 2;
   string description = 3;
@@ -222,13 +222,13 @@ message UpdateInspectionTargetRequest {
   map<string, string> metadata = 6;
 }
 
-message DeleteInspectionTargetRequest {
+message DeleteinspectionInstructionRequest {
   string id = 1;
 }
 
 // 検査項目のリクエスト
 message CreateInspectionItemRequest {
-  string target_id = 1;
+  string instruction_id = 1;
   string name = 2;
   string description = 3;
   InspectionType type = 4;
@@ -244,7 +244,7 @@ message GetInspectionItemRequest {
 }
 
 message ListInspectionItemsRequest {
-  string target_id = 1;
+  string instruction_id = 1;
   int32 page = 2;
   int32 page_size = 3;
 }
@@ -258,7 +258,7 @@ message ListInspectionItemsResponse {
 
 message UpdateInspectionItemRequest {
   string id = 1;
-  string target_id = 2;
+  string instruction_id = 2;
   string name = 3;
   string description = 4;
   InspectionType type = 5;
@@ -312,7 +312,7 @@ message DeleteInspectionCriteriaRequest {
 
 // 検査実行のリクエスト
 message ExecuteInspectionRequest {
-  string target_id = 1;
+  string instruction_id = 1;
   string operator_id = 2;
   string qr_code = 3;
   map<string, string> metadata = 4;
@@ -328,7 +328,7 @@ message GetInspectionExecutionRequest {
 }
 
 message ListInspectionExecutionsRequest {
-  string target_id = 1;
+  string instruction_id = 1;
   string operator_id = 2;
   InspectionStatus status = 3;
   int64 from_date = 4;
@@ -360,7 +360,7 @@ message GetInspectionResultRequest {
 
 message ListInspectionResultsRequest {
   string execution_id = 1;
-  string target_id = 2;
+  string instruction_id = 2;
   JudgmentResult judgment = 3;
   int64 from_date = 4;
   int64 to_date = 5;

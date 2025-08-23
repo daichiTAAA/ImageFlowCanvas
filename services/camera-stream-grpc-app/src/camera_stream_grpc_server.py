@@ -62,9 +62,7 @@ class CameraStreamProcessorImplementation(
                 "filter-grpc-service.image-processing.svc.cluster.local:9090"
             )
             backend_default = "http://backend-service.default.svc.cluster.local:8000"
-            evaluator_default = (
-                "inspection-evaluator-grpc-service.image-processing.svc.cluster.local:9090"
-            )
+            evaluator_default = "inspection-evaluator-grpc-service.image-processing.svc.cluster.local:9090"
         elif self.deployment_env == "docker":
             # Docker Compose service names
             resize_default = "resize-grpc:9090"
@@ -101,9 +99,7 @@ class CameraStreamProcessorImplementation(
                 "timeout": 30.0,
             },
             "evaluator": {
-                "endpoint": os.getenv(
-                    "EVALUATOR_GRPC_ENDPOINT", evaluator_default
-                ),
+                "endpoint": os.getenv("EVALUATOR_GRPC_ENDPOINT", evaluator_default),
                 "client_class": evaluator_pb2_grpc.InspectionEvaluatorStub,
                 "timeout": 10.0,
             },
@@ -322,8 +318,10 @@ class CameraStreamProcessorImplementation(
 
                         # Try to evaluate detections via inspection-evaluator service
                         try:
-                            eval_judgment, eval_item_id, eval_criteria_id = self._evaluate_detections(
-                                video_frame, list(result.get("detections", []))
+                            eval_judgment, eval_item_id, eval_criteria_id = (
+                                self._evaluate_detections(
+                                    video_frame, list(result.get("detections", []))
+                                )
                             )
                             if eval_judgment:
                                 processed_frame.judgment = eval_judgment
@@ -371,7 +369,9 @@ class CameraStreamProcessorImplementation(
             processed_frame.error_message = str(e)
             return processed_frame
 
-    def _evaluate_detections(self, video_frame, detections_list: List[ai_detection_pb2.Detection]):
+    def _evaluate_detections(
+        self, video_frame, detections_list: List[ai_detection_pb2.Detection]
+    ):
         """
         Call the inspection-evaluator to obtain server-side judgment.
         Returns (judgment, item_id, criteria_id) or (None, None, None) on failure.
@@ -380,23 +380,35 @@ class CameraStreamProcessorImplementation(
             return (None, None, None)
         try:
             client = self.clients["evaluator"]
-            product_code = video_frame.metadata.processing_params.get("product_code", "")
-            process_code = video_frame.metadata.processing_params.get("process_code", "")
+            product_code = video_frame.metadata.processing_params.get(
+                "product_code", ""
+            )
+            process_code = video_frame.metadata.processing_params.get(
+                "process_code", ""
+            )
             pipeline_id = video_frame.metadata.pipeline_id or ""
             # Build request
-            target_item_id = video_frame.metadata.processing_params.get("target_item_id", "")
+            instruction_item_id = video_frame.metadata.processing_params.get(
+                "instruction_item_id", ""
+            )
             req = evaluator_pb2.EvaluationRequest(
                 product_code=product_code,
                 process_code=process_code,
                 pipeline_id=pipeline_id,
                 detections=detections_list,
-                item_id=target_item_id or "",
+                item_id=instruction_item_id or "",
             )
-            resp = client.EvaluateDetections(req, timeout=self.grpc_services["evaluator"]["timeout"])
+            resp = client.EvaluateDetections(
+                req, timeout=self.grpc_services["evaluator"]["timeout"]
+            )
             logger.debug(
                 f"Evaluator resp: judgment={resp.judgment} item_id={resp.item_id} criteria_id={resp.criteria_id}"
             )
-            return (resp.judgment or None, resp.item_id or None, resp.criteria_id or None)
+            return (
+                resp.judgment or None,
+                resp.item_id or None,
+                resp.criteria_id or None,
+            )
         except Exception as e:
             logger.warning(f"EvaluateDetections error: {e}")
             return (None, None, None)

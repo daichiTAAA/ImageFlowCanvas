@@ -47,7 +47,7 @@ interface InspectionApiService {
     suspend fun listProcesses(page: Int = 1, pageSize: Int = 200): ApiResult<PaginatedResponse<ProcessMasterKmp>>
 
     // Executions
-    suspend fun createExecution(targetId: String, operatorId: String? = null, qrCode: String? = null, metadata: Map<String, String> = emptyMap()): ApiResult<ExecuteInspectionResponseKmp>
+    suspend fun createExecution(instructionId: String, operatorId: String? = null, qrCode: String? = null, metadata: Map<String, String> = emptyMap()): ApiResult<ExecuteInspectionResponseKmp>
     suspend fun listItemExecutions(executionId: String): ApiResult<List<InspectionItemExecutionKmp>>
     suspend fun saveInspectionResult(
         executionId: String,
@@ -74,7 +74,7 @@ data class PaginatedResponse<T>(
 @Serializable
 data class InspectionItemKmp(
     val id: String,
-    val target_id: String,
+    val instruction_id: String,
     val name: String,
     val description: String? = null,
     val type: String,

@@ -43,7 +43,7 @@ fun RealtimeInspectionDesktop(
     modifier: Modifier = Modifier,
     orderLabel: String? = null,
     renderUi: Boolean = true,
-    targetItemId: String? = null,
+    instructionItemId: String? = null,
     onDetectionsUpdated: ((detections: Int, processingTimeMs: Long) -> Unit)? = null,
     onRealtimeUpdate: ((detections: Int, processingTimeMs: Long, pipelineId: String?, details: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>, serverJudgment: String?) -> Unit)? = null,
     onOkSnapshot: ((pipelineId: String?, jpegBytes: ByteArray, details: List<com.imageflow.kmp.ui.viewmodel.MobileInspectionViewModel.RealtimeDetection>) -> Unit)? = null,
@@ -230,7 +230,7 @@ fun RealtimeInspectionDesktop(
                                 serverJudgment
                             )
                             // If server judgment is OK, emit snapshot bytes for persistence
-                            if ((serverPipelineId?.isNotBlank() == true || !targetItemId.isNullOrBlank()) && (serverJudgment?.equals("OK", ignoreCase = true) == true)) {
+                            if ((serverPipelineId?.isNotBlank() == true || !instructionItemId.isNullOrBlank()) && (serverJudgment?.equals("OK", ignoreCase = true) == true)) {
                                 latestJpeg?.let { jpg ->
                                     try { onOkSnapshotState.value?.invoke(serverPipelineId, jpg, details) } catch (_: Throwable) { }
                                 }

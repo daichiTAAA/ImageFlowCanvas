@@ -40,7 +40,7 @@ import {
 } from "@mui/icons-material";
 import { inspectionApi } from "../services/api";
 
-interface InspectionTarget {
+interface inspectionInstruction {
   id: string;
   name: string;
   description?: string;
@@ -55,7 +55,7 @@ interface InspectionTarget {
 
 interface InspectionItem {
   id: string;
-  target_id: string;
+  instruction_id: string;
   name: string;
   description?: string;
   type: string;
@@ -76,18 +76,17 @@ interface ProductTypeGroup {
 }
 
 export function InspectionMasters() {
-  const [targets, setTargets] = useState<InspectionTarget[]>([]);
-  const [selectedTarget, setSelectedTarget] = useState<InspectionTarget | null>(
-    null
-  );
-  const [targetInspectionItems, setTargetInspectionItems] = useState<
+  const [instructions, setInstructions] = useState<inspectionInstruction[]>([]);
+  const [selectedInstruction, setSelectedInstruction] =
+    useState<inspectionInstruction | null>(null);
+  const [instructionInspectionItems, setInstructionInspectionItems] = useState<
     InspectionItem[]
   >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingTarget, setEditingTarget] =
-    useState<Partial<InspectionTarget> | null>(null);
+  const [editingInstruction, setEditingInstruction] =
+    useState<Partial<inspectionInstruction> | null>(null);
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [editingItem, setEditingItem] =
     useState<Partial<InspectionItem> | null>(null);
@@ -107,7 +106,7 @@ export function InspectionMasters() {
   const [criterias, setCriterias] = useState<any[]>([]);
   const [openCriteriaDialog, setOpenCriteriaDialog] = useState(false);
   const [editingCriteria, setEditingCriteria] = useState<any | null>(null);
-  const [targetSearch, setTargetSearch] = useState("");
+  const [instructionSearch, setInstructionSearch] = useState("");
   const [processes, setProcesses] = useState<any[]>([]);
   const [openProcessDialog, setOpenProcessDialog] = useState(false);
   const [editingProcess, setEditingProcess] = useState<any | null>(null);
@@ -160,7 +159,7 @@ export function InspectionMasters() {
   }, [editingCriteria]);
 
   useEffect(() => {
-    loadTargets();
+    loadInstructions();
     loadGroups();
     loadCriterias();
     loadProcesses();
@@ -168,17 +167,17 @@ export function InspectionMasters() {
     loadCodeNames();
   }, []);
 
-  const loadTargets = async () => {
+  const loadInstructions = async () => {
     try {
       setLoading(true);
       // Fetch more rows but within backend limit (<= 100)
-      const response = await inspectionApi.listInspectionTargets({
+      const response = await inspectionApi.listinspectionInstructions({
         page_size: 100,
       });
-      setTargets(response.items);
+      setInstructions(response.items);
     } catch (error) {
-      setError("検査対象マスタの読み込みに失敗しました");
-      console.error("Failed to load targets:", error);
+      setError("検査指示マスタの読み込みに失敗しました");
+      console.error("Failed to load instructions:", error);
     } finally {
       setLoading(false);
     }
@@ -230,7 +229,7 @@ export function InspectionMasters() {
       const list = await inspectionApi.getPipelines();
       setPipelines(list || []);
     } catch (e) {
-      console.error('Failed to load pipelines', e);
+      console.error("Failed to load pipelines", e);
     }
   };
 
@@ -254,22 +253,22 @@ export function InspectionMasters() {
     }
   };
 
-  const loadTargetInspectionItems = async (targetId: string) => {
+  const loadInstructionInspectionItems = async (instructionId: string) => {
     try {
-      const response = await inspectionApi.listItems(targetId);
-      setTargetInspectionItems(response.items);
+      const response = await inspectionApi.listItems(instructionId);
+      setInstructionInspectionItems(response.items);
     } catch (error) {
-      console.error("Failed to load target items:", error);
+      console.error("Failed to load instruction items:", error);
     }
   };
 
-  const handleTargetSelect = (target: InspectionTarget) => {
-    setSelectedTarget(target);
-    loadTargetInspectionItems(target.id);
+  const handleInstructionSelect = (instruction: inspectionInstruction) => {
+    setSelectedInstruction(instruction);
+    loadInstructionInspectionItems(instruction.id);
   };
 
-  const handleCreateTarget = () => {
-    setEditingTarget({
+  const handleCreateInstruction = () => {
+    setEditingInstruction({
       name: "",
       description: "",
       // group_id はダイアログで選択
@@ -280,15 +279,15 @@ export function InspectionMasters() {
   };
 
   const handleCreateItem = () => {
-    if (!selectedTarget) return;
+    if (!selectedInstruction) return;
     setEditingItem({
-      target_id: selectedTarget.id,
+      instruction_id: selectedInstruction.id,
       name: "",
       description: "",
       type: "VISUAL_INSPECTION",
       pipeline_id: "",
       pipeline_params: {},
-      execution_order: (targetInspectionItems?.length || 0) + 1,
+      execution_order: (instructionInspectionItems?.length || 0) + 1,
       is_required: true,
       criteria_id: "",
     });
@@ -296,11 +295,11 @@ export function InspectionMasters() {
   };
 
   const handleSaveItem = async () => {
-    if (!editingItem || !selectedTarget) return;
+    if (!editingItem || !selectedInstruction) return;
     try {
       setLoading(true);
       const payload: any = {
-        target_id: selectedTarget.id,
+        instruction_id: selectedInstruction.id,
         name: editingItem.name,
         description: editingItem.description,
         type: editingItem.type,
@@ -317,7 +316,7 @@ export function InspectionMasters() {
       }
       setOpenItemDialog(false);
       setEditingItem(null);
-      await loadTargetInspectionItems(selectedTarget.id);
+      await loadInstructionInspectionItems(selectedInstruction.id);
     } catch (error) {
       setError("検査項目の保存に失敗しました");
       console.error("Failed to save item:", error);
@@ -330,12 +329,12 @@ export function InspectionMasters() {
     setOpenItemDialog(true);
   };
   const handleDeleteItem = async (item: InspectionItem) => {
-    if (!selectedTarget) return;
+    if (!selectedInstruction) return;
     if (!window.confirm("この項目を削除しますか？")) return;
     try {
       setLoading(true);
       await inspectionApi.deleteInspectionItem(item.id);
-      await loadTargetInspectionItems(selectedTarget.id);
+      await loadInstructionInspectionItems(selectedInstruction.id);
     } catch (e) {
       setError("検査項目の削除に失敗しました");
     } finally {
@@ -343,51 +342,51 @@ export function InspectionMasters() {
     }
   };
 
-  const handleEditTarget = (target: InspectionTarget) => {
-    setEditingTarget(target);
+  const handleEditInstruction = (instruction: inspectionInstruction) => {
+    setEditingInstruction(instruction);
     setOpenDialog(true);
   };
 
-  const handleSaveTarget = async () => {
-    if (!editingTarget) return;
+  const handleSaveInstruction = async () => {
+    if (!editingInstruction) return;
 
     try {
       setLoading(true);
-      if (editingTarget.id) {
+      if (editingInstruction.id) {
         // 更新
-        await inspectionApi.updateInspectionTarget(
-          editingTarget.id,
-          editingTarget
+        await inspectionApi.updateinspectionInstruction(
+          editingInstruction.id,
+          editingInstruction
         );
       } else {
         // 新規作成
-        await inspectionApi.createInspectionTarget(editingTarget);
+        await inspectionApi.createinspectionInstruction(editingInstruction);
       }
       setOpenDialog(false);
-      setEditingTarget(null);
-      await loadTargets();
+      setEditingInstruction(null);
+      await loadInstructions();
     } catch (error) {
-      setError("検査対象マスタの保存に失敗しました");
-      console.error("Failed to save target:", error);
+      setError("検査指示マスタの保存に失敗しました");
+      console.error("Failed to save instruction:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteTarget = async (targetId: string) => {
-    if (!window.confirm("この検査対象マスタを削除しますか？")) return;
+  const handleDeleteInstruction = async (instructionId: string) => {
+    if (!window.confirm("この検査指示マスタを削除しますか？")) return;
 
     try {
       setLoading(true);
-      await inspectionApi.deleteInspectionTarget(targetId);
-      await loadTargets();
-      if (selectedTarget?.id === targetId) {
-        setSelectedTarget(null);
-        setTargetInspectionItems([]);
+      await inspectionApi.deleteinspectionInstruction(instructionId);
+      await loadInstructions();
+      if (selectedInstruction?.id === instructionId) {
+        setSelectedInstruction(null);
+        setInstructionInspectionItems([]);
       }
     } catch (error) {
-      setError("検査対象マスタの削除に失敗しました");
-      console.error("Failed to delete target:", error);
+      setError("検査指示マスタの削除に失敗しました");
+      console.error("Failed to delete instruction:", error);
     } finally {
       setLoading(false);
     }
@@ -396,7 +395,7 @@ export function InspectionMasters() {
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        検査対象マスタ管理
+        検査マスタ管理
       </Typography>
 
       {error && (
@@ -406,7 +405,7 @@ export function InspectionMasters() {
       )}
 
       <Grid container spacing={3}>
-        {/* 検査対象マスタ一覧 */}
+        {/* 検査指示マスタ一覧 */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -417,21 +416,21 @@ export function InspectionMasters() {
                 mb={2}
                 gap={1}
               >
-                <Typography variant="h6">検査対象マスタ</Typography>
+                <Typography variant="h6">検査指示マスタ</Typography>
                 <Box display="flex" gap={1}>
                   <TextField
                     size="small"
-                    placeholder="型式グループ/工程/検査対象マスタ名で検索"
-                    value={targetSearch}
-                    onChange={(e) => setTargetSearch(e.target.value)}
+                    placeholder="型式グループ/工程/検査指示マスタ名で検索"
+                    value={instructionSearch}
+                    onChange={(e) => setInstructionSearch(e.target.value)}
                   />
                   <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={handleCreateTarget}
+                    onClick={handleCreateInstruction}
                     disabled={loading}
                   >
-                    検査対象マスタを新規作成
+                    検査指示マスタを新規作成
                   </Button>
                 </Box>
               </Box>
@@ -442,15 +441,15 @@ export function InspectionMasters() {
                     <TableRow>
                       <TableCell>型式グループ</TableCell>
                       <TableCell>工程</TableCell>
-                      <TableCell>検査対象マスタ名</TableCell>
+                      <TableCell>検査指示マスタ名</TableCell>
                       <TableCell>バージョン</TableCell>
                       <TableCell>操作</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {targets
+                    {instructions
                       .filter((t) => {
-                        const q = targetSearch.trim().toLowerCase();
+                        const q = instructionSearch.trim().toLowerCase();
                         if (!q) return true;
                         // Lookup group and process labels for filtering
                         const group = groups.find(
@@ -476,17 +475,17 @@ export function InspectionMasters() {
                           nameText.includes(q)
                         );
                       })
-                      .map((target) => (
+                      .map((instruction) => (
                         <TableRow
-                          key={target.id}
-                          selected={selectedTarget?.id === target.id}
+                          key={instruction.id}
+                          selected={selectedInstruction?.id === instruction.id}
                           hover
-                          onClick={() => handleTargetSelect(target)}
+                          onClick={() => handleInstructionSelect(instruction)}
                           sx={{ cursor: "pointer" }}
                         >
                           <TableCell>
                             {(() => {
-                              const gid = (target as any).group_id as
+                              const gid = (instruction as any).group_id as
                                 | string
                                 | undefined;
                               const g = gid
@@ -501,7 +500,7 @@ export function InspectionMasters() {
                           </TableCell>
                           <TableCell>
                             {(() => {
-                              const code = (target as any).process_code as
+                              const code = (instruction as any).process_code as
                                 | string
                                 | undefined;
                               const p = code
@@ -514,14 +513,14 @@ export function InspectionMasters() {
                               return code || "-";
                             })()}
                           </TableCell>
-                          <TableCell>{target.name}</TableCell>
-                          <TableCell>{target.version}</TableCell>
+                          <TableCell>{instruction.name}</TableCell>
+                          <TableCell>{instruction.version}</TableCell>
                           <TableCell>
                             <IconButton
                               size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleEditTarget(target);
+                                handleEditInstruction(instruction);
                               }}
                             >
                               <EditIcon />
@@ -531,7 +530,7 @@ export function InspectionMasters() {
                               color="error"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteTarget(target.id);
+                                handleDeleteInstruction(instruction.id);
                               }}
                             >
                               <DeleteIcon />
@@ -557,11 +556,14 @@ export function InspectionMasters() {
                 mb={2}
               >
                 <Typography variant="h6">
-                  検査項目 {selectedTarget && `- ${selectedTarget.name}`}
+                  検査項目{" "}
+                  {selectedInstruction && `- ${selectedInstruction.name}`}
                 </Typography>
                 <Tooltip
                   title={
-                    selectedTarget ? "" : "左の検査対象マスタを選択してください"
+                    selectedInstruction
+                      ? ""
+                      : "左の検査指示マスタを選択してください"
                   }
                 >
                   <span>
@@ -569,7 +571,7 @@ export function InspectionMasters() {
                       variant="contained"
                       startIcon={<AddIcon />}
                       onClick={handleCreateItem}
-                      disabled={!selectedTarget}
+                      disabled={!selectedInstruction}
                     >
                       検査項目を追加
                     </Button>
@@ -577,7 +579,7 @@ export function InspectionMasters() {
                 </Tooltip>
               </Box>
 
-              {selectedTarget ? (
+              {selectedInstruction ? (
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
@@ -590,7 +592,7 @@ export function InspectionMasters() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {targetInspectionItems.map((item) => (
+                      {instructionInspectionItems.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell>{item.execution_order}</TableCell>
                           <TableCell>{item.name}</TableCell>
@@ -638,13 +640,13 @@ export function InspectionMasters() {
                       <Button
                         color="inherit"
                         size="small"
-                        onClick={handleCreateTarget}
+                        onClick={handleCreateInstruction}
                       >
-                        検査対象マスタを作成
+                        検査指示マスタを作成
                       </Button>
                     }
                   >
-                    右側の検査項目を追加するには、左の検査対象マスタを選択してください。
+                    右側の検査項目を追加するには、左の検査指示マスタを選択してください。
                   </Alert>
                 </Box>
               )}
@@ -652,20 +654,20 @@ export function InspectionMasters() {
           </Card>
         </Grid>
 
-        {/* 検査対象マスタ詳細・統計 */}
-        {selectedTarget && (
+        {/* 検査指示マスタ詳細・統計 */}
+        {selectedInstruction && (
           <Grid item xs={12}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  検査対象マスタ詳細
+                  検査指示マスタ詳細
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} md={6}>
                     <TextField
                       label="型式グループ"
                       value={(function () {
-                        const gid = (selectedTarget as any).group_id as
+                        const gid = (selectedInstruction as any).group_id as
                           | string
                           | undefined;
                         const g = gid
@@ -682,9 +684,8 @@ export function InspectionMasters() {
                     <TextField
                       label="工程"
                       value={(function () {
-                        const code = (selectedTarget as any).process_code as
-                          | string
-                          | undefined;
+                        const code = (selectedInstruction as any)
+                          .process_code as string | undefined;
                         const p = code
                           ? (processes as any[]).find(
                               (x) => x.process_code === code
@@ -698,15 +699,15 @@ export function InspectionMasters() {
                       margin="normal"
                     />
                     <TextField
-                      label="検査対象マスタ名"
-                      value={selectedTarget.name}
+                      label="検査指示マスタ名"
+                      value={selectedInstruction.name}
                       fullWidth
                       InputProps={{ readOnly: true }}
                       margin="normal"
                     />
                     <TextField
                       label="説明"
-                      value={selectedTarget.description || ""}
+                      value={selectedInstruction.description || ""}
                       fullWidth
                       multiline
                       rows={2}
@@ -717,7 +718,7 @@ export function InspectionMasters() {
                   <Grid item xs={12} md={6}>
                     <TextField
                       label="バージョン"
-                      value={selectedTarget.version}
+                      value={selectedInstruction.version}
                       fullWidth
                       InputProps={{ readOnly: true }}
                       margin="normal"
@@ -725,7 +726,7 @@ export function InspectionMasters() {
                     <TextField
                       label="作成日時"
                       value={new Date(
-                        selectedTarget.created_at
+                        selectedInstruction.created_at
                       ).toLocaleString()}
                       fullWidth
                       InputProps={{ readOnly: true }}
@@ -734,7 +735,7 @@ export function InspectionMasters() {
                     <TextField
                       label="更新日時"
                       value={new Date(
-                        selectedTarget.updated_at
+                        selectedInstruction.updated_at
                       ).toLocaleString()}
                       fullWidth
                       InputProps={{ readOnly: true }}
@@ -748,7 +749,7 @@ export function InspectionMasters() {
         )}
       </Grid>
 
-      {/* 検査対象マスタ編集ダイアログ */}
+      {/* 検査指示マスタ編集ダイアログ */}
       <Dialog
         open={openDialog}
         onClose={() => setOpenDialog(false)}
@@ -756,7 +757,9 @@ export function InspectionMasters() {
         fullWidth
       >
         <DialogTitle>
-          {editingTarget?.id ? "検査対象マスタ編集" : "検査対象マスタ新規作成"}
+          {editingInstruction?.id
+            ? "検査指示マスタ編集"
+            : "検査指示マスタ新規作成"}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -768,7 +771,7 @@ export function InspectionMasters() {
                 <Select
                   labelId="group-select-label"
                   label="型式グループ group_id"
-                  value={(editingTarget as any)?.group_id || ""}
+                  value={(editingInstruction as any)?.group_id || ""}
                   renderValue={(sel) => {
                     const v = String(sel || "");
                     if (!v) return ""; // 未選択時は何も表示しない
@@ -776,7 +779,7 @@ export function InspectionMasters() {
                     return found?.name || v;
                   }}
                   onChange={(e) =>
-                    setEditingTarget((prev) =>
+                    setEditingInstruction((prev) =>
                       prev
                         ? { ...prev, group_id: String(e.target.value) }
                         : null
@@ -803,7 +806,7 @@ export function InspectionMasters() {
                 <Select
                   labelId="process-select-label"
                   label="工程 process_code"
-                  value={(editingTarget as any)?.process_code || ""}
+                  value={(editingInstruction as any)?.process_code || ""}
                   renderValue={(sel) => {
                     const v = String(sel || "");
                     if (!v) return "";
@@ -813,7 +816,7 @@ export function InspectionMasters() {
                     return found?.process_name || v;
                   }}
                   onChange={(e) =>
-                    setEditingTarget((prev) =>
+                    setEditingInstruction((prev) =>
                       prev
                         ? { ...prev, process_code: String(e.target.value) }
                         : null
@@ -835,9 +838,9 @@ export function InspectionMasters() {
             <Grid item xs={12} md={6}>
               <TextField
                 label="バージョン"
-                value={editingTarget?.version || ""}
+                value={editingInstruction?.version || ""}
                 onChange={(e) =>
-                  setEditingTarget((prev) =>
+                  setEditingInstruction((prev) =>
                     prev ? { ...prev, version: e.target.value } : null
                   )
                 }
@@ -846,10 +849,10 @@ export function InspectionMasters() {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                label="検査対象マスタ名"
-                value={editingTarget?.name || ""}
+                label="検査指示マスタ名"
+                value={editingInstruction?.name || ""}
                 onChange={(e) =>
-                  setEditingTarget((prev) =>
+                  setEditingInstruction((prev) =>
                     prev ? { ...prev, name: e.target.value } : null
                   )
                 }
@@ -860,9 +863,9 @@ export function InspectionMasters() {
             <Grid item xs={12}>
               <TextField
                 label="説明"
-                value={editingTarget?.description || ""}
+                value={editingInstruction?.description || ""}
                 onChange={(e) =>
-                  setEditingTarget((prev) =>
+                  setEditingInstruction((prev) =>
                     prev ? { ...prev, description: e.target.value } : null
                   )
                 }
@@ -881,13 +884,13 @@ export function InspectionMasters() {
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>キャンセル</Button>
           <Button
-            onClick={handleSaveTarget}
+            onClick={handleSaveInstruction}
             variant="contained"
             disabled={
               loading ||
-              !editingTarget?.name ||
-              !(editingTarget as any)?.group_id ||
-              !(editingTarget as any)?.process_code
+              !editingInstruction?.name ||
+              !(editingInstruction as any)?.group_id ||
+              !(editingInstruction as any)?.process_code
             }
           >
             保存
@@ -1159,9 +1162,17 @@ export function InspectionMasters() {
               <Box display="flex" gap={1} mt={1}>
                 <Autocomplete
                   options={codeNameRows as any}
-                  getOptionLabel={(opt: any) => `${opt.product_name} (${opt.product_code})`}
-                  value={(codeNameRows as any).find((o: any) => o.product_code === memberInput) || null}
-                  onChange={(_, val: any | null) => setMemberInput(val?.product_code || "")}
+                  getOptionLabel={(opt: any) =>
+                    `${opt.product_name} (${opt.product_code})`
+                  }
+                  value={
+                    (codeNameRows as any).find(
+                      (o: any) => o.product_code === memberInput
+                    ) || null
+                  }
+                  onChange={(_, val: any | null) =>
+                    setMemberInput(val?.product_code || "")
+                  }
                   renderInput={(params) => (
                     <TextField {...params} label="型式コードを選択" fullWidth />
                   )}
@@ -1185,9 +1196,13 @@ export function InspectionMasters() {
                       [editingGroup.id!]: codes,
                     }));
                     try {
-                      const ns = await inspectionApi.getProductTypeNamesBatch(codes);
+                      const ns = await inspectionApi.getProductTypeNamesBatch(
+                        codes
+                      );
                       const cn: Record<string, string> = { ...codeNameMap };
-                      (ns || []).forEach((e: any) => { cn[e.product_code] = e.product_name; });
+                      (ns || []).forEach((e: any) => {
+                        cn[e.product_code] = e.product_name;
+                      });
                       setCodeNameMap(cn);
                     } catch {}
                   }}
@@ -1871,13 +1886,27 @@ export function InspectionMasters() {
             <Grid item xs={12} md={6}>
               <Autocomplete
                 options={pipelines as any}
-                getOptionLabel={(p: any) => (p?.name ? `${p.name} (${p.id})` : (p?.id || ''))}
-                value={(pipelines as any).find((p: any) => String(p.id) === String(editingItem?.pipeline_id)) || null}
+                getOptionLabel={(p: any) =>
+                  p?.name ? `${p.name} (${p.id})` : p?.id || ""
+                }
+                value={
+                  (pipelines as any).find(
+                    (p: any) =>
+                      String(p.id) === String(editingItem?.pipeline_id)
+                  ) || null
+                }
                 onChange={(_, val: any | null) =>
-                  setEditingItem((prev) => (prev ? { ...prev, pipeline_id: val?.id || undefined } : prev))
+                  setEditingItem((prev) =>
+                    prev ? { ...prev, pipeline_id: val?.id || undefined } : prev
+                  )
                 }
                 renderInput={(params) => (
-                  <TextField {...params} label="パイプライン" placeholder="選択" fullWidth />
+                  <TextField
+                    {...params}
+                    label="パイプライン"
+                    placeholder="選択"
+                    fullWidth
+                  />
                 )}
                 fullWidth
               />

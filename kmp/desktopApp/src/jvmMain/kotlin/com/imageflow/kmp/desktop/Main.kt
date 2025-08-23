@@ -294,12 +294,12 @@ private fun ImageFlowDesktopApp() {
                                 authToken = authToken,
                                 orderLabel = orderLabel,
                                 renderUi = false,
-                                targetItemId = selectedItem?.id,
+                                instructionItemId = selectedItem?.id,
                                 processingParams = buildMap {
                                     uiState.currentProduct?.productCode?.let { put("product_code", it) }
                                     processCode?.let { put("process_code", it) }
-                                    // Pass explicit target item id to help server-side disambiguation
-                                    selectedItem?.id?.let { put("target_item_id", it) }
+                                    // Pass explicit instruction item id to help server-side disambiguation
+                                    selectedItem?.id?.let { put("instruction_item_id", it) }
                                     // Include pipeline params from the selected item
                                     (selectedItem?.pipeline_params ?: emptyMap()).forEach { (k, v) -> put(k, v) }
                                 },
@@ -386,17 +386,17 @@ private fun ImageFlowDesktopApp() {
                         },
                         onCompleteInspection = { finalResult, perItem, items ->
                             // 最終結果を送信し検査を完了（先にバックエンドへ結果を保存）
-                            val targetId = items.firstOrNull()?.target_id
-                            if (targetId != null) {
+                            val instructionId = items.firstOrNull()?.instruction_id
+                            if (instructionId != null) {
                                 viewModel.completeAndSaveInspection(
-                                    targetId = targetId,
+                                    instructionId = instructionId,
                                     decisions = perItem,
                                     items = items,
                                     finalResult = finalResult,
                                     itemSnapshots = okSnapshots.mapValues { it.value.bytes }
                                 )
                             } else {
-                                // target不明でも最終結果のみローカル完了
+                                // instruction不明でも最終結果のみローカル完了
                                 viewModel.submitHumanReview(finalResult)
                             }
                         },

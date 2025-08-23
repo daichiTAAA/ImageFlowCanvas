@@ -317,34 +317,34 @@ class ApiService {
   }
 
   // Inspection APIs
-  // Inspection Targets
-  async createInspectionTarget(data: any): Promise<any> {
+  // Inspection Instructions
+  async createinspectionInstruction(data: any): Promise<any> {
     const api = this.ensureApiInitialized()
-    const response = await api.post('/inspection/targets', data)
+    const response = await api.post('/inspection/instructions', data)
     return response.data
   }
 
-  async getInspectionTarget(targetId: string): Promise<any> {
+  async getinspectionInstruction(instructionId: string): Promise<any> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/inspection/targets/${targetId}`)
+    const response = await api.get(`/inspection/instructions/${instructionId}`)
     return response.data
   }
 
-  async listInspectionTargets(params: any = {}): Promise<any> {
+  async listinspectionInstructions(params: any = {}): Promise<any> {
     const api = this.ensureApiInitialized()
-    const response = await api.get('/inspection/targets', { params })
+    const response = await api.get('/inspection/instructions', { params })
     return response.data
   }
 
-  async updateInspectionTarget(targetId: string, data: any): Promise<any> {
+  async updateinspectionInstruction(instructionId: string, data: any): Promise<any> {
     const api = this.ensureApiInitialized()
-    const response = await api.put(`/inspection/targets/${targetId}`, data)
+    const response = await api.put(`/inspection/instructions/${instructionId}`, data)
     return response.data
   }
 
-  async deleteInspectionTarget(targetId: string): Promise<void> {
+  async deleteinspectionInstruction(instructionId: string): Promise<void> {
     const api = this.ensureApiInitialized()
-    await api.delete(`/inspection/targets/${targetId}`)
+    await api.delete(`/inspection/instructions/${instructionId}`)
   }
 
   // Inspection Items
@@ -466,9 +466,9 @@ class ApiService {
     return response.data
   }
 
-  async listItems(targetId: string, params: any = {}): Promise<any> {
+  async listItems(instructionId: string, params: any = {}): Promise<any> {
     const api = this.ensureApiInitialized()
-    const response = await api.get(`/inspection/targets/${targetId}/items`, { params })
+    const response = await api.get(`/inspection/instructions/${instructionId}/items`, { params })
     return response.data
   }
 

@@ -12,7 +12,7 @@ import logging
 
 from app.database import get_db
 from app.models.inspection import (
-    InspectionTarget,
+    inspectionInstruction,
     InspectionItem,
     InspectionCriteria,
     ProductTypeGroup,
@@ -21,9 +21,9 @@ from app.models.inspection import (
 )
 from app.models.product import ProductMaster
 from app.schemas.inspection import (
-    InspectionTargetCreate,
-    InspectionTargetUpdate,
-    InspectionTargetResponse,
+    inspectionInstructionCreate,
+    inspectionInstructionUpdate,
+    inspectionInstructionResponse,
     InspectionItemCreate,
     InspectionItemUpdate,
     InspectionItemResponse,
@@ -57,117 +57,125 @@ def _extract_user_id(current_user) -> Optional[uuid.UUID]:
     except Exception:
         return None
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# 検査対象管理API
+# 検査指示管理API
 
 
 @router.post(
-    "/targets", response_model=InspectionTargetResponse, tags=["inspection-masters"]
+    "/instructions",
+    response_model=inspectionInstructionResponse,
+    tags=["inspection-masters"],
 )
-async def create_inspection_target(
-    target_data: InspectionTargetCreate,
+async def create_inspection_instruction(
+    instruction_data: inspectionInstructionCreate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """検査対象を作成（vNEXT: group_id + process_code 必須）"""
+    """検査指示を作成（vNEXT: group_id + process_code 必須）"""
     try:
-        if not target_data.group_id or not target_data.process_code:
-            raise HTTPException(status_code=400, detail="group_id and process_code are required")
+        if not instruction_data.group_id or not instruction_data.process_code:
+            raise HTTPException(
+                status_code=400, detail="group_id and process_code are required"
+            )
 
         # 一意性: group_id + process_code + version
         dup = await db.execute(
-            select(InspectionTarget).where(
+            select(inspectionInstruction).where(
                 and_(
-                    InspectionTarget.group_id == target_data.group_id,
-                    InspectionTarget.process_code == target_data.process_code,
-                    InspectionTarget.version == target_data.version,
+                    inspectionInstruction.group_id == instruction_data.group_id,
+                    inspectionInstruction.process_code == instruction_data.process_code,
+                    inspectionInstruction.version == instruction_data.version,
                 )
             )
         )
         if dup.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Target already exists for group+process+version")
+            raise HTTPException(
+                status_code=400,
+                detail="Instruction already exists for group+process+version",
+            )
 
-        target = InspectionTarget(
-            name=target_data.name,
-            description=target_data.description,
-            product_name=target_data.product_name,
-            group_id=target_data.group_id,
-            group_name=target_data.group_name,
-            process_code=target_data.process_code,
-            version=target_data.version,
-            metadata_=target_data.metadata or {},
+        instruction = inspectionInstruction(
+            name=instruction_data.name,
+            description=instruction_data.description,
+            product_name=instruction_data.product_name,
+            group_id=instruction_data.group_id,
+            group_name=instruction_data.group_name,
+            process_code=instruction_data.process_code,
+            version=instruction_data.version,
+            metadata_=instruction_data.metadata or {},
             created_by=_extract_user_id(current_user),
         )
 
-        db.add(target)
+        db.add(instruction)
         await db.commit()
-        await db.refresh(target)
+        await db.refresh(instruction)
 
-        logger.info(f"Created inspection target: {target.id}")
-        return target
+        logger.info(f"Created inspection instruction: {instruction.id}")
+        return instruction
 
     except HTTPException as e:
         # Preserve intended HTTP error codes (e.g., 400 on duplicate)
         await db.rollback()
-        logger.error(f"Failed to create inspection target (client error): {e.detail}")
+        logger.error(f"Failed to create inspection instruction (client error): {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"Failed to create inspection target: {e}")
+        logger.error(f"Failed to create inspection instruction: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get(
-    "/targets/{target_id}",
-    response_model=InspectionTargetResponse,
+    "/instructions/{instruction_id}",
+    response_model=inspectionInstructionResponse,
     tags=["inspection-masters"],
 )
-async def get_inspection_target(
-    target_id: uuid.UUID,
+async def get_inspection_instruction(
+    instruction_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """検査対象を取得"""
+    """検査指示を取得"""
     try:
-        target = await db.execute(
-            select(InspectionTarget)
-            .options(selectinload(InspectionTarget.inspection_items))
-            .where(InspectionTarget.id == target_id)
+        instruction = await db.execute(
+            select(inspectionInstruction)
+            .options(selectinload(inspectionInstruction.inspection_items))
+            .where(inspectionInstruction.id == instruction_id)
         )
-        target = target.scalar_one_or_none()
+        instruction = instruction.scalar_one_or_none()
 
-        if not target:
-            raise HTTPException(status_code=404, detail="Inspection target not found")
+        if not instruction:
+            raise HTTPException(status_code=404, detail="Inspection instruction not found")
 
-        return target
+        return instruction
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get inspection target: {e}")
+        logger.error(f"Failed to get inspection instruction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get(
-    "/targets",
-    response_model=PaginatedResponse[InspectionTargetResponse],
+    "/instructions",
+    response_model=PaginatedResponse[inspectionInstructionResponse],
     tags=["inspection-masters"],
 )
-async def list_inspection_targets(
+async def list_inspection_instructions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """検査対象一覧を取得"""
+    """検査指示一覧を取得"""
     try:
         # ベースクエリ
-        query = select(InspectionTarget)
-        count_query = select(func.count(InspectionTarget.id))
+        query = select(inspectionInstruction)
+        count_query = select(func.count(inspectionInstruction.id))
 
         # 検索条件（group+process+name ベース）
         if search:
@@ -175,20 +183,20 @@ async def list_inspection_targets(
             # join: 型式グループの group_code/name も対象にする
             query = query.join(
                 ProductTypeGroup,
-                InspectionTarget.group_id == ProductTypeGroup.id,
+                inspectionInstruction.group_id == ProductTypeGroup.id,
                 isouter=True,
             )
             count_query = count_query.join(
                 ProductTypeGroup,
-                InspectionTarget.group_id == ProductTypeGroup.id,
+                inspectionInstruction.group_id == ProductTypeGroup.id,
                 isouter=True,
             )
 
             search_filter = or_(
-                InspectionTarget.name.ilike(like),
-                InspectionTarget.description.ilike(like),
-                InspectionTarget.group_name.ilike(like),
-                InspectionTarget.process_code.ilike(like),
+                inspectionInstruction.name.ilike(like),
+                inspectionInstruction.description.ilike(like),
+                inspectionInstruction.group_name.ilike(like),
+                inspectionInstruction.process_code.ilike(like),
                 ProductTypeGroup.group_code.ilike(like),
                 ProductTypeGroup.name.ilike(like),
             )
@@ -204,15 +212,15 @@ async def list_inspection_targets(
         query = (
             query.offset(offset)
             .limit(page_size)
-            .order_by(InspectionTarget.created_at.desc())
+            .order_by(inspectionInstruction.created_at.desc())
         )
 
         # データ取得
         result = await db.execute(query)
-        targets = result.scalars().all()
+        instructions = result.scalars().all()
 
         return PaginatedResponse(
-            items=targets,
+            items=instructions,
             total_count=total_count,
             page=page,
             page_size=page_size,
@@ -220,96 +228,109 @@ async def list_inspection_targets(
         )
 
     except Exception as e:
-        logger.error(f"Failed to list inspection targets: {e}")
+        logger.error(f"Failed to list inspection instructions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put(
-    "/targets/{target_id}",
-    response_model=InspectionTargetResponse,
+    "/instructions/{instruction_id}",
+    response_model=inspectionInstructionResponse,
     tags=["inspection-masters"],
 )
-async def update_inspection_target(
-    target_id: uuid.UUID,
-    target_data: InspectionTargetUpdate,
+async def update_inspection_instruction(
+    instruction_id: uuid.UUID,
+    instruction_data: inspectionInstructionUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """検査対象を更新"""
+    """検査指示を更新"""
     try:
-        target = await db.execute(
-            select(InspectionTarget).where(InspectionTarget.id == target_id)
+        instruction = await db.execute(
+            select(inspectionInstruction).where(
+                inspectionInstruction.id == instruction_id
+            )
         )
-        target = target.scalar_one_or_none()
+        instruction = instruction.scalar_one_or_none()
 
-        if not target:
-            raise HTTPException(status_code=404, detail="Inspection target not found")
+        if not instruction:
+            raise HTTPException(status_code=404, detail="Inspection instruction not found")
 
         # 重複チェック（group+process+version）
-        if (target_data.group_id is not None) or (target_data.process_code is not None) or (target_data.version is not None):
-            gid = target_data.group_id or target.group_id
-            pcd = target_data.process_code or target.process_code
-            ver = target_data.version or target.version
+        if (
+            (instruction_data.group_id is not None)
+            or (instruction_data.process_code is not None)
+            or (instruction_data.version is not None)
+        ):
+            gid = instruction_data.group_id or instruction.group_id
+            pcd = instruction_data.process_code or instruction.process_code
+            ver = instruction_data.version or instruction.version
             dup = await db.execute(
-                select(InspectionTarget).where(
+                select(inspectionInstruction).where(
                     and_(
-                        InspectionTarget.group_id == gid,
-                        InspectionTarget.process_code == pcd,
-                        InspectionTarget.version == ver,
-                        InspectionTarget.id != target_id,
+                        inspectionInstruction.group_id == gid,
+                        inspectionInstruction.process_code == pcd,
+                        inspectionInstruction.version == ver,
+                        inspectionInstruction.id != instruction_id,
                     )
                 )
             )
             if dup.scalar_one_or_none():
-                raise HTTPException(status_code=400, detail="Target already exists for group+process+version")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Instruction already exists for group+process+version",
+                )
 
         # 更新
-        for field, value in target_data.dict(exclude_unset=True).items():
+        for field, value in instruction_data.dict(exclude_unset=True).items():
             if field == "metadata":
-                setattr(target, "metadata_", value)
+                setattr(instruction, "metadata_", value)
                 continue
-            if hasattr(target, field):
-                setattr(target, field, value)
+            if hasattr(instruction, field):
+                setattr(instruction, field, value)
 
         await db.commit()
-        await db.refresh(target)
+        await db.refresh(instruction)
 
-        logger.info(f"Updated inspection target: {target.id}")
-        return target
+        logger.info(f"Updated inspection instruction: {instruction.id}")
+        return instruction
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update inspection target: {e}")
+        logger.error(f"Failed to update inspection instruction: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/targets/{target_id}", status_code=204, tags=["inspection-masters"])
-async def delete_inspection_target(
-    target_id: uuid.UUID,
+@router.delete(
+    "/instructions/{instruction_id}", status_code=204, tags=["inspection-masters"]
+)
+async def delete_inspection_instruction(
+    instruction_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """検査対象を削除"""
+    """検査指示を削除"""
     try:
-        target = await db.execute(
-            select(InspectionTarget).where(InspectionTarget.id == target_id)
+        instruction = await db.execute(
+            select(inspectionInstruction).where(
+                inspectionInstruction.id == instruction_id
+            )
         )
-        target = target.scalar_one_or_none()
+        instruction = instruction.scalar_one_or_none()
 
-        if not target:
-            raise HTTPException(status_code=404, detail="Inspection target not found")
+        if not instruction:
+            raise HTTPException(status_code=404, detail="Inspection instruction not found")
 
-        await db.delete(target)
+        await db.delete(instruction)
         await db.commit()
 
-        logger.info(f"Deleted inspection target: {target_id}")
+        logger.info(f"Deleted inspection instruction: {instruction_id}")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete inspection target: {e}")
+        logger.error(f"Failed to delete inspection instruction: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -327,12 +348,14 @@ async def create_inspection_item(
 ):
     """検査項目を作成"""
     try:
-        # 検査対象存在チェック
-        target = await db.execute(
-            select(InspectionTarget).where(InspectionTarget.id == item_data.target_id)
+        # 検査指示存在チェック
+        instruction = await db.execute(
+            select(inspectionInstruction).where(
+                inspectionInstruction.id == item_data.instruction_id
+            )
         )
-        if not target.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Inspection target not found")
+        if not instruction.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Inspection instruction not found")
 
         # 検査基準存在チェック
         if item_data.criteria_id:
@@ -347,7 +370,7 @@ async def create_inspection_item(
                 )
 
         item = InspectionItem(
-            target_id=item_data.target_id,
+            instruction_id=item_data.instruction_id,
             name=item_data.name,
             description=item_data.description,
             type=item_data.type,
@@ -366,7 +389,7 @@ async def create_inspection_item(
             await db.execute(
                 select(InspectionItem)
                 .options(
-                    selectinload(InspectionItem.target),
+                    selectinload(InspectionItem.instruction),
                     selectinload(InspectionItem.criteria),
                 )
                 .where(InspectionItem.id == item.id)
@@ -399,7 +422,7 @@ async def get_inspection_item(
         item = await db.execute(
             select(InspectionItem)
             .options(
-                selectinload(InspectionItem.target),
+                selectinload(InspectionItem.instruction),
                 selectinload(InspectionItem.criteria),
             )
             .where(InspectionItem.id == item_id)
@@ -448,7 +471,7 @@ async def update_inspection_item(
             await db.execute(
                 select(InspectionItem)
                 .options(
-                    selectinload(InspectionItem.target),
+                    selectinload(InspectionItem.instruction),
                     selectinload(InspectionItem.criteria),
                 )
                 .where(InspectionItem.id == item_id)
@@ -489,12 +512,12 @@ async def delete_inspection_item(
 
 
 @router.get(
-    "/targets/{target_id}/items",
+    "/instructions/{instruction_id}/items",
     response_model=PaginatedResponse[InspectionItemResponse],
     tags=["inspection-masters"],
 )
 async def list_inspection_items(
-    target_id: uuid.UUID,
+    instruction_id: uuid.UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -503,9 +526,11 @@ async def list_inspection_items(
     """検査項目一覧を取得"""
     try:
         # ベースクエリ
-        query = select(InspectionItem).where(InspectionItem.target_id == target_id)
+        query = select(InspectionItem).where(
+            InspectionItem.instruction_id == instruction_id
+        )
         count_query = select(func.count(InspectionItem.id)).where(
-            InspectionItem.target_id == target_id
+            InspectionItem.instruction_id == instruction_id
         )
 
         # 総件数取得
@@ -523,7 +548,7 @@ async def list_inspection_items(
         # データ取得（関連をselectinloadで先読みしてレスポンス時の遅延ロードを回避）
         result = await db.execute(
             query.options(
-                selectinload(InspectionItem.target),
+                selectinload(InspectionItem.instruction),
                 selectinload(InspectionItem.criteria),
             )
         )
@@ -557,7 +582,7 @@ async def list_items_by_product(
     """製品IDから検査項目一覧を取得
 
     設計上の前提:
-    - Webアプリで作成される InspectionTarget.product_code は製品の型式コード(ProductMaster.product_code)と一致させる
+    - Webアプリで作成される inspectionInstruction.product_code は製品の型式コード(ProductMaster.product_code)と一致させる
     - 上記が見つからない場合のフォールバックとして、work_order_id などの補助キーも試行
     """
     try:
@@ -591,37 +616,41 @@ async def list_items_by_product(
         )
         group = grp.scalar_one_or_none()
 
-        target = None
+        instruction = None
         if group:
             tgt_by_group = await db.execute(
-                select(InspectionTarget).where(InspectionTarget.group_id == group.id)
+                select(inspectionInstruction).where(
+                    inspectionInstruction.group_id == group.id
+                )
             )
-            target = tgt_by_group.scalar_one_or_none()
+            instruction = tgt_by_group.scalar_one_or_none()
 
         # 2) グループ未設定の場合は従来の product_code マッピング
-        if not target:
+        if not instruction:
             # まず product_code
-            target_q = select(InspectionTarget).where(
-                InspectionTarget.product_code == product.product_code
+            instruction_q = select(inspectionInstruction).where(
+                inspectionInstruction.product_code == product.product_code
             )
-            target = (await db.execute(target_q)).scalar_one_or_none()
-        if not target:
+            instruction = (await db.execute(instruction_q)).scalar_one_or_none()
+        if not instruction:
             # フォールバック: work_order_id
-            alt_q = select(InspectionTarget).where(
-                InspectionTarget.product_code == product.work_order_id
+            alt_q = select(inspectionInstruction).where(
+                inspectionInstruction.product_code == product.work_order_id
             )
-            target = (await db.execute(alt_q)).scalar_one_or_none()
+            instruction = (await db.execute(alt_q)).scalar_one_or_none()
 
-        if not target:
-            # 一致する検査対象がない場合は空で返す（404ではなく空配列の方がクライアント実装簡素）
+        if not instruction:
+            # 一致する検査指示がない場合は空で返す（404ではなく空配列の方がクライアント実装簡素）
             return PaginatedResponse(
                 items=[], total_count=0, page=page, page_size=page_size, total_pages=0
             )
 
         # 対象に紐づく項目を順序で返す
-        base_q = select(InspectionItem).where(InspectionItem.target_id == target.id)
+        base_q = select(InspectionItem).where(
+            InspectionItem.instruction_id == instruction.id
+        )
         count_q = select(func.count(InspectionItem.id)).where(
-            InspectionItem.target_id == target.id
+            InspectionItem.instruction_id == instruction.id
         )
 
         total_count = (await db.execute(count_q)).scalar() or 0
@@ -630,7 +659,7 @@ async def list_items_by_product(
             (
                 await db.execute(
                     base_q.options(
-                        selectinload(InspectionItem.target),
+                        selectinload(InspectionItem.instruction),
                         selectinload(InspectionItem.criteria),
                     )
                     .order_by(InspectionItem.execution_order.asc())
@@ -985,7 +1014,9 @@ async def list_inspection_criterias(
 
 
 @router.get(
-    "/criterias/{criteria_id}", response_model=InspectionCriteriaResponse, tags=["inspection-masters"]
+    "/criterias/{criteria_id}",
+    response_model=InspectionCriteriaResponse,
+    tags=["inspection-masters"],
 )
 async def get_inspection_criteria(
     criteria_id: uuid.UUID,
@@ -994,7 +1025,9 @@ async def get_inspection_criteria(
 ):
     try:
         row = (
-            await db.execute(select(InspectionCriteria).where(InspectionCriteria.id == criteria_id))
+            await db.execute(
+                select(InspectionCriteria).where(InspectionCriteria.id == criteria_id)
+            )
         ).scalar_one_or_none()
         if not row:
             raise HTTPException(status_code=404, detail="Inspection criteria not found")
@@ -1007,7 +1040,9 @@ async def get_inspection_criteria(
 
 
 @router.put(
-    "/criterias/{criteria_id}", response_model=InspectionCriteriaResponse, tags=["inspection-masters"]
+    "/criterias/{criteria_id}",
+    response_model=InspectionCriteriaResponse,
+    tags=["inspection-masters"],
 )
 async def update_inspection_criteria(
     criteria_id: uuid.UUID,
@@ -1017,7 +1052,9 @@ async def update_inspection_criteria(
 ):
     try:
         row = (
-            await db.execute(select(InspectionCriteria).where(InspectionCriteria.id == criteria_id))
+            await db.execute(
+                select(InspectionCriteria).where(InspectionCriteria.id == criteria_id)
+            )
         ).scalar_one_or_none()
         if not row:
             raise HTTPException(status_code=404, detail="Inspection criteria not found")
@@ -1049,9 +1086,7 @@ async def update_inspection_criteria(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete(
-    "/criterias/{criteria_id}", status_code=204, tags=["inspection-masters"]
-)
+@router.delete("/criterias/{criteria_id}", status_code=204, tags=["inspection-masters"])
 async def delete_inspection_criteria(
     criteria_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -1059,7 +1094,9 @@ async def delete_inspection_criteria(
 ):
     try:
         row = (
-            await db.execute(select(InspectionCriteria).where(InspectionCriteria.id == criteria_id))
+            await db.execute(
+                select(InspectionCriteria).where(InspectionCriteria.id == criteria_id)
+            )
         ).scalar_one_or_none()
         if not row:
             raise HTTPException(status_code=404, detail="Inspection criteria not found")
@@ -1072,6 +1109,8 @@ async def delete_inspection_criteria(
         await db.rollback()
         logger.error(f"Failed to delete inspection criteria: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
 # products + process_code から検査項目を取得（厳格運用: 型式グループ未所属は返さない）
 @router.get(
     "/products/{product_id}/processes/{process_code}/items",
@@ -1088,6 +1127,7 @@ async def list_items_by_product_and_process(
 ):
     try:
         from uuid import UUID
+
         product: ProductMaster | None = None
         try:
             uid = UUID(product_id)
@@ -1118,25 +1158,27 @@ async def list_items_by_product_and_process(
 
         # 型式グループ + 工程コード一致のターゲットのみ
         q = await db.execute(
-            select(InspectionTarget)
+            select(inspectionInstruction)
             .where(
                 and_(
-                    InspectionTarget.group_id == group.id,
-                    InspectionTarget.process_code == process_code,
+                    inspectionInstruction.group_id == group.id,
+                    inspectionInstruction.process_code == process_code,
                 )
             )
-            .order_by(InspectionTarget.created_at.desc())
+            .order_by(inspectionInstruction.created_at.desc())
         )
-        target = q.scalar_one_or_none()
+        instruction = q.scalar_one_or_none()
 
-        if not target:
+        if not instruction:
             return PaginatedResponse(
                 items=[], total_count=0, page=page, page_size=page_size, total_pages=0
             )
 
-        base_q = select(InspectionItem).where(InspectionItem.target_id == target.id)
+        base_q = select(InspectionItem).where(
+            InspectionItem.instruction_id == instruction.id
+        )
         count_q = select(func.count(InspectionItem.id)).where(
-            InspectionItem.target_id == target.id
+            InspectionItem.instruction_id == instruction.id
         )
         total_count = (await db.execute(count_q)).scalar() or 0
         offset = (page - 1) * page_size
@@ -1144,7 +1186,7 @@ async def list_items_by_product_and_process(
             (
                 await db.execute(
                     base_q.options(
-                        selectinload(InspectionItem.target),
+                        selectinload(InspectionItem.instruction),
                         selectinload(InspectionItem.criteria),
                     )
                     .order_by(InspectionItem.execution_order.asc())
@@ -1168,6 +1210,8 @@ async def list_items_by_product_and_process(
     except Exception as e:
         logger.error(f"Failed to list items by product+process: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
 # 工程マスタ API（最小: 一覧のみ）
 @router.post(
     "/processes",
@@ -1180,22 +1224,32 @@ async def create_process(
     current_user=Depends(get_current_user),
 ):
     from app.models.inspection import ProcessMaster
+
     try:
         exists = (
-            await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == payload.process_code))
+            await db.execute(
+                select(ProcessMaster).where(
+                    ProcessMaster.process_code == payload.process_code
+                )
+            )
         ).scalar_one_or_none()
         if exists:
             raise HTTPException(status_code=400, detail="Process code already exists")
-        row = ProcessMaster(process_code=payload.process_code, process_name=payload.process_name)
+        row = ProcessMaster(
+            process_code=payload.process_code, process_name=payload.process_name
+        )
         db.add(row)
         await db.commit()
         await db.refresh(row)
         return row
     except HTTPException:
-        await db.rollback(); raise
+        await db.rollback()
+        raise
     except Exception as e:
-        await db.rollback(); logger.error(f"Failed to create process: {e}")
+        await db.rollback()
+        logger.error(f"Failed to create process: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get(
     "/processes",
@@ -1209,16 +1263,19 @@ async def list_processes(
     current_user=Depends(get_current_user),
 ):
     from app.models.inspection import ProcessMaster
+
     try:
         total = (await db.execute(select(func.count(ProcessMaster.id)))).scalar() or 0
         offset = (page - 1) * page_size
         rows = (
-            (await db.execute(
-                select(ProcessMaster)
-                .order_by(ProcessMaster.process_code.asc())
-                .offset(offset)
-                .limit(page_size)
-            ))
+            (
+                await db.execute(
+                    select(ProcessMaster)
+                    .order_by(ProcessMaster.process_code.asc())
+                    .offset(offset)
+                    .limit(page_size)
+                )
+            )
             .scalars()
             .all()
         )
@@ -1233,6 +1290,7 @@ async def list_processes(
         logger.error(f"Failed to list processes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get(
     "/processes/{process_code}",
     response_model=ProcessMasterResponse,
@@ -1244,12 +1302,16 @@ async def get_process(
     current_user=Depends(get_current_user),
 ):
     from app.models.inspection import ProcessMaster
+
     row = (
-        await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == process_code))
+        await db.execute(
+            select(ProcessMaster).where(ProcessMaster.process_code == process_code)
+        )
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Process not found")
     return row
+
 
 @router.put(
     "/processes/{process_code}",
@@ -1263,20 +1325,26 @@ async def update_process(
     current_user=Depends(get_current_user),
 ):
     from app.models.inspection import ProcessMaster
+
     try:
         row = (
-            await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == process_code))
+            await db.execute(
+                select(ProcessMaster).where(ProcessMaster.process_code == process_code)
+            )
         ).scalar_one_or_none()
         if not row:
             raise HTTPException(status_code=404, detail="Process not found")
         for field, value in payload.dict(exclude_unset=True).items():
             setattr(row, field, value)
-        await db.commit(); await db.refresh(row)
+        await db.commit()
+        await db.refresh(row)
         return row
     except HTTPException:
-        await db.rollback(); raise
+        await db.rollback()
+        raise
     except Exception as e:
-        await db.rollback(); logger.error(f"Failed to update process: {e}")
+        await db.rollback()
+        logger.error(f"Failed to update process: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1296,18 +1364,26 @@ async def create_product_code_name(
     try:
         exists = (
             await db.execute(
-                select(ProductCodeName).where(ProductCodeName.product_code == payload.product_code)
+                select(ProductCodeName).where(
+                    ProductCodeName.product_code == payload.product_code
+                )
             )
         ).scalar_one_or_none()
         if exists:
             raise HTTPException(status_code=400, detail="Product code already exists")
-        row = ProductCodeName(product_code=payload.product_code, product_name=payload.product_name)
-        db.add(row); await db.commit(); await db.refresh(row)
+        row = ProductCodeName(
+            product_code=payload.product_code, product_name=payload.product_name
+        )
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
         return row
     except HTTPException:
-        await db.rollback(); raise
+        await db.rollback()
+        raise
     except Exception as e:
-        await db.rollback(); logger.error(f"Failed to create product code name: {e}")
+        await db.rollback()
+        logger.error(f"Failed to create product code name: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1333,17 +1409,27 @@ async def list_product_code_names(
                     ProductCodeName.product_name.ilike(like),
                 )
             )
-        total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
+        total = (
+            await db.execute(select(func.count()).select_from(base.subquery()))
+        ).scalar() or 0
         offset = (page - 1) * page_size
         rows = (
-            (await db.execute(
-                base.order_by(ProductCodeName.product_code.asc()).offset(offset).limit(page_size)
-            ))
+            (
+                await db.execute(
+                    base.order_by(ProductCodeName.product_code.asc())
+                    .offset(offset)
+                    .limit(page_size)
+                )
+            )
             .scalars()
             .all()
         )
         return PaginatedResponse(
-            items=rows, total_count=total, page=page, page_size=page_size, total_pages=(total + page_size - 1)//page_size
+            items=rows,
+            total_count=total,
+            page=page,
+            page_size=page_size,
+            total_pages=(total + page_size - 1) // page_size,
         )
     except Exception as e:
         logger.error(f"Failed to list product code names: {e}")
@@ -1360,7 +1446,7 @@ async def get_product_code_names_batch(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    wanted = [c.strip() for c in codes.split(',') if c.strip()]
+    wanted = [c.strip() for c in codes.split(",") if c.strip()]
     if not wanted:
         return []
     rows = (await db.execute(select(ProductCodeName))).scalars().all()
@@ -1381,19 +1467,27 @@ async def update_product_code_name(
 ):
     try:
         row = (
-            await db.execute(select(ProductCodeName).where(ProductCodeName.product_code == product_code))
+            await db.execute(
+                select(ProductCodeName).where(
+                    ProductCodeName.product_code == product_code
+                )
+            )
         ).scalar_one_or_none()
         if not row:
             raise HTTPException(status_code=404, detail="Product code not found")
         if payload.product_name is not None:
             row.product_name = payload.product_name
-        await db.commit(); await db.refresh(row)
+        await db.commit()
+        await db.refresh(row)
         return row
     except HTTPException:
-        await db.rollback(); raise
+        await db.rollback()
+        raise
     except Exception as e:
-        await db.rollback(); logger.error(f"Failed to update product code name: {e}")
+        await db.rollback()
+        logger.error(f"Failed to update product code name: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete(
     "/processes/{process_code}",
@@ -1406,15 +1500,22 @@ async def delete_process(
     current_user=Depends(get_current_user),
 ):
     from app.models.inspection import ProcessMaster
+
     try:
         row = (
-            await db.execute(select(ProcessMaster).where(ProcessMaster.process_code == process_code))
+            await db.execute(
+                select(ProcessMaster).where(ProcessMaster.process_code == process_code)
+            )
         ).scalar_one_or_none()
         if not row:
             raise HTTPException(status_code=404, detail="Process not found")
-        await db.delete(row); await db.commit(); return None
+        await db.delete(row)
+        await db.commit()
+        return None
     except HTTPException:
-        await db.rollback(); raise
+        await db.rollback()
+        raise
     except Exception as e:
-        await db.rollback(); logger.error(f"Failed to delete process: {e}")
+        await db.rollback()
+        logger.error(f"Failed to delete process: {e}")
         raise HTTPException(status_code=500, detail=str(e))

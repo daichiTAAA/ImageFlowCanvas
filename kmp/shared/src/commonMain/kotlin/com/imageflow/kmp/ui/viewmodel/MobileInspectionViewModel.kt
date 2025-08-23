@@ -303,11 +303,11 @@ class MobileInspectionViewModel(
         val product = _uiState.value.currentProduct ?: return
         val items = _uiState.value.inspectionItems
         if (items.isEmpty()) return
-        // Use first item's target_id as the target for execution
-        val targetId = items.first().target_id
+        // Use first item's instruction_id as the instruction for execution
+        val instructionId = items.first().instruction_id
         val inspectionApi = com.imageflow.kmp.di.DependencyContainer.provideInspectionApiService()
         // 1) Create execution
-        when (val created = inspectionApi.createExecution(targetId)) {
+        when (val created = inspectionApi.createExecution(instructionId)) {
             is com.imageflow.kmp.network.ApiResult.Success -> {
                 val executionId = created.data.execution_id
                 // 2) Fetch item executions created on server
@@ -400,7 +400,7 @@ class MobileInspectionViewModel(
 
     // 完了時にバックエンドへ結果を永続化（Execution作成 + 各項目の判定を保存）
     fun completeAndSaveInspection(
-        targetId: String,
+        instructionId: String,
         decisions: Map<String, HumanResult>,
         items: List<com.imageflow.kmp.network.InspectionItemKmp>,
         finalResult: HumanResult,
@@ -421,10 +421,10 @@ class MobileInspectionViewModel(
                     // Desktop-provided inspection timestamps (ms since epoch)
                     inspectionStartedAtMs?.let { put("client_started_at_ms", it.toString()) }
                     put("client_completed_at_ms", System.currentTimeMillis().toString())
-                    // product_name is not present in ProductInfo; Web derives from target.product_name
+                    // product_name is not present in ProductInfo; Web derives from instruction.product_name
                 }
                 val ok = inspectionWorkflowUseCase.persistHumanResultsToBackend(
-                    targetId,
+                    instructionId,
                     decisions,
                     items,
                     metadata = meta,

@@ -14,7 +14,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models.inspection import (
-    InspectionTarget,
+    inspectionInstruction,
     InspectionItem,
     InspectionExecution,
     InspectionItemExecution,
@@ -67,27 +67,30 @@ async def create_inspection_execution(
 ):
     """検査実行を開始"""
     try:
-        # 検査対象存在チェック
-        target = await db.execute(
-            select(InspectionTarget)
-            .options(selectinload(InspectionTarget.inspection_items))
-            .where(InspectionTarget.id == request.target_id)
+        # 検査指示存在チェック
+        instruction = await db.execute(
+            select(inspectionInstruction)
+            .options(selectinload(inspectionInstruction.inspection_items))
+            .where(inspectionInstruction.id == request.instruction_id)
         )
-        target = target.scalar_one_or_none()
+        instruction = instruction.scalar_one_or_none()
 
-        if not target:
-            raise HTTPException(status_code=404, detail="Inspection target not found")
-
-        if not target.inspection_items:
+        if not instruction:
             raise HTTPException(
-                status_code=400, detail="No inspection items defined for this target"
+                status_code=404, detail="Inspection instruction not found"
+            )
+
+        if not instruction.inspection_items:
+            raise HTTPException(
+                status_code=400,
+                detail="No inspection items defined for this instruction",
             )
 
         # 検査実行を作成
         # Note: ORM attribute is metadata_ (DB column name "metadata").
         # Use metadata_ here so the field is persisted and later serialized via alias as "metadata".
         execution = InspectionExecution(
-            target_id=request.target_id,
+            instruction_id=request.instruction_id,
             operator_id=request.operator_id or _extract_user_id(current_user),
             qr_code=request.qr_code,
             metadata_=request.metadata or {},
@@ -99,7 +102,9 @@ async def create_inspection_execution(
 
         # 検査項目実行を事前作成
         item_executions = []
-        for item in sorted(target.inspection_items, key=lambda x: x.execution_order):
+        for item in sorted(
+            instruction.inspection_items, key=lambda x: x.execution_order
+        ):
             item_execution = InspectionItemExecution(
                 execution_id=execution.id,
                 item_id=item.id,
@@ -111,11 +116,11 @@ async def create_inspection_execution(
         await db.commit()
         await db.refresh(execution)
 
-        # レスポンス用にtargetをロード
-        await db.refresh(execution, ["target"])
+        # レスポンス用にinstructionをロード
+        await db.refresh(execution, ["instruction"])
 
         logger.info(
-            f"Created inspection execution: {execution.id} for target: {request.target_id}"
+            f"Created inspection execution: {execution.id} for instruction: {request.instruction_id}"
         )
 
         return ExecuteInspectionResponse(execution_id=execution.id, execution=execution)
@@ -143,7 +148,7 @@ async def get_inspection_execution(
         execution = await db.execute(
             select(InspectionExecution)
             .options(
-                selectinload(InspectionExecution.target),
+                selectinload(InspectionExecution.instruction),
                 selectinload(InspectionExecution.item_executions).selectinload(
                     InspectionItemExecution.item
                 ),
@@ -172,7 +177,7 @@ async def get_inspection_execution(
     tags=["inspection-execution"],
 )
 async def list_inspection_executions(
-    target_id: Optional[uuid.UUID] = Query(None),
+    instruction_id: Optional[uuid.UUID] = Query(None),
     operator_id: Optional[uuid.UUID] = Query(None),
     status: Optional[InspectionStatus] = Query(None),
     from_date: Optional[datetime] = Query(None),
@@ -186,14 +191,14 @@ async def list_inspection_executions(
     try:
         # ベースクエリ
         query = select(InspectionExecution).options(
-            selectinload(InspectionExecution.target)
+            selectinload(InspectionExecution.instruction)
         )
         count_query = select(func.count(InspectionExecution.id))
 
         # フィルタ条件
         filters = []
-        if target_id:
-            filters.append(InspectionExecution.target_id == target_id)
+        if instruction_id:
+            filters.append(InspectionExecution.instruction_id == instruction_id)
         if operator_id:
             filters.append(InspectionExecution.operator_id == operator_id)
         if status:
@@ -374,9 +379,7 @@ async def save_inspection_result(
                     str(x) for x in (request.evidence_file_ids or [])
                 ]
             except Exception:
-                existing_result.evidence_file_ids = (
-                    request.evidence_file_ids or []
-                )
+                existing_result.evidence_file_ids = request.evidence_file_ids or []
             existing_result.metrics = request.metrics or {}
             await db.commit()
             await db.refresh(existing_result)
@@ -389,9 +392,7 @@ async def save_inspection_result(
                 item_execution_id=request.item_execution_id,
                 judgment=request.judgment,
                 comment=request.comment,
-                evidence_file_ids=[
-                    str(x) for x in (request.evidence_file_ids or [])
-                ],
+                evidence_file_ids=[str(x) for x in (request.evidence_file_ids or [])],
                 metrics=request.metrics or {},
                 created_by=_extract_user_id(current_user),
             )
@@ -434,7 +435,8 @@ async def save_inspection_result(
                 select(func.count(InspectionItemExecution.id)).where(
                     and_(
                         InspectionItemExecution.execution_id == exec_id,
-                        InspectionItemExecution.status == InspectionItemStatus.ITEM_COMPLETED,
+                        InspectionItemExecution.status
+                        == InspectionItemStatus.ITEM_COMPLETED,
                     )
                 )
             )
@@ -443,7 +445,9 @@ async def save_inspection_result(
             if total > 0 and done == total:
                 exec_row = (
                     await db.execute(
-                        select(InspectionExecution).where(InspectionExecution.id == exec_id)
+                        select(InspectionExecution).where(
+                            InspectionExecution.id == exec_id
+                        )
                     )
                 ).scalar_one_or_none()
                 if exec_row:
@@ -472,7 +476,7 @@ async def save_inspection_result(
 )
 async def list_inspection_results(
     execution_id: Optional[uuid.UUID] = Query(None),
-    target_id: Optional[uuid.UUID] = Query(None),
+    instruction_id: Optional[uuid.UUID] = Query(None),
     judgment: Optional[JudgmentResult] = Query(None),
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
@@ -498,13 +502,13 @@ async def list_inspection_results(
         if to_date:
             filters.append(InspectionResult.created_at <= to_date)
 
-        # target_idでフィルタする場合はJOINが必要
-        if target_id:
+        # instruction_idでフィルタする場合はJOINが必要
+        if instruction_id:
             query = query.join(InspectionExecution).where(
-                InspectionExecution.target_id == target_id
+                InspectionExecution.instruction_id == instruction_id
             )
             count_query = count_query.join(InspectionExecution).where(
-                InspectionExecution.target_id == target_id
+                InspectionExecution.instruction_id == instruction_id
             )
 
         if filters:
@@ -556,10 +560,12 @@ async def get_inspection_item_executions(
         result = await db.execute(
             select(InspectionItemExecution)
             .options(
-                selectinload(InspectionItemExecution.item)
-                .selectinload(InspectionItem.target),
-                selectinload(InspectionItemExecution.item)
-                .selectinload(InspectionItem.criteria),
+                selectinload(InspectionItemExecution.item).selectinload(
+                    InspectionItem.instruction
+                ),
+                selectinload(InspectionItemExecution.item).selectinload(
+                    InspectionItem.criteria
+                ),
             )
             .join(InspectionItem, InspectionItem.id == InspectionItemExecution.item_id)
             .where(InspectionItemExecution.execution_id == execution_id)

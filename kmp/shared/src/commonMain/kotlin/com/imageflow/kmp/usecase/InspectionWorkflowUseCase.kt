@@ -503,15 +503,15 @@ class InspectionWorkflowUseCase(
 
     // Persist human decisions to backend execution/results
     suspend fun persistHumanResultsToBackend(
-        targetId: String,
+        instructionId: String,
         decisions: Map<String, HumanResult>,
         items: List<com.imageflow.kmp.network.InspectionItemKmp>,
         metadata: Map<String, String> = emptyMap(),
         evidenceByItem: Map<String, ByteArray> = emptyMap(),
     ): Boolean {
         return try {
-            // Create execution for the selected target
-            val exec = inspectionApiService.createExecution(targetId = targetId, operatorId = null, qrCode = null, metadata = metadata)
+            // Create execution for the selected instruction
+            val exec = inspectionApiService.createExecution(instructionId = instructionId, operatorId = null, qrCode = null, metadata = metadata)
             val execId = when (exec) {
                 is ApiResult.Success -> exec.data.execution_id
                 is ApiResult.Error, is ApiResult.NetworkError -> return false
