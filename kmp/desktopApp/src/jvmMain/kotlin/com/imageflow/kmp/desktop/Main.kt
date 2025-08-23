@@ -76,6 +76,9 @@ private fun ImageFlowDesktopApp() {
                     viewModel.startInspection(InspectionType.REALTIME)
                     currentScreen = AppScreen.INSPECTION_DETAIL
                 },
+                onOpenInspectionDetail = {
+                    currentScreen = AppScreen.INSPECTION_DETAIL
+                },
                 onViewHistoryClick = {
                     currentScreen = AppScreen.HISTORY
                 },

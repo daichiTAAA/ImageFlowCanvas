@@ -79,6 +79,9 @@ fun ImageFlowMobileApp() {
                         viewModel.startInspection(InspectionType.STATIC_IMAGE)
                         currentScreen = AppScreen.INSPECTION_DETAIL
                     },
+                    onOpenInspectionDetail = {
+                        currentScreen = AppScreen.INSPECTION_DETAIL
+                    },
                     onViewHistoryClick = {
                         // TODO: Implement inspection history screen
                         currentScreen = AppScreen.HISTORY

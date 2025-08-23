@@ -30,6 +30,7 @@ fun MobileInspectionScreen(
     onQrScanClick: () -> Unit = {},
     onSearchProductClick: () -> Unit = {},
     onStartInspectionClick: () -> Unit = {},
+    onOpenInspectionDetail: () -> Unit = {},
     onViewHistoryClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onBack: (() -> Unit)? = null
@@ -84,7 +85,8 @@ fun MobileInspectionScreen(
             inspectionState = inspectionState,
             onQrScanClick = onQrScanClick,
             onSearchProductClick = onSearchProductClick,
-            onStartInspectionClick = onStartInspectionClick
+            onStartInspectionClick = onStartInspectionClick,
+            onOpenInspectionDetail = onOpenInspectionDetail
         )
 
         // Recent inspections (show only when available to save vertical space)
@@ -230,7 +232,8 @@ private fun QuickActionButtons(
     inspectionState: InspectionState,
     onQrScanClick: () -> Unit,
     onSearchProductClick: () -> Unit,
-    onStartInspectionClick: () -> Unit
+    onStartInspectionClick: () -> Unit,
+    onOpenInspectionDetail: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -306,6 +309,20 @@ private fun QuickActionButtons(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("検査開始")
+                }
+            } else if (inspectionState != InspectionState.ProductScanning) {
+                // Resume/Return to inspection detail
+                OutlinedButton(
+                    onClick = onOpenInspectionDetail,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Visibility,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("検査に戻る")
                 }
             }
         }
