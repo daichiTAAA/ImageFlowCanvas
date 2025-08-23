@@ -10,8 +10,9 @@ export default defineConfig({
     // ホットリロードの設定
     hmr: {
       // Browser connects via nginx on 3000 (not 3001)
-      clientPort: 3000,
-      host: 'localhost',
+      clientPort: Number(process.env.HMR_CLIENT_PORT || 3000),
+      host: process.env.HMR_HOST || 'localhost',
+      protocol: (process.env.HMR_PROTOCOL as 'ws' | 'wss') || 'ws',
     },
     // ファイル変更の監視設定
     watch: {
@@ -21,7 +22,7 @@ export default defineConfig({
     // CORS設定（開発環境で必要な場合）
     cors: true,
     // nginx経由でのアクセスを考慮
-    origin: 'http://localhost:3000',
+    origin: process.env.HMR_ORIGIN || 'http://localhost:3000',
   },
   build: {
     outDir: 'dist',

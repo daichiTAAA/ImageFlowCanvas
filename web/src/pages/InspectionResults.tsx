@@ -150,6 +150,7 @@ const StatusChip = ({ status }: { status: string }) => {
   const config = getStatusConfig(status);
   return (
     <Chip
+      component="span"
       icon={config.icon}
       label={config.label}
       color={config.color}
@@ -175,7 +176,14 @@ const JudgmentChip = ({ judgment }: { judgment: string }) => {
   };
 
   const config = getJudgmentConfig(judgment);
-  return <Chip label={config.label} color={config.color} size="small" />;
+  return (
+    <Chip
+      component="span"
+      label={config.label}
+      color={config.color}
+      size="small"
+    />
+  );
 };
 
 export function InspectionResults() {

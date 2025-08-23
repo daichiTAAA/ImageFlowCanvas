@@ -18,7 +18,15 @@ envsubst '${BACKEND_HOST} ${BACKEND_PORT} ${NGINX_RESOLVER}' < /etc/nginx/nginx.
 
 # Start Vite dev server in background
 echo "🔥 Starting Vite dev server on port 3001..."
-npm run dev:nginx -- --host 0.0.0.0 --port 3001 &
+# Allow overriding HMR public host/port if developing remotely
+export HMR_HOST=${HMR_HOST:-localhost}
+export HMR_CLIENT_PORT=${HMR_CLIENT_PORT:-3000}
+export HMR_PROTOCOL=${HMR_PROTOCOL:-ws}
+export HMR_ORIGIN=${HMR_ORIGIN:-http://localhost:3000}
+echo "HMR public endpoint: ${HMR_PROTOCOL}://${HMR_HOST}:${HMR_CLIENT_PORT} (origin ${HMR_ORIGIN})"
+
+# Use Vite config for host/port to avoid leaking 0.0.0.0 to client HMR URL
+npm run dev:nginx &
 VITE_PID=$!
 
 # Wait for Vite to start
