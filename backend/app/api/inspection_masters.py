@@ -1068,7 +1068,7 @@ async def delete_inspection_criteria(
         await db.rollback()
         logger.error(f"Failed to delete inspection criteria: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-# vNEXT: products + process_code から検査項目を取得
+# products + process_code から検査項目を取得（厳格運用: 型式グループ未所属は返さない）
 @router.get(
     "/products/{product_id}/processes/{process_code}/items",
     response_model=PaginatedResponse[InspectionItemResponse],
@@ -1100,62 +1100,30 @@ async def list_items_by_product_and_process(
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
+        # 厳格運用: 型式グループに属していない場合は空を返す
         grp = await db.execute(
             select(ProductTypeGroup)
             .join(ProductTypeGroupMember)
             .where(ProductTypeGroupMember.product_code == product.product_code)
         )
         group = grp.scalar_one_or_none()
-
-        target = None
-        # 1) 型式グループ + 工程コードで検索（新運用）
-        if group:
-            q = await db.execute(
-                select(InspectionTarget)
-                .where(
-                    and_(
-                        InspectionTarget.group_id == group.id,
-                        InspectionTarget.process_code == process_code,
-                    )
-                )
-                .order_by(InspectionTarget.created_at.desc())
+        if not group:
+            return PaginatedResponse(
+                items=[], total_count=0, page=page, page_size=page_size, total_pages=0
             )
-            target = q.scalar_one_or_none()
 
-        # 2) フォールバック: 旧運用の product_code 直接紐付け + 工程コード一致
-        if not target:
-            q2 = await db.execute(
-                select(InspectionTarget)
-                .where(
-                    and_(
-                        InspectionTarget.process_code == process_code,
-                        # 旧スキーマ互換: product_code を metadata に持つケースを考慮
-                        # ここでは簡易に group 未使用ターゲットを拾うため product_code として work_order 等も試す
-                        # まずは product_code
-                        InspectionTarget.group_id.is_(None),
-                    )
+        # 型式グループ + 工程コード一致のターゲットのみ
+        q = await db.execute(
+            select(InspectionTarget)
+            .where(
+                and_(
+                    InspectionTarget.group_id == group.id,
+                    InspectionTarget.process_code == process_code,
                 )
             )
-            # 直近のターゲットを選ぶ（必要なら product_code 列があれば条件追加）
-            target = q2.scalar_one_or_none()
-
-        if not target:
-            # 3) さらにフォールバック: product.product_code でグループ未設定ターゲットを探す
-            try:
-                q3 = await db.execute(
-                    select(InspectionTarget)
-                    .where(
-                        and_(
-                            InspectionTarget.process_code == process_code,
-                            # product_code 列がある環境では一致を追加（存在しない場合は無視される想定）
-                            # SQLAlchemyでは存在しない列参照は失敗するため、ここでは省略し created_at の新しい順で一件採用
-                        )
-                    )
-                    .order_by(InspectionTarget.created_at.desc())
-                )
-                target = q3.scalar_one_or_none()
-            except Exception:
-                target = None
+            .order_by(InspectionTarget.created_at.desc())
+        )
+        target = q.scalar_one_or_none()
 
         if not target:
             return PaginatedResponse(
