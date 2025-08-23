@@ -99,6 +99,22 @@ class ProductTypeGroupMember(Base):
     )
 
 
+class ProductCodeName(Base):
+    """型式コードと型式名の1対1マスタ"""
+    __tablename__ = "product_code_names"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_code = Column(String(100), unique=True, nullable=False)
+    product_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_product_code_names_code', 'product_code'),
+        Index('idx_product_code_names_name', 'product_name'),
+    )
+
+
 class InspectionCriteria(Base):
     """検査基準マスタ"""
     __tablename__ = "inspection_criterias"

@@ -52,6 +52,7 @@ export const Navigation: React.FC = () => {
       label: "検査マスタ",
       path: "/inspection-masters",
     },
+    { icon: <InspectionIcon />, label: "順序情報", path: "/order-info" },
     { icon: <ResultsIcon />, label: "検査結果", path: "/inspection-results" },
     { icon: <StorageIcon />, label: "gRPCサービス", path: "/grpc-services" },
   ];
@@ -63,8 +64,9 @@ export const Navigation: React.FC = () => {
       "/executions": 2,
       "/camera-stream": 3,
       "/inspection-masters": 4,
-      "/inspection-results": 5,
-      "/grpc-services": 6,
+      "/order-info": 5,
+      "/inspection-results": 6,
+      "/grpc-services": 7,
     };
 
     if (location.pathname.startsWith("/execution")) return 2;

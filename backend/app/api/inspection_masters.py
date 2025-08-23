@@ -17,6 +17,7 @@ from app.models.inspection import (
     InspectionCriteria,
     ProductTypeGroup,
     ProductTypeGroupMember,
+    ProductCodeName,
 )
 from app.models.product import ProductMaster
 from app.schemas.inspection import (
@@ -38,6 +39,9 @@ from app.schemas.inspection import (
     ProcessMasterCreate,
     ProcessMasterUpdate,
     ProcessMasterResponse,
+    ProductCodeNameCreate,
+    ProductCodeNameUpdate,
+    ProductCodeNameResponse,
 )
 from app.services.auth_service import get_current_user
 
@@ -1273,6 +1277,122 @@ async def update_process(
         await db.rollback(); raise
     except Exception as e:
         await db.rollback(); logger.error(f"Failed to update process: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 型式コード・型式名マスタ API
+
+
+@router.post(
+    "/type-names",
+    response_model=ProductCodeNameResponse,
+    tags=["inspection-masters"],
+)
+async def create_product_code_name(
+    payload: ProductCodeNameCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        exists = (
+            await db.execute(
+                select(ProductCodeName).where(ProductCodeName.product_code == payload.product_code)
+            )
+        ).scalar_one_or_none()
+        if exists:
+            raise HTTPException(status_code=400, detail="Product code already exists")
+        row = ProductCodeName(product_code=payload.product_code, product_name=payload.product_name)
+        db.add(row); await db.commit(); await db.refresh(row)
+        return row
+    except HTTPException:
+        await db.rollback(); raise
+    except Exception as e:
+        await db.rollback(); logger.error(f"Failed to create product code name: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/type-names",
+    response_model=PaginatedResponse[ProductCodeNameResponse],
+    tags=["inspection-masters"],
+)
+async def list_product_code_names(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
+    q: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        base = select(ProductCodeName)
+        if q:
+            like = f"%{q}%"
+            base = base.where(
+                or_(
+                    ProductCodeName.product_code.ilike(like),
+                    ProductCodeName.product_name.ilike(like),
+                )
+            )
+        total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
+        offset = (page - 1) * page_size
+        rows = (
+            (await db.execute(
+                base.order_by(ProductCodeName.product_code.asc()).offset(offset).limit(page_size)
+            ))
+            .scalars()
+            .all()
+        )
+        return PaginatedResponse(
+            items=rows, total_count=total, page=page, page_size=page_size, total_pages=(total + page_size - 1)//page_size
+        )
+    except Exception as e:
+        logger.error(f"Failed to list product code names: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/type-names/batch",
+    response_model=List[ProductCodeNameResponse],
+    tags=["inspection-masters"],
+)
+async def get_product_code_names_batch(
+    codes: str = Query(..., description="comma separated product codes"),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    wanted = [c.strip() for c in codes.split(',') if c.strip()]
+    if not wanted:
+        return []
+    rows = (await db.execute(select(ProductCodeName))).scalars().all()
+    out = [r for r in rows if r.product_code in wanted]
+    return out
+
+
+@router.put(
+    "/type-names/{product_code}",
+    response_model=ProductCodeNameResponse,
+    tags=["inspection-masters"],
+)
+async def update_product_code_name(
+    product_code: str,
+    payload: ProductCodeNameUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = (
+            await db.execute(select(ProductCodeName).where(ProductCodeName.product_code == product_code))
+        ).scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Product code not found")
+        if payload.product_name is not None:
+            row.product_name = payload.product_name
+        await db.commit(); await db.refresh(row)
+        return row
+    except HTTPException:
+        await db.rollback(); raise
+    except Exception as e:
+        await db.rollback(); logger.error(f"Failed to update product code name: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete(

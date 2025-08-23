@@ -9,6 +9,7 @@ import { GrpcServicesStatus } from "./pages/GrpcServicesStatus";
 import { CameraStream } from "./pages/CameraStream";
 import { InspectionMasters } from "./pages/InspectionMasters";
 import { InspectionResults } from "./pages/InspectionResults";
+import { OrderInfo } from "./pages/OrderInfo";
 import { AuthProvider, useAuth } from "./services/AuthContext";
 import { Navigation } from "./components/Navigation";
 
@@ -39,6 +40,7 @@ function AppContent() {
           <Route path="/camera-stream" element={<CameraStream />} />
           <Route path="/inspection-masters" element={<InspectionMasters />} />
           <Route path="/inspection-results" element={<InspectionResults />} />
+          <Route path="/order-info" element={<OrderInfo />} />
         </Routes>
       </Container>
     </Box>

@@ -264,6 +264,27 @@ class ProcessMasterResponse(ProcessMasterBase):
     updated_at: datetime
 
 
+# 型式コード・型式名マスタ
+class ProductCodeNameBase(BaseModel):
+    product_code: str = Field(..., max_length=100)
+    product_name: str = Field(..., max_length=255)
+
+
+class ProductCodeNameCreate(ProductCodeNameBase):
+    pass
+
+
+class ProductCodeNameUpdate(BaseModel):
+    product_name: Optional[str] = Field(None, max_length=255)
+
+
+class ProductCodeNameResponse(ProductCodeNameBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+
 # 検査項目スキーマ
 class InspectionItemBase(BaseModel):
     target_id: uuid.UUID

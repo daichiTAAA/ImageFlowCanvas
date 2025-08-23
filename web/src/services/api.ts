@@ -401,9 +401,63 @@ class ApiService {
     return response.data
   }
 
+  // Product Code <-> Name master
+  async listProductTypeNames(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/type-names', { params })
+    return response.data
+  }
+
+  async getProductTypeNamesBatch(codes: string[]): Promise<any[]> {
+    const api = this.ensureApiInitialized()
+    const query = codes.length ? `?codes=${encodeURIComponent(codes.join(','))}` : '?codes='
+    const response = await api.get(`/inspection/type-names/batch${query}`)
+    return response.data
+  }
+
+  async createProductTypeName(data: { product_code: string; product_name: string }): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/type-names', data)
+    return response.data
+  }
+
+  async updateProductTypeName(productCode: string, data: { product_name: string }): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.put(`/inspection/type-names/${encodeURIComponent(productCode)}`, data)
+    return response.data
+  }
+
   async deleteProductTypeGroupMember(groupId: string, productCode: string): Promise<void> {
     const api = this.ensureApiInitialized()
     await api.delete(`/inspection/type-groups/${groupId}/members/${encodeURIComponent(productCode)}`)
+  }
+
+  // Order Info (製造指図情報: ProductMaster)
+  async searchOrders(limit: number = 50, params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const query = { limit, ...params }
+    const response = await api.get('/products/search', { params: query })
+    return response.data
+  }
+
+  async listOrders(params: any = {}): Promise<any[]> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/products/', { params })
+    return response.data
+  }
+
+  async createOrder(data: {
+    workOrderId: string
+    instructionId: string
+    productCode: string
+    machineNumber: string
+    productionDate: string // YYYY-MM-DD
+    monthlySequence: number
+    qrRawData?: string
+  }): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/products/', data)
+    return response.data
   }
 
   async getInspectionItem(itemId: string): Promise<any> {
