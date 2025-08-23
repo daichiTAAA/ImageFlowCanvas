@@ -29,6 +29,9 @@ class MobileInspectionViewModel(
     private val _searchResults = MutableStateFlow<ProductSearchResult?>(null)
     val searchResults: StateFlow<ProductSearchResult?> = _searchResults.asStateFlow()
 
+    private val _productStatuses = MutableStateFlow<Map<String, InspectionState>>(emptyMap())
+    val productStatuses: StateFlow<Map<String, InspectionState>> = _productStatuses.asStateFlow()
+
     private val _suggestions = MutableStateFlow<List<ProductSuggestion>>(emptyList())
     val suggestions: StateFlow<List<ProductSuggestion>> = _suggestions.asStateFlow()
     
@@ -114,6 +117,7 @@ class MobileInspectionViewModel(
                 _searchResults.value = result.copy(
                     products = sortByProductionOrder(result.products)
                 )
+                refreshProductStatuses(_searchResults.value?.products ?: emptyList())
             } catch (e: Throwable) {
                 updateUiState {
                     it.copy(
@@ -140,6 +144,7 @@ class MobileInspectionViewModel(
                 _searchResults.value = result.copy(
                     products = sortByProductionOrder(result.products)
                 )
+                refreshProductStatuses(_searchResults.value?.products ?: emptyList())
             } catch (e: Throwable) {
                 updateUiState {
                     it.copy(
@@ -231,6 +236,22 @@ class MobileInspectionViewModel(
     fun clearSearchResults() {
         _searchResults.value = null
         _suggestions.value = emptyList()
+        _productStatuses.value = emptyMap()
+    }
+
+    private fun refreshProductStatuses(products: List<ProductInfo>) {
+        viewModelScope.launch {
+            try {
+                val map = mutableMapOf<String, InspectionState>()
+                for (p in products) {
+                    val st = inspectionWorkflowUseCase.getLatestInspectionStateForProduct(p.id)
+                    if (st != null) map[p.id] = st
+                }
+                _productStatuses.value = map
+            } catch (_: Throwable) {
+                _productStatuses.value = emptyMap()
+            }
+        }
     }
 
     fun resetToScanning() {

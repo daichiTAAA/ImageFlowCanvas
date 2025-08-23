@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,7 @@ fun DesktopInspectionDetailPanel(
     scrollRequestSeq: Int = 0,
     onSelectItemIndex: (Int) -> Unit = {},
     onItemHumanReview: (String, com.imageflow.kmp.models.HumanResult) -> Unit = { _, _ -> },
+    onCompleteInspection: (com.imageflow.kmp.models.HumanResult) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
@@ -170,6 +172,31 @@ fun DesktopInspectionDetailPanel(
                     }
                     HorizontalDivider()
                 }
+            }
+        }
+        // 検査完了ボタン（一覧の一番下）
+        // 完了は「全ての項目に目視OK」が付いた場合のみ可能（State依存のためderivedStateOfで追従）
+        val canComplete by remember(inspectionItems, perItemHuman) {
+            derivedStateOf {
+                val ordered = inspectionItems.sortedBy { it.execution_order }
+                ordered.isNotEmpty() && ordered.all { perItemHuman[it.id] == com.imageflow.kmp.models.HumanResult.OK }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            val overall by remember(inspectionItems, perItemHuman) {
+                derivedStateOf {
+                    val anyNg = inspectionItems.any { perItemHuman[it.id] == com.imageflow.kmp.models.HumanResult.NG }
+                    if (anyNg) com.imageflow.kmp.models.HumanResult.NG else com.imageflow.kmp.models.HumanResult.OK
+                }
+            }
+            androidx.compose.material3.Button(
+                onClick = { onCompleteInspection(overall) },
+                enabled = canComplete
+            ) {
+                Text("検査完了")
             }
         }
         // Note: We no longer auto-select based on scroll position to avoid

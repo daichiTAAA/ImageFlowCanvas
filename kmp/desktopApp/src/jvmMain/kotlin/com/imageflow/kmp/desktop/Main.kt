@@ -43,6 +43,7 @@ fun main() = application {
 @Composable
 private fun ImageFlowDesktopApp() {
     var currentScreen by remember { mutableStateOf(AppScreen.MAIN) }
+    var showCompletedDialog by remember { mutableStateOf(false) }
 
     val viewModel = remember {
         DependencyContainer.createMobileInspectionViewModel(
@@ -57,6 +58,7 @@ private fun ImageFlowDesktopApp() {
     val currentInspection by viewModel.currentInspection.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
+    val productStatuses by viewModel.productStatuses.collectAsState()
 
     when (currentScreen) {
         AppScreen.MAIN -> {
@@ -72,12 +74,20 @@ private fun ImageFlowDesktopApp() {
                     currentScreen = AppScreen.PRODUCT_SEARCH
                 },
                 onStartInspectionClick = {
-                    // Use REALTIME to avoid REST orchestration; stream via gRPC instead
-                    viewModel.startInspection(InspectionType.REALTIME)
-                    currentScreen = AppScreen.INSPECTION_DETAIL
+                    if (inspectionState == com.imageflow.kmp.state.InspectionState.Completed) {
+                        showCompletedDialog = true
+                    } else {
+                        // Use REALTIME to avoid REST orchestration; stream via gRPC instead
+                        viewModel.startInspection(InspectionType.REALTIME)
+                        currentScreen = AppScreen.INSPECTION_DETAIL
+                    }
                 },
                 onOpenInspectionDetail = {
-                    currentScreen = AppScreen.INSPECTION_DETAIL
+                    if (inspectionState == com.imageflow.kmp.state.InspectionState.Completed) {
+                        showCompletedDialog = true
+                    } else {
+                        currentScreen = AppScreen.INSPECTION_DETAIL
+                    }
                 },
                 onViewHistoryClick = {
                     currentScreen = AppScreen.HISTORY
@@ -89,6 +99,18 @@ private fun ImageFlowDesktopApp() {
                     currentScreen = AppScreen.PRODUCT_SEARCH
                 }
             )
+            if (showCompletedDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showCompletedDialog = false },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = { showCompletedDialog = false }) {
+                            androidx.compose.material3.Text("OK")
+                        }
+                    },
+                    title = { androidx.compose.material3.Text("検査が完了しています") },
+                    text = { androidx.compose.material3.Text("この製品の検査は完了済みです。検査詳細は開けません。") }
+                )
+            }
         }
 
         AppScreen.QR_SCAN -> {
@@ -120,6 +142,7 @@ private fun ImageFlowDesktopApp() {
                 isLoading = uiState.isLoading,
                 suggestions = suggestions,
                 searchResults = searchResults?.products ?: emptyList(),
+                inspectionStatuses = productStatuses,
                 onQueryChange = { q -> viewModel.loadSuggestions(q) },
                 onSearch = { q -> viewModel.searchProducts(q) },
                 onSelectSuggestion = { s ->
@@ -146,6 +169,12 @@ private fun ImageFlowDesktopApp() {
             val authToken by settingsVm.authToken.collectAsState()
             val processCode by settingsVm.processCode.collectAsState()
             val processes by settingsVm.processes.collectAsState()
+            // 完了状態になったらメイン画面へ戻る
+            LaunchedEffect(inspectionState) {
+                if (inspectionState == com.imageflow.kmp.state.InspectionState.Completed) {
+                    currentScreen = AppScreen.MAIN
+                }
+            }
             ScreenWithTopBar(
                 title = "検査詳細",
                 onBack = { currentScreen = AppScreen.MAIN },
@@ -351,6 +380,10 @@ private fun ImageFlowDesktopApp() {
                                     scrollSeq++
                                 }
                             }
+                        },
+                        onCompleteInspection = { finalResult ->
+                            // 最終結果を送信し検査を完了
+                            viewModel.submitHumanReview(finalResult)
                         },
                     )
                 }

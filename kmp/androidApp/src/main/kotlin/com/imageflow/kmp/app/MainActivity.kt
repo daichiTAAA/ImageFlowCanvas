@@ -57,6 +57,7 @@ fun ImageFlowMobileApp() {
     val inspectionProgress by viewModel.inspectionProgress.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
+    val productStatuses by viewModel.productStatuses.collectAsState()
     val currentInspection by viewModel.currentInspection.collectAsState()
     
     MaterialTheme {
@@ -139,6 +140,7 @@ fun ImageFlowMobileApp() {
                     isLoading = uiState.isLoading,
                     suggestions = suggestions,
                     searchResults = searchResults?.products ?: emptyList(),
+                    inspectionStatuses = productStatuses,
                     onQueryChange = { q -> viewModel.loadSuggestions(q) },
                     onSearch = { q -> viewModel.searchProducts(q) },
                     onSelectSuggestion = { s ->

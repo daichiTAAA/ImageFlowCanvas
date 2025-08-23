@@ -21,6 +21,7 @@ fun ProductSearchScreen(
     isLoading: Boolean,
     suggestions: List<ProductSuggestion>,
     searchResults: List<ProductInfo>,
+    inspectionStatuses: Map<String, com.imageflow.kmp.state.InspectionState> = emptyMap(),
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onSelectSuggestion: (ProductSuggestion) -> Unit,
@@ -132,7 +133,8 @@ fun ProductSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(searchResults) { p ->
-                        ProductResultItem(product = p) { onSelectProduct(p) }
+                        val st = inspectionStatuses[p.id]
+                        ProductResultItem(product = p, status = st) { onSelectProduct(p) }
                     }
                 }
             }
@@ -155,7 +157,7 @@ private fun SuggestionItem(s: ProductSuggestion, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ProductResultItem(product: ProductInfo, onClick: () -> Unit) {
+private fun ProductResultItem(product: ProductInfo, status: com.imageflow.kmp.state.InspectionState?, onClick: () -> Unit) {
     ElevatedCard(onClick = onClick) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(text = "${product.productCode} - ${product.machineNumber}", fontWeight = FontWeight.SemiBold)
@@ -171,6 +173,26 @@ private fun ProductResultItem(product: ProductInfo, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val label = when (status) {
+                    com.imageflow.kmp.state.InspectionState.ProductScanning -> "検査待ち"
+                    com.imageflow.kmp.state.InspectionState.ProductIdentified -> "型式特定済み"
+                    com.imageflow.kmp.state.InspectionState.InProgress -> "検査中"
+                    com.imageflow.kmp.state.InspectionState.AiCompleted -> "AI判定完了"
+                    com.imageflow.kmp.state.InspectionState.HumanReview -> "人手確認中"
+                    com.imageflow.kmp.state.InspectionState.Completed -> "検査完了"
+                    com.imageflow.kmp.state.InspectionState.ProductNotFound -> "型式未検出"
+                    com.imageflow.kmp.state.InspectionState.QrDecodeFailed -> "QR失敗"
+                    com.imageflow.kmp.state.InspectionState.Failed -> "失敗"
+                    com.imageflow.kmp.state.InspectionState.Cancelled -> "キャンセル"
+                    null -> "未実施"
+                }
+                AssistChip(
+                    onClick = {},
+                    label = { Text("検査状況: $label") }
+                )
+            }
         }
     }
 }

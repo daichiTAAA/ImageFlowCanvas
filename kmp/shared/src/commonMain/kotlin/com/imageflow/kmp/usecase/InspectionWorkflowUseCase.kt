@@ -101,10 +101,23 @@ class InspectionWorkflowUseCase(
     
     override suspend fun selectProduct(productInfo: ProductInfo): Boolean {
         return try {
-            // Create new inspection
+            // If there is already a completed inspection for this product, reuse it and mark state as Completed
+            runCatching {
+                val prior = inspectionRepository.getInspectionsByProduct(productInfo.id)
+                    .filter { it.inspectionState == InspectionState.Completed }
+                    .maxByOrNull { it.completedAt ?: it.updatedAt }
+                if (prior != null) {
+                    _currentInspection.value = prior
+                    _state.value = InspectionState.Completed
+                    updateProgress()
+                    return true
+                }
+            }
+
+            // Otherwise create a new inspection
             val inspection = createNewInspection(productInfo)
             inspectionRepository.saveInspection(inspection)
-            
+
             _currentInspection.value = inspection
             _state.value = InspectionState.ProductIdentified
             updateProgress()
@@ -116,7 +129,12 @@ class InspectionWorkflowUseCase(
     
     override suspend fun startInspection(inspectionType: InspectionType): Boolean {
         val currentInspection = _currentInspection.value ?: return false
-        
+        // Block starting when already completed
+        if (currentInspection.inspectionState == InspectionState.Completed) {
+            _state.value = InspectionState.Completed
+            updateProgress()
+            return false
+        }
         return try {
             val updatedInspection = currentInspection.copy(
                 inspectionType = inspectionType,
@@ -469,6 +487,17 @@ class InspectionWorkflowUseCase(
             is ApiResult.Success -> res.data.items
             is ApiResult.Error -> emptyList()
             is ApiResult.NetworkError -> emptyList()
+        }
+    }
+
+    // Status helper for UI: latest inspection state for a given product
+    suspend fun getLatestInspectionStateForProduct(productId: String): InspectionState? {
+        return try {
+            val list = inspectionRepository.getInspectionsByProduct(productId)
+            val latest = list.maxByOrNull { (it.completedAt ?: 0L).coerceAtLeast(it.updatedAt) }
+            latest?.inspectionState
+        } catch (_: Throwable) {
+            null
         }
     }
 
