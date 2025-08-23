@@ -95,7 +95,7 @@ fun DesktopInspectionDetailPanel(
                     Text("型式コード: ${currentProduct.productCode}", fontWeight = FontWeight.SemiBold)
                     Text("機番: ${currentProduct.machineNumber}")
                     Text("指図/指示: ${currentProduct.workOrderId} / ${currentProduct.instructionId}")
-                    Text("生産日/連番: ${currentProduct.productionDate} / ${currentProduct.monthlySequence}")
+                    Text("生産日/月連番: ${currentProduct.productionDate} / ${currentProduct.monthlySequence}")
                 } else {
                     Text("型式未選択", color = MaterialTheme.colorScheme.error)
                 }

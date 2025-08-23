@@ -399,7 +399,18 @@ class MobileInspectionViewModel(
         viewModelScope.launch {
             updateUiState { it.copy(isLoading = true) }
             try {
-                val ok = inspectionWorkflowUseCase.persistHumanResultsToBackend(targetId, decisions, items)
+                // Attach rich product context so Web can display model code/name, machine number, production date, and monthly sequence
+                val meta = buildMap<String, String> {
+                    uiState.value.currentProduct?.productCode?.let { put("product_code", it) }
+                    uiState.value.currentProduct?.machineNumber?.let { put("machine_number", it) }
+                    uiState.value.currentProduct?.workOrderId?.let { put("work_order_id", it) }
+                    uiState.value.currentProduct?.instructionId?.let { put("instruction_id", it) }
+                    uiState.value.currentProduct?.productionDate?.let { put("production_date", it) }
+                    // Serialize monthly sequence as string for consistent JSON in metadata
+                    uiState.value.currentProduct?.monthlySequence?.let { put("monthly_sequence", it.toString()) }
+                    // product_name is not present in ProductInfo; Web derives from target.product_name
+                }
+                val ok = inspectionWorkflowUseCase.persistHumanResultsToBackend(targetId, decisions, items, metadata = meta)
                 if (!ok) {
                     updateUiState { it.copy(errorMessage = "検査結果の保存に失敗しました") }
                 }

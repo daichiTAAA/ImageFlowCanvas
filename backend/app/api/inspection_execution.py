@@ -84,11 +84,13 @@ async def create_inspection_execution(
             )
 
         # 検査実行を作成
+        # Note: ORM attribute is metadata_ (DB column name "metadata").
+        # Use metadata_ here so the field is persisted and later serialized via alias as "metadata".
         execution = InspectionExecution(
             target_id=request.target_id,
             operator_id=request.operator_id or _extract_user_id(current_user),
             qr_code=request.qr_code,
-            metadata=request.metadata or {},
+            metadata_=request.metadata or {},
             status=InspectionStatus.PENDING,
         )
 
@@ -392,6 +394,21 @@ async def save_inspection_result(
         if request.judgment in [JudgmentResult.OK, JudgmentResult.NG]:
             item_execution.status = InspectionItemStatus.ITEM_COMPLETED
             item_execution.completed_at = datetime.utcnow()
+
+        # AI結果が未設定の場合でも、少なくとも判定はWebに表示できるよう
+        # 最低限のAI結果を補完（本来はAI処理で設定される）
+        try:
+            if not item_execution.ai_result:
+                item_execution.ai_result = {
+                    "judgment": request.judgment,
+                    "confidence_score": None,
+                    "detections": [],
+                    "measurements": {},
+                    "explanation": None,
+                    "processing_time_ms": None,
+                }
+        except Exception:
+            pass
 
         await db.commit()
 

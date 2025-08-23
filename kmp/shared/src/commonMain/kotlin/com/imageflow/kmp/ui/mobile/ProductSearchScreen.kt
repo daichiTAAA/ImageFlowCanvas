@@ -169,7 +169,7 @@ private fun ProductResultItem(product: ProductInfo, status: com.imageflow.kmp.st
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "生産日: ${product.productionDate} / 連番: ${product.monthlySequence}",
+                text = "生産日: ${product.productionDate} / 月連番: ${product.monthlySequence}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

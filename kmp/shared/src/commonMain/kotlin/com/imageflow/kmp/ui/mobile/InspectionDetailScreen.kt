@@ -38,7 +38,7 @@ fun InspectionDetailScreen(
                 if (currentProduct != null) {
                     Text("型式コード: ${currentProduct.productCode} - ${currentProduct.machineNumber}", fontWeight = FontWeight.SemiBold)
                     Text("指図: ${currentProduct.workOrderId} / 指示: ${currentProduct.instructionId}")
-                    Text("生産日: ${currentProduct.productionDate} / 連番: ${currentProduct.monthlySequence}")
+                    Text("生産日: ${currentProduct.productionDate} / 月連番: ${currentProduct.monthlySequence}")
                 } else {
                     Text("順序情報が選択されていません", color = MaterialTheme.colorScheme.error)
                 }

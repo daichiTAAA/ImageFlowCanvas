@@ -54,10 +54,12 @@ interface InspectionExecution {
   started_at: string;
   completed_at?: string;
   error_message?: string;
+  metadata?: Record<string, any>;
   target?: {
     id: string;
     name: string;
-    product_code: string;
+    product_name?: string;
+    group_name?: string;
   };
 }
 
@@ -381,7 +383,11 @@ export function InspectionResults() {
                     <TableRow>
                       <TableCell>実行ID</TableCell>
                       <TableCell>検査対象</TableCell>
-                      <TableCell>製品コード</TableCell>
+                      <TableCell>型式コード</TableCell>
+                      <TableCell>型式名</TableCell>
+                      <TableCell>機番</TableCell>
+                      <TableCell>生産日</TableCell>
+                      <TableCell>月連番</TableCell>
                       <TableCell>ステータス</TableCell>
                       <TableCell>開始時刻</TableCell>
                       <TableCell>完了時刻</TableCell>
@@ -394,7 +400,19 @@ export function InspectionResults() {
                         <TableCell>{execution.id.slice(0, 8)}...</TableCell>
                         <TableCell>{execution.target?.name || "-"}</TableCell>
                         <TableCell>
-                          {execution.target?.product_code || "-"}
+                          {execution.metadata?.product_code || execution.target?.product_code || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {execution.target?.product_name || execution.metadata?.product_name || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {execution.metadata?.machine_number || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {execution.metadata?.production_date || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {execution.metadata?.monthly_sequence || "-"}
                         </TableCell>
                         <TableCell>
                           <StatusChip status={execution.status} />
@@ -512,8 +530,24 @@ export function InspectionResults() {
                         {selectedExecution.target?.name}
                       </Typography>
                       <Typography>
-                        <strong>製品コード:</strong>{" "}
-                        {selectedExecution.target?.product_code}
+                        <strong>型式コード:</strong>{" "}
+                        {selectedExecution.metadata?.product_code || selectedExecution.target?.product_code || selectedExecution.target?.group_name || "-"}
+                      </Typography>
+                      <Typography>
+                        <strong>型式名:</strong>{" "}
+                        {selectedExecution.target?.product_name || selectedExecution.metadata?.product_name || "-"}
+                      </Typography>
+                      <Typography>
+                        <strong>機番:</strong>{" "}
+                        {selectedExecution.metadata?.machine_number || "-"}
+                      </Typography>
+                      <Typography>
+                        <strong>生産日:</strong>{" "}
+                        {selectedExecution.metadata?.production_date || "-"}
+                      </Typography>
+                      <Typography>
+                        <strong>月連番:</strong>{" "}
+                        {selectedExecution.metadata?.monthly_sequence || "-"}
                       </Typography>
                       <Typography>
                         <strong>ステータス:</strong>{" "}
