@@ -9,6 +9,7 @@ actual object AppSettings {
     private const val KEY_AUTH_TOKEN = "auth_token"
     private const val KEY_AUTH_USERNAME = "auth_username"
     private const val KEY_AUTH_PASSWORD = "auth_password"
+    private const val KEY_CAMERA_ID = "selected_camera_id"
 
     actual fun getBaseUrl(): String? = prefs.get(KEY_BASE_URL, null)
 
@@ -22,6 +23,10 @@ actual object AppSettings {
     actual fun getAuthToken(): String? = prefs.get(KEY_AUTH_TOKEN, null)
     actual fun setAuthToken(token: String?) {
         if (token == null) prefs.remove(KEY_AUTH_TOKEN) else prefs.put(KEY_AUTH_TOKEN, token)
+    }
+    actual fun getSelectedCameraId(): String? = prefs.get(KEY_CAMERA_ID, null)
+    actual fun setSelectedCameraId(id: String?) {
+        if (id.isNullOrBlank()) prefs.remove(KEY_CAMERA_ID) else prefs.put(KEY_CAMERA_ID, id)
     }
     actual fun getAuthUsername(): String? = prefs.get(KEY_AUTH_USERNAME, null)
     actual fun getAuthPassword(): String? = prefs.get(KEY_AUTH_PASSWORD, null)

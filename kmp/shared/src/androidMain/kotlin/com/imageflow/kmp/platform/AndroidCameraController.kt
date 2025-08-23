@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.camera.core.*
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.Recorder
 import androidx.camera.video.VideoCapture
@@ -248,8 +249,19 @@ internal class AndroidCameraController(
             // Setup image analysis for QR scanning
             setupImageAnalyzer()
             
-            // Select camera (back camera)
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            // Select camera based on settings; fallback to back camera
+            val selectedId = com.imageflow.kmp.settings.AppSettings.getSelectedCameraId()
+            val cameraSelector = if (!selectedId.isNullOrBlank()) {
+                CameraSelector.Builder()
+                    .addCameraFilter(CameraFilter { infos ->
+                        infos.filter { info ->
+                            try { Camera2CameraInfo.from(info).cameraId == selectedId } catch (_: Throwable) { false }
+                        }
+                    })
+                    .build()
+            } else {
+                CameraSelector.DEFAULT_BACK_CAMERA
+            }
             
             // Bind use cases to lifecycle
             cameraProvider.unbindAll()

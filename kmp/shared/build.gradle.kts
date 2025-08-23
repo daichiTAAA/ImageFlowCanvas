@@ -103,6 +103,8 @@ kotlin {
                 implementation("app.cash.sqldelight:sqlite-driver:$sqldelightVersion")
                 // Provide Dispatchers.Main for Swing/AWT on desktop
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:$coroutinesVersion")
+                // JavaCV for camera enumeration on desktop
+                implementation("org.bytedeco:javacv-platform:1.5.10")
             }
         }
 

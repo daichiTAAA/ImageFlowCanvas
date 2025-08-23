@@ -44,8 +44,8 @@ compose.desktop {
         mainClass = "com.imageflow.kmp.desktop.MainKt"
         jvmArgs += listOf(
             "-Dfile.encoding=UTF-8",
-            // Enable JavaCPP/FFmpeg logs via SLF4J (shown in console)
-            "-Dorg.bytedeco.javacpp.logger=slf4j",
+            // Route JavaCPP/FFmpeg logs to console to enable device enumeration parsing
+            "-Dorg.bytedeco.javacpp.logger=console",
             "-Dorg.bytedeco.javacpp.loggerFormat=%m%n"
         )
 

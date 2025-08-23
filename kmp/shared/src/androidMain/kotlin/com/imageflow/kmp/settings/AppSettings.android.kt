@@ -10,6 +10,7 @@ actual object AppSettings {
     private const val KEY_AUTH_TOKEN = "auth_token"
     private const val KEY_AUTH_USERNAME = "auth_username"
     private const val KEY_AUTH_PASSWORD = "auth_password"
+    private const val KEY_CAMERA_ID = "selected_camera_id"
 
     private fun ctx(): Context = AndroidDbContextHolder.context
 
@@ -61,6 +62,20 @@ actual object AppSettings {
         try {
             val edit = ctx().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             if (token == null) edit.remove(KEY_AUTH_TOKEN) else edit.putString(KEY_AUTH_TOKEN, token)
+            edit.apply()
+        } catch (_: Exception) { }
+    }
+
+    actual fun getSelectedCameraId(): String? {
+        return try {
+            ctx().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CAMERA_ID, null)
+        } catch (_: Exception) { null }
+    }
+
+    actual fun setSelectedCameraId(id: String?) {
+        try {
+            val edit = ctx().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            if (id.isNullOrBlank()) edit.remove(KEY_CAMERA_ID) else edit.putString(KEY_CAMERA_ID, id)
             edit.apply()
         } catch (_: Exception) { }
     }

@@ -8,6 +8,9 @@ expect object AppSettings {
     fun setProcessCode(code: String)
     fun getAuthToken(): String?
     fun setAuthToken(token: String?)
+    // Camera selection
+    fun getSelectedCameraId(): String?
+    fun setSelectedCameraId(id: String?)
     // Optional: stored credentials for auto re-login (plain text; for dev convenience only)
     fun getAuthUsername(): String?
     fun getAuthPassword(): String?

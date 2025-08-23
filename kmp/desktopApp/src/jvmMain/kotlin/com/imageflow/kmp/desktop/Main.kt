@@ -18,9 +18,15 @@ import java.awt.Frame
 import com.imageflow.kmp.ui.mobile.MobileInspectionScreen
 import com.imageflow.kmp.ui.mobile.ProductSearchScreen
 import com.imageflow.kmp.ui.mobile.SettingsScreen
+import com.imageflow.kmp.platform.AvFoundationLogTap
 import com.imageflow.kmp.ui.viewmodel.SettingsViewModel
 
 fun main() = application {
+    // Install AVFoundation stderr tap as early as possible
+    try {
+        AvFoundationLogTap.installIfNeeded()
+        println("[DesktopMain] Installed AvFoundationLogTap")
+    } catch (_: Throwable) {}
     val windowState = rememberWindowState(width = 1280.dp, height = 880.dp)
     Window(onCloseRequest = ::exitApplication, title = "ImageFlow Desktop", state = windowState) {
         // Enforce a reasonable minimum window size
@@ -362,7 +368,8 @@ private fun ImageFlowDesktopApp() {
             val currentProcess by settingsVm.processCode.collectAsState()
             val authToken by settingsVm.authToken.collectAsState()
             val processList by settingsVm.processes.collectAsState()
-            SettingsScreen(
+            Column(Modifier.fillMaxSize()) {
+                SettingsScreen(
                 initialBaseUrl = currentUrl,
                 initialProcessCode = currentProcess,
                 isAuthenticated = !authToken.isNullOrBlank(),
@@ -393,10 +400,13 @@ private fun ImageFlowDesktopApp() {
                     settingsVm.loadProcesses()
                 },
                 onBack = { currentScreen = AppScreen.MAIN }
-            )
+                )
+            }
         }
     }
 }
+
+// DesktopCameraSelector removed; shared SettingsScreen now handles camera selection
 
 // Simple native file picker for images (macOS/Windows/Linux)
 private fun pickImageFile(): String? {

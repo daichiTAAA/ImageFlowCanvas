@@ -11,6 +11,9 @@ import androidx.compose.ui.unit.dp
 import com.imageflow.kmp.ui.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import com.imageflow.kmp.platform.listAvailableCameras
+import com.imageflow.kmp.settings.AppSettings
+import com.imageflow.kmp.platform.CameraDeviceInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +45,18 @@ fun SettingsScreen(
     var password by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
 
+    // Camera list and selection (load after composition to allow native logger flush)
+    var cameras by remember { mutableStateOf<List<CameraDeviceInfo>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        val list = listAvailableCameras()
+        println("[SettingsScreen] Camera list size: ${list.size}")
+        list.forEachIndexed { idx, c -> println("[SettingsScreen] #${idx}: ${c.label}") }
+        cameras = list
+    }
+    var cameraMenuExpanded by remember { mutableStateOf(false) }
+    var selectedCameraId by remember { mutableStateOf(AppSettings.getSelectedCameraId() ?: cameras.firstOrNull()?.id.orEmpty()) }
+    val selectedCameraLabel = cameras.firstOrNull { it.id == selectedCameraId }?.label ?: (selectedCameraId.ifBlank { "(未選択)" })
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -61,6 +76,42 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Camera selection
+            Text(text = "カメラ選択", style = MaterialTheme.typography.labelLarge)
+            ExposedDropdownMenuBox(
+                expanded = cameraMenuExpanded,
+                onExpandedChange = { cameraMenuExpanded = it }
+            ) {
+                OutlinedTextField(
+                    value = selectedCameraLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    placeholder = { Text("カメラを選択") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = cameraMenuExpanded) }
+                )
+                ExposedDropdownMenu(expanded = cameraMenuExpanded, onDismissRequest = { cameraMenuExpanded = false }) {
+                    if (cameras.isEmpty()) {
+                        DropdownMenuItem(text = { Text("検出できるカメラがありません") }, onClick = { cameraMenuExpanded = false }, enabled = false)
+                    } else {
+                        cameras.forEach { cam ->
+                            DropdownMenuItem(
+                                text = { Text(cam.label) },
+                                onClick = {
+                                    selectedCameraId = cam.id
+                                    AppSettings.setSelectedCameraId(cam.id)
+                                    cameraMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
             Text(text = "API ベースURL", style = MaterialTheme.typography.labelLarge)
             OutlinedTextField(
                 value = url,

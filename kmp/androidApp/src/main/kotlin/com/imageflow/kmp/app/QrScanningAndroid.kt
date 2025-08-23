@@ -191,7 +191,17 @@ fun QrScanningScreenAndroid(
             }
         }
 
-        val selector = CameraSelector.DEFAULT_BACK_CAMERA
+        val selectedId = com.imageflow.kmp.settings.AppSettings.getSelectedCameraId()
+        val selector = if (!selectedId.isNullOrBlank()) {
+            val filter = CameraFilter { infos ->
+                infos.filter { info ->
+                    try { androidx.camera.camera2.interop.Camera2CameraInfo.from(info).cameraId == selectedId } catch (_: Throwable) { false }
+                }
+            }
+            CameraSelector.Builder().addCameraFilter(filter).build()
+        } else {
+            CameraSelector.DEFAULT_BACK_CAMERA
+        }
         camera = cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview, imageAnalysis)
         analysis = imageAnalysis
     }

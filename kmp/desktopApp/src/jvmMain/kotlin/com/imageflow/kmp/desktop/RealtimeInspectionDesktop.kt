@@ -29,6 +29,8 @@ import org.bytedeco.javacv.Frame
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGR0
 import org.slf4j.LoggerFactory
 import javax.swing.SwingUtilities
+import com.imageflow.kmp.settings.AppSettings
+import com.imageflow.kmp.platform.listAvailableCameras
 private val LOG = LoggerFactory.getLogger("RealtimeInspection")
 
 @Composable
@@ -61,8 +63,20 @@ fun RealtimeInspectionDesktop(
     var frameCount by remember { mutableStateOf(0) }
     var startAt by remember { mutableStateOf(0L) }
     var configVersion by remember { mutableStateOf(0) }
-    // Simple camera controls
-    var deviceIndex by remember { mutableStateOf(0) }
+    // Simple camera controls (initialize from settings if available)
+    val deviceNames = remember { listAvailableCameras().map { it.label } }
+    val initialDeviceIndex = remember {
+        val sel = AppSettings.getSelectedCameraId()
+        val idxByName = if (!sel.isNullOrBlank()) deviceNames.indexOfFirst { it == sel } else -1
+        if (idxByName >= 0) idxByName else sel?.toIntOrNull() ?: 0
+    }
+    var deviceIndex by remember { mutableStateOf(initialDeviceIndex) }
+    // Persist selected camera by NAME so it survives device index reordering
+    LaunchedEffect(deviceIndex) {
+        val cams = listAvailableCameras().map { it.label }
+        val name = cams.getOrNull(deviceIndex)
+        if (!name.isNullOrBlank()) runCatching { AppSettings.setSelectedCameraId(name) }
+    }
     var pixelFmt by remember { mutableStateOf(PixelFmt.RGB0) }
     var resolution by remember { mutableStateOf(Res(1280, 720)) }
     var fps by remember { mutableStateOf(30) }
@@ -98,6 +112,11 @@ fun RealtimeInspectionDesktop(
             Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = {
                 // trigger clean restart via state key; LaunchedEffect will cancel and re-init safely
+                // Also resync selected camera from settings (if changed in Settings screen)
+                val sel = AppSettings.getSelectedCameraId()
+                val cams = listAvailableCameras().map { it.label }
+                val idx = if (!sel.isNullOrBlank()) cams.indexOfFirst { it == sel } else -1
+                if (idx >= 0) deviceIndex = idx
                 frameCount = 0
                 startAt = 0L
                 configVersion++
