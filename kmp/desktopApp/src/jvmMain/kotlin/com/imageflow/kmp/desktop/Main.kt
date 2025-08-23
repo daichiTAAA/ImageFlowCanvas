@@ -338,6 +338,9 @@ private fun ImageFlowDesktopApp() {
                     // Emit scroll request when advancing after human OK
                     var scrollSeq by remember { mutableStateOf(0) }
                     var scrollTargetIndex by remember { mutableStateOf(currentIdx) }
+                    // Mark inspection start on entering detail screen once
+                    LaunchedEffect(Unit) { viewModel.markInspectionStarted() }
+
                     DesktopInspectionDetailPanel(
                         currentProduct = uiState.currentProduct,
                         processCode = processCode,

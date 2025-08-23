@@ -40,6 +40,15 @@ class MobileInspectionViewModel(
     val currentInspection: StateFlow<Inspection?> = inspectionWorkflowUseCase.currentInspection
     val inspectionProgress: StateFlow<InspectionProgress> = inspectionWorkflowUseCase.progress
     
+    // Client-side inspection timestamps (epoch millis)
+    private var inspectionStartedAtMs: Long? = null
+
+    fun markInspectionStarted() {
+        if (inspectionStartedAtMs == null) {
+            inspectionStartedAtMs = System.currentTimeMillis()
+        }
+    }
+    
     init {
         // Initialize workflow
         viewModelScope.launch {
@@ -408,6 +417,9 @@ class MobileInspectionViewModel(
                     uiState.value.currentProduct?.productionDate?.let { put("production_date", it) }
                     // Serialize monthly sequence as string for consistent JSON in metadata
                     uiState.value.currentProduct?.monthlySequence?.let { put("monthly_sequence", it.toString()) }
+                    // Desktop-provided inspection timestamps (ms since epoch)
+                    inspectionStartedAtMs?.let { put("client_started_at_ms", it.toString()) }
+                    put("client_completed_at_ms", System.currentTimeMillis().toString())
                     // product_name is not present in ProductInfo; Web derives from target.product_name
                 }
                 val ok = inspectionWorkflowUseCase.persistHumanResultsToBackend(targetId, decisions, items, metadata = meta)

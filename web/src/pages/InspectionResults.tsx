@@ -45,9 +45,15 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { inspectionApi } from "../services/api";
 
-// Robust local time formatter that handles ISO with/without timezone and Safari quirks
-function formatLocalDateTime(value?: string): string {
+// Robust local time formatter that handles ISO with/without timezone, millis epoch, and Safari quirks
+function formatLocalDateTime(value?: string | number): string {
   if (!value) return "-";
+  // Millis epoch (string or number)
+  if (typeof value === "number") return new Date(value).toLocaleString();
+  if (/^\d{10,}$/.test(value)) {
+    const ms = parseInt(value, 10);
+    if (!isNaN(ms)) return new Date(ms).toLocaleString();
+  }
   let s = value;
   // Normalize: if no timezone info, assume UTC and append 'Z'
   const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
@@ -405,8 +411,8 @@ export function InspectionResults() {
                       <TableCell>生産日</TableCell>
                       <TableCell>月連番</TableCell>
                       <TableCell>ステータス</TableCell>
-                      <TableCell>開始時刻</TableCell>
-                      <TableCell>完了時刻</TableCell>
+                      <TableCell>検査開始時刻</TableCell>
+                      <TableCell>検査完了時刻</TableCell>
                       <TableCell>操作</TableCell>
                     </TableRow>
                   </TableHead>
@@ -434,12 +440,14 @@ export function InspectionResults() {
                           <StatusChip status={execution.status} />
                         </TableCell>
                         <TableCell>
-                          {formatLocalDateTime(execution.started_at)}
+                          {formatLocalDateTime(
+                            execution.metadata?.client_started_at_ms || execution.metadata?.client_started_at || execution.started_at
+                          )}
                         </TableCell>
                         <TableCell>
-                          {execution.completed_at
-                            ? formatLocalDateTime(execution.completed_at)
-                            : "-"}
+                          {formatLocalDateTime(
+                            execution.metadata?.client_completed_at_ms || execution.metadata?.client_completed_at || execution.completed_at
+                          )}
                         </TableCell>
                         <TableCell>
                           <IconButton
@@ -570,13 +578,17 @@ export function InspectionResults() {
                         <StatusChip status={selectedExecution.status} />
                       </Typography>
                       <Typography>
-                        <strong>開始時刻:</strong>{" "}
-                        {formatLocalDateTime(selectedExecution.started_at)}
+                        <strong>検査開始時刻:</strong>{" "}
+                        {formatLocalDateTime(
+                          selectedExecution.metadata?.client_started_at_ms || selectedExecution.metadata?.client_started_at || selectedExecution.started_at
+                        )}
                       </Typography>
                       {selectedExecution.completed_at && (
                         <Typography>
-                          <strong>完了時刻:</strong>{" "}
-                          {formatLocalDateTime(selectedExecution.completed_at)}
+                          <strong>検査完了時刻:</strong>{" "}
+                          {formatLocalDateTime(
+                            selectedExecution.metadata?.client_completed_at_ms || selectedExecution.metadata?.client_completed_at || selectedExecution.completed_at
+                          )}
                         </Typography>
                       )}
                     </CardContent>
