@@ -144,7 +144,7 @@ fun SettingsScreen(
                 }) { Text("既定値に戻す") }
             }
 
-            Divider()
+            HorizontalDivider()
             Text(text = "認証 (JWT)", style = MaterialTheme.typography.labelLarge)
             if (!isAuthenticated) {
                 OutlinedTextField(value = username, onValueChange = { username = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("ユーザー名") })
@@ -217,7 +217,7 @@ fun SettingsScreen(
                     }
                 }
             }
-            Divider()
+            HorizontalDivider()
             Text(
                 text = "ヒント: エミュレータは 10.0.2.2、実機はPCのLAN IPを使用。ベースURLは /v1 まで（/products は含めない）。",
                 style = MaterialTheme.typography.bodySmall,

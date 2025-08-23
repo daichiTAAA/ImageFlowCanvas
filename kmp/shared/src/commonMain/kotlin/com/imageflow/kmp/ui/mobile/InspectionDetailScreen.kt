@@ -83,7 +83,7 @@ fun InspectionDetailScreen(
                     OutlinedButton(onClick = { onHumanReview(HumanResult.NG) }, enabled = currentProduct != null) { Text("人手確認: NG") }
                 }
                 if (addedImages.isNotEmpty()) {
-                    Divider()
+                    HorizontalDivider()
                     Text("追加済み画像 (${addedImages.size})", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     addedImages.takeLast(5).forEach { p ->
                         Text("• $p", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
