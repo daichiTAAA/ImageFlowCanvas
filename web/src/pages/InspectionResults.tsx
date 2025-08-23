@@ -45,6 +45,22 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { inspectionApi } from "../services/api";
 
+// Robust local time formatter that handles ISO with/without timezone and Safari quirks
+function formatLocalDateTime(value?: string): string {
+  if (!value) return "-";
+  let s = value;
+  // Normalize: if no timezone info, assume UTC and append 'Z'
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+  if (!hasTz) {
+    // Replace space with 'T' for Safari compatibility
+    if (s.indexOf("T") === -1) s = s.replace(" ", "T");
+    s = s + "Z";
+  }
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return value;
+  return d.toLocaleString();
+}
+
 interface InspectionExecution {
   id: string;
   target_id: string;
@@ -418,11 +434,11 @@ export function InspectionResults() {
                           <StatusChip status={execution.status} />
                         </TableCell>
                         <TableCell>
-                          {new Date(execution.started_at).toLocaleString()}
+                          {formatLocalDateTime(execution.started_at)}
                         </TableCell>
                         <TableCell>
                           {execution.completed_at
-                            ? new Date(execution.completed_at).toLocaleString()
+                            ? formatLocalDateTime(execution.completed_at)
                             : "-"}
                         </TableCell>
                         <TableCell>
@@ -476,7 +492,7 @@ export function InspectionResults() {
                             : "-"}
                         </TableCell>
                         <TableCell>
-                          {new Date(result.created_at).toLocaleString()}
+                          {formatLocalDateTime(result.created_at)}
                         </TableCell>
                         <TableCell>
                           <IconButton size="small">
@@ -555,16 +571,12 @@ export function InspectionResults() {
                       </Typography>
                       <Typography>
                         <strong>開始時刻:</strong>{" "}
-                        {new Date(
-                          selectedExecution.started_at
-                        ).toLocaleString()}
+                        {formatLocalDateTime(selectedExecution.started_at)}
                       </Typography>
                       {selectedExecution.completed_at && (
                         <Typography>
                           <strong>完了時刻:</strong>{" "}
-                          {new Date(
-                            selectedExecution.completed_at
-                          ).toLocaleString()}
+                          {formatLocalDateTime(selectedExecution.completed_at)}
                         </Typography>
                       )}
                     </CardContent>
