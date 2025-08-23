@@ -202,6 +202,8 @@ export function InspectionResults() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailDialog, setDetailDialog] = useState(false);
+  // 型式コード -> 型式名（code-nameマスタ）マップ
+  const [codeToProductName, setCodeToProductName] = useState<Record<string, string>>({});
 
   // フィルタ状態
   const [filters, setFilters] = useState({
@@ -224,6 +226,23 @@ export function InspectionResults() {
       loadResults();
     }
   }, [activeTab, page, filters]);
+
+  useEffect(() => {
+    // 型式コード・型式名マスタから、型式コード -> 型式名 を構築
+    (async () => {
+      try {
+        const res = await inspectionApi.listProductTypeNames({ page_size: 500 });
+        const items = res.items || [];
+        const map: Record<string, string> = {};
+        items.forEach((e: any) => {
+          if (e?.product_code) map[e.product_code] = e.product_name || "";
+        });
+        setCodeToProductName(map);
+      } catch (e) {
+        console.warn("Failed to load product code-name master for code->name map", e);
+      }
+    })();
+  }, []);
 
   const loadExecutions = async () => {
     try {
@@ -487,9 +506,18 @@ export function InspectionResults() {
                             "-"}
                         </TableCell>
                         <TableCell>
-                          {execution.target?.product_name ||
-                            execution.metadata?.product_name ||
-                            "-"}
+                          {(() => {
+                            const code =
+                              execution.metadata?.product_code ||
+                              (execution as any)?.target?.product_code;
+                            const nameFromCode = code ? codeToProductName[code] : undefined;
+                            return (
+                              nameFromCode ||
+                              execution.target?.product_name ||
+                              execution.metadata?.product_name ||
+                              "-"
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           {execution.metadata?.machine_number || "-"}
@@ -646,9 +674,18 @@ export function InspectionResults() {
                       </Typography>
                       <Typography>
                         <strong>型式名:</strong>{" "}
-                        {selectedExecution.target?.product_name ||
-                          selectedExecution.metadata?.product_name ||
-                          "-"}
+                        {(() => {
+                          const code =
+                            selectedExecution.metadata?.product_code ||
+                            (selectedExecution as any)?.target?.product_code;
+                          const nameFromCode = code ? codeToProductName[code] : undefined;
+                          return (
+                            nameFromCode ||
+                            selectedExecution.target?.product_name ||
+                            selectedExecution.metadata?.product_name ||
+                            "-"
+                          );
+                        })()}
                       </Typography>
                       <Typography>
                         <strong>機番:</strong>{" "}
