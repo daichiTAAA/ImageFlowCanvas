@@ -187,6 +187,10 @@ export function InspectionResults() {
   const [itemExecutions, setItemExecutions] = useState<
     InspectionItemExecution[]
   >([]);
+  // item_execution_id -> evidence_file_ids
+  const [execResultsByItem, setExecResultsByItem] = useState<Record<string, string[]>>({});
+  // item_execution_id -> ObjectURL (auth-safe thumbnail)
+  const [thumbUrlsByItem, setThumbUrlsByItem] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailDialog, setDetailDialog] = useState(false);
@@ -262,6 +266,41 @@ export function InspectionResults() {
         execution.id
       );
       setItemExecutions(response);
+      // 同一実行の結果一覧を取得し、項目実行IDごとの画像を紐付け
+      try {
+        // Backend enforces page_size <= 100. Fetch enough to cover
+        // all item executions in a single execution.
+        const res = await inspectionApi.listInspectionResults({
+          execution_id: execution.id,
+          page: 1,
+          page_size: 100,
+        });
+        const byItem: Record<string, string[]> = {};
+        (res.items || []).forEach((r: any) => {
+          if (
+            r.item_execution_id &&
+            r.evidence_file_ids &&
+            r.evidence_file_ids.length > 0
+          ) {
+            byItem[r.item_execution_id] = r.evidence_file_ids;
+          }
+        });
+        setExecResultsByItem(byItem);
+        const pairs: [string, string][] = [];
+        for (const [itemExecId, ids] of Object.entries(byItem)) {
+          const fileId = ids[0];
+          try {
+            const blob = await inspectionApi.downloadFile(fileId);
+            const url = URL.createObjectURL(blob);
+            pairs.push([itemExecId, url]);
+          } catch (_e) {}
+        }
+        setThumbUrlsByItem(Object.fromEntries(pairs));
+      } catch (e) {
+        console.warn("Failed to load execution results for images", e);
+        setExecResultsByItem({});
+        setThumbUrlsByItem({});
+      }
       setSelectedExecution(execution);
       setDetailDialog(true);
     } catch (error) {
@@ -288,6 +327,19 @@ export function InspectionResults() {
       console.log("Exporting results...");
     } catch (error) {
       setError("エクスポートに失敗しました");
+    }
+  };
+
+  // 結果画像を安全に取得して新しいタブで表示
+  const openEvidence = async (fileId: string) => {
+    try {
+      const blob = await inspectionApi.downloadFile(fileId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      // しばらくして開放（即時revokeすると表示できないブラウザがある）
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      setError("結果の取得に失敗しました");
     }
   };
 
@@ -422,10 +474,14 @@ export function InspectionResults() {
                         <TableCell>{execution.id.slice(0, 8)}...</TableCell>
                         <TableCell>{execution.target?.name || "-"}</TableCell>
                         <TableCell>
-                          {execution.metadata?.product_code || execution.target?.product_code || "-"}
+                          {execution.metadata?.product_code ||
+                            execution.target?.product_code ||
+                            "-"}
                         </TableCell>
                         <TableCell>
-                          {execution.target?.product_name || execution.metadata?.product_name || "-"}
+                          {execution.target?.product_name ||
+                            execution.metadata?.product_name ||
+                            "-"}
                         </TableCell>
                         <TableCell>
                           {execution.metadata?.machine_number || "-"}
@@ -441,12 +497,16 @@ export function InspectionResults() {
                         </TableCell>
                         <TableCell>
                           {formatLocalDateTime(
-                            execution.metadata?.client_started_at_ms || execution.metadata?.client_started_at || execution.started_at
+                            execution.metadata?.client_started_at_ms ||
+                              execution.metadata?.client_started_at ||
+                              execution.started_at
                           )}
                         </TableCell>
                         <TableCell>
                           {formatLocalDateTime(
-                            execution.metadata?.client_completed_at_ms || execution.metadata?.client_completed_at || execution.completed_at
+                            execution.metadata?.client_completed_at_ms ||
+                              execution.metadata?.client_completed_at ||
+                              execution.completed_at
                           )}
                         </TableCell>
                         <TableCell>
@@ -475,6 +535,7 @@ export function InspectionResults() {
                       <TableCell>判定結果</TableCell>
                       <TableCell>信頼度</TableCell>
                       <TableCell>処理時間</TableCell>
+                      <TableCell>結果画像</TableCell>
                       <TableCell>作成日時</TableCell>
                       <TableCell>操作</TableCell>
                     </TableRow>
@@ -498,6 +559,21 @@ export function InspectionResults() {
                           {result.processing_time_ms
                             ? `${result.processing_time_ms}ms`
                             : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {result.evidence_file_ids &&
+                          result.evidence_file_ids.length > 0 ? (
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                openEvidence(result.evidence_file_ids![0])
+                              }
+                            >
+                              表示
+                            </Button>
+                          ) : (
+                            "-"
+                          )}
                         </TableCell>
                         <TableCell>
                           {formatLocalDateTime(result.created_at)}
@@ -555,11 +631,16 @@ export function InspectionResults() {
                       </Typography>
                       <Typography>
                         <strong>型式コード:</strong>{" "}
-                        {selectedExecution.metadata?.product_code || selectedExecution.target?.product_code || selectedExecution.target?.group_name || "-"}
+                        {selectedExecution.metadata?.product_code ||
+                          selectedExecution.target?.product_code ||
+                          selectedExecution.target?.group_name ||
+                          "-"}
                       </Typography>
                       <Typography>
                         <strong>型式名:</strong>{" "}
-                        {selectedExecution.target?.product_name || selectedExecution.metadata?.product_name || "-"}
+                        {selectedExecution.target?.product_name ||
+                          selectedExecution.metadata?.product_name ||
+                          "-"}
                       </Typography>
                       <Typography>
                         <strong>機番:</strong>{" "}
@@ -580,14 +661,19 @@ export function InspectionResults() {
                       <Typography>
                         <strong>検査開始時刻:</strong>{" "}
                         {formatLocalDateTime(
-                          selectedExecution.metadata?.client_started_at_ms || selectedExecution.metadata?.client_started_at || selectedExecution.started_at
+                          selectedExecution.metadata?.client_started_at_ms ||
+                            selectedExecution.metadata?.client_started_at ||
+                            selectedExecution.started_at
                         )}
                       </Typography>
                       {selectedExecution.completed_at && (
                         <Typography>
                           <strong>検査完了時刻:</strong>{" "}
                           {formatLocalDateTime(
-                            selectedExecution.metadata?.client_completed_at_ms || selectedExecution.metadata?.client_completed_at || selectedExecution.completed_at
+                            selectedExecution.metadata
+                              ?.client_completed_at_ms ||
+                              selectedExecution.metadata?.client_completed_at ||
+                              selectedExecution.completed_at
                           )}
                         </Typography>
                       )}
@@ -648,6 +734,7 @@ export function InspectionResults() {
                               <TableCell>ステータス</TableCell>
                               <TableCell>AI判定</TableCell>
                               <TableCell>最終判定</TableCell>
+                              <TableCell>結果画像</TableCell>
                               <TableCell>処理時間</TableCell>
                             </TableRow>
                           </TableHead>
@@ -682,6 +769,22 @@ export function InspectionResults() {
                                     <JudgmentChip
                                       judgment={itemExecution.final_result}
                                     />
+                                  ) : (
+                                    "-"
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {execResultsByItem[itemExecution.id] && execResultsByItem[itemExecution.id].length > 0 ? (
+                                    thumbUrlsByItem[itemExecution.id] ? (
+                                      <img
+                                        src={thumbUrlsByItem[itemExecution.id]}
+                                        alt="結果画像"
+                                        style={{ maxWidth: 96, maxHeight: 64, objectFit: "cover", borderRadius: 4, cursor: "pointer" }}
+                                        onClick={() => openEvidence(execResultsByItem[itemExecution.id][0])}
+                                      />
+                                    ) : (
+                                      <Button size="small" onClick={() => openEvidence(execResultsByItem[itemExecution.id][0])}>表示</Button>
+                                    )
                                   ) : (
                                     "-"
                                   )}

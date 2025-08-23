@@ -369,19 +369,29 @@ async def save_inspection_result(
             # 既存結果を更新
             existing_result.judgment = request.judgment
             existing_result.comment = request.comment
-            existing_result.evidence_file_ids = request.evidence_file_ids or []
+            try:
+                existing_result.evidence_file_ids = [
+                    str(x) for x in (request.evidence_file_ids or [])
+                ]
+            except Exception:
+                existing_result.evidence_file_ids = (
+                    request.evidence_file_ids or []
+                )
             existing_result.metrics = request.metrics or {}
             await db.commit()
             await db.refresh(existing_result)
             result = existing_result
         else:
             # 新規結果を作成
+            # JSON カラムにUUID型を直接入れるとシリアライズエラーになるため、文字列へ変換
             result = InspectionResult(
                 execution_id=request.execution_id,
                 item_execution_id=request.item_execution_id,
                 judgment=request.judgment,
                 comment=request.comment,
-                evidence_file_ids=request.evidence_file_ids or [],
+                evidence_file_ids=[
+                    str(x) for x in (request.evidence_file_ids or [])
+                ],
                 metrics=request.metrics or {},
                 created_by=_extract_user_id(current_user),
             )

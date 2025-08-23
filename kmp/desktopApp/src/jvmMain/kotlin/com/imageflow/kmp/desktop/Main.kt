@@ -392,7 +392,8 @@ private fun ImageFlowDesktopApp() {
                                     targetId = targetId,
                                     decisions = perItem,
                                     items = items,
-                                    finalResult = finalResult
+                                    finalResult = finalResult,
+                                    itemSnapshots = okSnapshots.mapValues { it.value.bytes }
                                 )
                             } else {
                                 // target不明でも最終結果のみローカル完了

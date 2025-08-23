@@ -2,6 +2,7 @@ package com.imageflow.kmp.network
 
 import com.imageflow.kmp.models.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonElement
 
 // Inspection API Service interface for AI processing and inspection management
@@ -48,7 +49,17 @@ interface InspectionApiService {
     // Executions
     suspend fun createExecution(targetId: String, operatorId: String? = null, qrCode: String? = null, metadata: Map<String, String> = emptyMap()): ApiResult<ExecuteInspectionResponseKmp>
     suspend fun listItemExecutions(executionId: String): ApiResult<List<InspectionItemExecutionKmp>>
-    suspend fun saveInspectionResult(executionId: String, itemExecutionId: String, judgment: JudgmentResultKmp, comment: String? = null, metrics: Map<String, String> = emptyMap()): ApiResult<InspectionResultKmp>
+    suspend fun saveInspectionResult(
+        executionId: String,
+        itemExecutionId: String,
+        judgment: JudgmentResultKmp,
+        comment: String? = null,
+        metrics: Map<String, String> = emptyMap(),
+        evidenceFileIds: List<String> = emptyList()
+    ): ApiResult<InspectionResultKmp>
+
+    // Files
+    suspend fun uploadImageBytes(bytes: ByteArray, filename: String = "evidence.jpg", contentType: String = "image/jpeg"): ApiResult<FileUploadResult>
 }
 
 @Serializable
@@ -191,10 +202,9 @@ enum class ProcessingStatus {
 
 @Serializable
 data class FileUploadResult(
-    val fileId: String,
-    val uploadedPath: String,
-    val sizeBytes: Long,
-    val checksum: String
+    @SerialName("file_id") val fileId: String,
+    @SerialName("filename") val filename: String? = null,
+    @SerialName("content_type") val contentType: String? = null
 )
 
 @Serializable

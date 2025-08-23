@@ -136,7 +136,8 @@ class KtorInspectionApiService(
         itemExecutionId: String,
         judgment: JudgmentResultKmp,
         comment: String?,
-        metrics: Map<String, String>
+        metrics: Map<String, String>,
+        evidenceFileIds: List<String>
     ): ApiResult<InspectionResultKmp> = runCatching {
         val payload = buildString {
             append("{")
@@ -148,10 +149,20 @@ class KtorInspectionApiService(
                 val metaJson = metrics.entries.joinToString(prefix = "{", postfix = "}") { (k, v) -> "\"${k}\":\"${v}\"" }
                 append(",\"metrics\":$metaJson")
             }
+            if (evidenceFileIds.isNotEmpty()) {
+                val arr = evidenceFileIds.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+                append(",\"evidence_file_ids\":$arr")
+            }
             append("}")
         }
         val body = rest.postJson("inspection/results", payload)
         val resp = json.decodeFromString<InspectionResultKmp>(body)
+        ApiResult.Success(resp)
+    }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
+
+    override suspend fun uploadImageBytes(bytes: ByteArray, filename: String, contentType: String): ApiResult<FileUploadResult> = runCatching {
+        val body = rest.postMultipartBytes("files/", fieldName = "file", filename = filename, bytes = bytes, contentType = contentType)
+        val resp = json.decodeFromString<FileUploadResult>(body)
         ApiResult.Success(resp)
     }.getOrElse { e -> ApiResult.NetworkError(e.message ?: "Network error") }
 }

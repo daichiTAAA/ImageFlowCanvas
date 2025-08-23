@@ -506,7 +506,8 @@ class InspectionWorkflowUseCase(
         targetId: String,
         decisions: Map<String, HumanResult>,
         items: List<com.imageflow.kmp.network.InspectionItemKmp>,
-        metadata: Map<String, String> = emptyMap()
+        metadata: Map<String, String> = emptyMap(),
+        evidenceByItem: Map<String, ByteArray> = emptyMap(),
     ): Boolean {
         return try {
             // Create execution for the selected target
@@ -532,12 +533,26 @@ class InspectionWorkflowUseCase(
                     HumanResult.PENDING -> com.imageflow.kmp.network.JudgmentResultKmp.PENDING
                 }
                 val ie = byItemId[item.id] ?: run { allOk = false; return@forEach }
+                // Upload evidence image if present for this item
+                val fileIds: MutableList<String> = mutableListOf()
+                evidenceByItem[item.id]?.let { bytes ->
+                    when (val up = inspectionApiService.uploadImageBytes(bytes, filename = "inspection_${item.id.take(8)}.jpg", contentType = "image/jpeg")) {
+                        is ApiResult.Success -> {
+                            val rawId = up.data.fileId
+                            // Backend returns object_name (uuid + extension). Extract pure UUID for API schema.
+                            val uuidOnly = rawId.substringBefore('.')
+                            fileIds.add(uuidOnly)
+                        }
+                        is ApiResult.Error, is ApiResult.NetworkError -> { /* keep going without evidence */ }
+                    }
+                }
                 when (inspectionApiService.saveInspectionResult(
                     executionId = execId,
                     itemExecutionId = ie.id,
                     judgment = j,
                     comment = null,
-                    metrics = emptyMap()
+                    metrics = emptyMap(),
+                    evidenceFileIds = fileIds
                 )) {
                     is ApiResult.Success -> {}
                     is ApiResult.Error, is ApiResult.NetworkError -> allOk = false

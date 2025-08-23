@@ -403,7 +403,8 @@ class MobileInspectionViewModel(
         targetId: String,
         decisions: Map<String, HumanResult>,
         items: List<com.imageflow.kmp.network.InspectionItemKmp>,
-        finalResult: HumanResult
+        finalResult: HumanResult,
+        itemSnapshots: Map<String, ByteArray> = emptyMap()
     ) {
         viewModelScope.launch {
             updateUiState { it.copy(isLoading = true) }
@@ -422,7 +423,13 @@ class MobileInspectionViewModel(
                     put("client_completed_at_ms", System.currentTimeMillis().toString())
                     // product_name is not present in ProductInfo; Web derives from target.product_name
                 }
-                val ok = inspectionWorkflowUseCase.persistHumanResultsToBackend(targetId, decisions, items, metadata = meta)
+                val ok = inspectionWorkflowUseCase.persistHumanResultsToBackend(
+                    targetId,
+                    decisions,
+                    items,
+                    metadata = meta,
+                    evidenceByItem = itemSnapshots
+                )
                 if (!ok) {
                     updateUiState { it.copy(errorMessage = "検査結果の保存に失敗しました") }
                 }
