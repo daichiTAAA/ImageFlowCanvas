@@ -501,6 +501,53 @@ class InspectionWorkflowUseCase(
         }
     }
 
+    // Persist human decisions to backend execution/results
+    suspend fun persistHumanResultsToBackend(
+        targetId: String,
+        decisions: Map<String, HumanResult>,
+        items: List<com.imageflow.kmp.network.InspectionItemKmp>
+    ): Boolean {
+        return try {
+            // Create execution for the selected target
+            val exec = inspectionApiService.createExecution(targetId = targetId, operatorId = null, qrCode = null, metadata = emptyMap())
+            val execId = when (exec) {
+                is ApiResult.Success -> exec.data.execution_id
+                is ApiResult.Error, is ApiResult.NetworkError -> return false
+            }
+
+            // Fetch item executions to map item_id -> item_execution_id
+            val exList = when (val list = inspectionApiService.listItemExecutions(execId)) {
+                is ApiResult.Success -> list.data
+                is ApiResult.Error, is ApiResult.NetworkError -> return false
+            }
+            val byItemId = exList.associateBy { it.item_id }
+
+            var allOk = true
+            items.forEach { item ->
+                val dec = decisions[item.id] ?: return@forEach
+                val j = when (dec) {
+                    HumanResult.OK -> com.imageflow.kmp.network.JudgmentResultKmp.OK
+                    HumanResult.NG -> com.imageflow.kmp.network.JudgmentResultKmp.NG
+                    HumanResult.PENDING -> com.imageflow.kmp.network.JudgmentResultKmp.PENDING
+                }
+                val ie = byItemId[item.id] ?: run { allOk = false; return@forEach }
+                when (inspectionApiService.saveInspectionResult(
+                    executionId = execId,
+                    itemExecutionId = ie.id,
+                    judgment = j,
+                    comment = null,
+                    metrics = emptyMap()
+                )) {
+                    is ApiResult.Success -> {}
+                    is ApiResult.Error, is ApiResult.NetworkError -> allOk = false
+                }
+            }
+            allOk
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     // Realtime AI updates from desktop streaming (gRPC)
     suspend fun updateAiResultFromRealtime(ai: AiInspectionResult) {
         val current = _currentInspection.value ?: return

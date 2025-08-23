@@ -381,9 +381,20 @@ private fun ImageFlowDesktopApp() {
                                 }
                             }
                         },
-                        onCompleteInspection = { finalResult ->
-                            // 最終結果を送信し検査を完了
-                            viewModel.submitHumanReview(finalResult)
+                        onCompleteInspection = { finalResult, perItem, items ->
+                            // 最終結果を送信し検査を完了（先にバックエンドへ結果を保存）
+                            val targetId = items.firstOrNull()?.target_id
+                            if (targetId != null) {
+                                viewModel.completeAndSaveInspection(
+                                    targetId = targetId,
+                                    decisions = perItem,
+                                    items = items,
+                                    finalResult = finalResult
+                                )
+                            } else {
+                                // target不明でも最終結果のみローカル完了
+                                viewModel.submitHumanReview(finalResult)
+                            }
                         },
                     )
                 }

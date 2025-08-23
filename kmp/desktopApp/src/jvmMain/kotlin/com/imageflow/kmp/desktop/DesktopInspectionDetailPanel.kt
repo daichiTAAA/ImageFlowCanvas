@@ -72,7 +72,11 @@ fun DesktopInspectionDetailPanel(
     scrollRequestSeq: Int = 0,
     onSelectItemIndex: (Int) -> Unit = {},
     onItemHumanReview: (String, com.imageflow.kmp.models.HumanResult) -> Unit = { _, _ -> },
-    onCompleteInspection: (com.imageflow.kmp.models.HumanResult) -> Unit = {},
+    onCompleteInspection: (
+        finalResult: com.imageflow.kmp.models.HumanResult,
+        perItemHuman: Map<String, com.imageflow.kmp.models.HumanResult>,
+        inspectionItems: List<com.imageflow.kmp.network.InspectionItemKmp>
+    ) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
@@ -193,7 +197,7 @@ fun DesktopInspectionDetailPanel(
                 }
             }
             androidx.compose.material3.Button(
-                onClick = { onCompleteInspection(overall) },
+                onClick = { onCompleteInspection(overall, perItemHuman, inspectionItems) },
                 enabled = canComplete
             ) {
                 Text("検査完了")

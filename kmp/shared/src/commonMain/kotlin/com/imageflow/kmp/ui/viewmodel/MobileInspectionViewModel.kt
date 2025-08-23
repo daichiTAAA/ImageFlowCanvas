@@ -389,6 +389,30 @@ class MobileInspectionViewModel(
         }
     }
 
+    // 完了時にバックエンドへ結果を永続化（Execution作成 + 各項目の判定を保存）
+    fun completeAndSaveInspection(
+        targetId: String,
+        decisions: Map<String, HumanResult>,
+        items: List<com.imageflow.kmp.network.InspectionItemKmp>,
+        finalResult: HumanResult
+    ) {
+        viewModelScope.launch {
+            updateUiState { it.copy(isLoading = true) }
+            try {
+                val ok = inspectionWorkflowUseCase.persistHumanResultsToBackend(targetId, decisions, items)
+                if (!ok) {
+                    updateUiState { it.copy(errorMessage = "検査結果の保存に失敗しました") }
+                }
+            } catch (e: Exception) {
+                updateUiState { it.copy(errorMessage = "検査結果保存エラー: ${e.message}") }
+            } finally {
+                // regardless of backend save, finalize locally to keep flow consistent
+                submitHumanReview(finalResult)
+                updateUiState { it.copy(isLoading = false) }
+            }
+        }
+    }
+
     // Desktop realtime streaming -> update AI result + state
     data class RealtimeDetection(
         val className: String,
