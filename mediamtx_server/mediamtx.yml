@@ -117,7 +117,7 @@ hlsAllowOrigin: '*'
 hlsTrustedProxies: []
 hlsAlwaysRemux: no
 hlsVariant: lowLatency
-hlsSegmentCount: 4
+hlsSegmentCount: 120
 hlsSegmentDuration: 1s
 hlsPartDuration: 200ms
 hlsSegmentMaxSize: 50M
