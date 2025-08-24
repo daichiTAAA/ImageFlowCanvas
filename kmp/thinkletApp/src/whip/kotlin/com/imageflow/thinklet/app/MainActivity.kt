@@ -236,7 +236,13 @@ private class WhipController(private val activity: ComponentActivity) {
             videoCapturer = createCameraCapturer()
             videoSource = f.createVideoSource(false)
             videoCapturer?.initialize(surfaceHelper, activity, videoSource!!.capturerObserver)
-            videoCapturer?.startCapture(1280, 720, 30)
+            // Try higher resolution first, then fall back gracefully
+            fun tryStartCapture(w: Int, h: Int, fps: Int): Boolean {
+                return try { videoCapturer?.startCapture(w, h, fps); true } catch (_: Exception) { false }
+            }
+            if (!(tryStartCapture(1920, 1080, 30) || tryStartCapture(1280, 720, 30) || tryStartCapture(960, 540, 30))) {
+                tryStartCapture(640, 360, 30)
+            }
             videoTrack = f.createVideoTrack("video0", videoSource)
 
             audioSource = f.createAudioSource(MediaConstraints())
@@ -259,8 +265,24 @@ private class WhipController(private val activity: ComponentActivity) {
             })
 
             val transceiverInit = RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_ONLY)
-            pc!!.addTransceiver(videoTrack, transceiverInit)
+            val vTrans = pc!!.addTransceiver(videoTrack, transceiverInit)
             pc!!.addTransceiver(audioTrack, transceiverInit)
+
+            // Bump up publisher bitrate/framerate for better quality
+            try {
+                val vSender = vTrans.sender
+                val vParams = vSender.parameters
+                vParams.encodings?.forEach { enc ->
+                    // 4-6 Mbps target for 1080p30; allow downscale if needed
+                    enc.maxBitrateBps = 6_000_000
+                    enc.minBitrateBps = 800_000
+                    enc.maxFramerate = 30
+                    enc.scaleResolutionDownBy = 1.0
+                }
+                vSender.parameters = vParams
+            } catch (_: Exception) {
+                // ignore if parameters not supported on device
+            }
 
             val constraints = MediaConstraints().apply {
                 mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
