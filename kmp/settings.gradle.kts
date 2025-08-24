@@ -1,3 +1,6 @@
+import org.gradle.api.credentials.HttpHeaderCredentials
+import org.gradle.authentication.http.HttpHeaderAuthentication
+
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -23,6 +26,19 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+        maven("https://jitpack.io") {
+            // Optional: use GitHub token for JitPack to avoid 401/rate-limit
+            val token = System.getenv("JITPACK_GH_TOKEN") ?: System.getenv("GITHUB_TOKEN")
+            if (!token.isNullOrBlank()) {
+                credentials(HttpHeaderCredentials::class) {
+                    name = "Authorization"
+                    value = "Bearer $token"
+                }
+                authentication {
+                    create<HttpHeaderAuthentication>("header")
+                }
+            }
+        }
     }
 }
 
@@ -31,3 +47,4 @@ rootProject.name = "imageflow-kmp"
 include(":shared")
 include(":androidApp")
 include(":desktopApp")
+include(":thinkletApp")

@@ -210,6 +210,14 @@ fun ImageFlowMobileApp() {
                     onBack = { currentScreen = AppScreen.MAIN }
                 )
             }
+            AppScreen.THINKLET_STREAM -> {
+                ScreenWithTopBar(title = "THINKLET 配信", onBack = { currentScreen = AppScreen.MAIN }) {
+                    ThinkletStreamingScreen(
+                        defaultUrl = "http://" + ("localhost") + ":8889/whip/thinklet/demo1",
+                        onBack = { currentScreen = AppScreen.MAIN }
+                    )
+                }
+            }
         }
     }
 
@@ -265,5 +273,6 @@ enum class AppScreen {
     PRODUCT_SEARCH,
     INSPECTION_DETAIL,
     HISTORY,
-    SETTINGS
+    SETTINGS,
+    THINKLET_STREAM
 }

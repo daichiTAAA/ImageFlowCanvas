@@ -298,6 +298,24 @@ services:
       timeout: 10s
       retries: 3
 
+  # MediaMTX (WebRTC/HLS server)
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: imageflow-mediamtx
+    restart: unless-stopped
+    ports:
+      - "8888:8888"   # HLS playback
+      - "8889:8889"   # WebRTC (WHIP/WHEP)
+      - "9997:9997"   # Control API
+    volumes:
+      - ../../mediamtx_server/mediamtx.yml:/mediamtx.yml:ro
+      - mediamtx_recordings:/recordings
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9997/v3/paths/list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
     driver: local
@@ -305,8 +323,14 @@ volumes:
     driver: local
   kafka_data:
     driver: local
+  mediamtx_recordings:
+    driver: local
 
 networks:
   default:
     name: imageflow-network
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

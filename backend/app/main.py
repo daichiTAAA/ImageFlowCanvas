@@ -19,6 +19,7 @@ from app.api import (
     camera_stream,
     inspection_masters,
     inspection_execution,
+    mediamtx as mediamtx_api,
 )
 from app.services.execution_worker import execution_worker
 from app.database import init_db
@@ -91,6 +92,7 @@ app.include_router(health.router, prefix="/v1", tags=["health"])
 # Camera stream router must be registered BEFORE general websocket router to avoid path conflicts
 app.include_router(camera_stream.router, prefix="/v1", tags=["camera-stream"])
 app.include_router(websocket.router, prefix="/v1", tags=["websocket"])
+app.include_router(mediamtx_api.router, prefix="/v1/thinklet", tags=["thinklet"])
 app.include_router(auth.router, prefix="/v1/auth", tags=["authentication"])
 app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["executions"])

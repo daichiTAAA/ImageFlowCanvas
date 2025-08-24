@@ -16,6 +16,16 @@ export NGINX_RESOLVER=${NGINX_RESOLVER:-}
 echo "📝 Processing nginx configuration..."
 envsubst '${BACKEND_HOST} ${BACKEND_PORT} ${NGINX_RESOLVER}' < /etc/nginx/nginx.dev.conf.template > /etc/nginx/nginx.conf
 
+# Ensure frontend deps are installed based on mounted package.json
+echo "📦 Installing frontend dependencies (sync with mounted package.json)..."
+npm ci || npm install --no-audit --no-fund
+
+# Safety net: ensure hls.js exists (used by Thinklet viewer)
+if ! node -e "require.resolve('hls.js')" >/dev/null 2>&1; then
+  echo "➕ Installing missing dependency: hls.js"
+  npm install --no-audit --no-fund hls.js@^1.5.14 || true
+fi
+
 # Start Vite dev server in background
 echo "🔥 Starting Vite dev server on port 3001..."
 # Allow overriding HMR public host/port if developing remotely

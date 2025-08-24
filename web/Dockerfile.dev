@@ -20,8 +20,8 @@ RUN if [ -n "$PROXY" ]; then \
     npm config set registry https://registry.npmjs.org/; \
     fi
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (fall back to npm install if lock mismatches)
+RUN npm ci || npm install --no-audit --no-fund
 
 # Copy configuration files
 COPY web/vite.dev.config.ts ./vite.dev.config.ts

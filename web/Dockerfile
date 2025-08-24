@@ -17,8 +17,8 @@ RUN if [ -n "$PROXY" ]; then \
     npm config set registry https://registry.npmjs.org/; \
     fi
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (fallback to npm install when lock is out of sync)
+RUN npm ci || npm install --no-audit --no-fund
 
 # Copy source code
 COPY web/ .

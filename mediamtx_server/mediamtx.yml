@@ -1,0 +1,195 @@
+###############################################
+# Global settings
+
+# Settings in this section are applied anywhere.
+
+###############################################
+# Global settings -> General
+
+logLevel: debug
+logDestinations: [stdout]
+logFile: mediamtx.log
+sysLogPrefix: mediamtx
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+udpMaxPayloadSize: 1472
+runOnConnect:
+runOnConnectRestart: no
+runOnDisconnect:
+
+###############################################
+# Global settings -> Authentication
+
+authMethod: internal
+authInternalUsers:
+- user: any
+  pass:
+  ips: []
+  permissions:
+  - action: publish
+    path:
+  - action: read
+    path:
+  - action: playback
+    path:
+- user: any
+  pass:
+  # Allow API/metrics/pprof from Docker bridge subnet (compose-defined) and localhost.
+  # For production, further restrict or use JWT.
+  ips: ['127.0.0.1', '::1', '172.28.0.0/16']
+  permissions:
+  - action: api
+  - action: metrics
+  - action: pprof
+authHTTPAddress:
+authHTTPExclude:
+- action: api
+- action: metrics
+- action: pprof
+authJWTJWKS:
+authJWTJWKSFingerprint:
+authJWTClaimKey: mediamtx_permissions
+authJWTExclude: []
+authJWTInHTTPQuery: true
+
+###############################################
+# Global settings -> Control API
+
+api: yes
+apiAddress: :9997
+apiEncryption: no
+apiServerKey: server.key
+apiServerCert: server.crt
+apiAllowOrigin: '*'
+apiTrustedProxies: []
+
+###############################################
+# Global settings -> Playback server
+
+playback: yes
+playbackAddress: :9996
+playbackEncryption: no
+playbackServerKey: server.key
+playbackServerCert: server.crt
+playbackAllowOrigin: '*'
+playbackTrustedProxies: []
+
+###############################################
+# Global settings -> RTSP server (disabled when using pure WebRTC/HLS)
+rtsp: no
+rtspTransports: [udp, multicast, tcp]
+rtspEncryption: "no"
+rtspAddress: :8554
+rtspsAddress: :8322
+rtpAddress: :8000
+rtcpAddress: :8001
+multicastIPRange: 224.1.0.0/16
+multicastRTPPort: 8002
+multicastRTCPPort: 8003
+srtpAddress: :8004
+srtcpAddress: :8005
+multicastSRTPPort: 8006
+multicastSRTCPPort: 8007
+rtspServerKey: server.key
+rtspServerCert: server.crt
+rtspAuthMethods: [basic]
+rtspUDPReadBufferSize: 0
+
+###############################################
+# Global settings -> RTMP server (disabled; prefer WHIP for publishing)
+rtmp: no
+rtmpAddress: :1935
+rtmpEncryption: "no"
+rtmpsAddress: :1936
+rtmpServerKey: server.key
+rtmpServerCert: server.crt
+
+###############################################
+# Global settings -> HLS server
+
+hls: yes
+hlsAddress: :8888
+hlsEncryption: no
+hlsServerKey: server.key
+hlsServerCert: server.crt
+hlsAllowOrigin: '*'
+hlsTrustedProxies: []
+hlsAlwaysRemux: no
+hlsVariant: lowLatency
+hlsSegmentCount: 4
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentMaxSize: 50M
+hlsDirectory: ''
+hlsMuxerCloseAfter: 60s
+
+###############################################
+# Global settings -> WebRTC server
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcEncryption: no
+webrtcServerKey: server.key
+webrtcServerCert: server.crt
+webrtcAllowOrigin: '*'
+webrtcTrustedProxies: []
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ''
+webrtcIPsFromInterfaces: yes
+webrtcIPsFromInterfacesList: []
+webrtcAdditionalHosts: []
+webrtcICEServers2: []
+webrtcHandshakeTimeout: 10s
+webrtcTrackGatherTimeout: 2s
+webrtcSTUNGatherTimeout: 5s
+
+###############################################
+# Global settings -> SRT server (remain disabled)
+srt: no
+
+###############################################
+# Path settings defaults
+
+pathDefaults:
+  source: publisher
+  sourceFingerprint:
+  sourceOnDemand: no
+  sourceOnDemandStartTimeout: 10s
+  sourceOnDemandCloseAfter: 10s
+  maxReaders: 0
+  srtReadPassphrase:
+  fallback:
+  useAbsoluteTimestamp: false
+
+  # Record defaults
+  record: no
+  recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordMaxPartSize: 50M
+  recordSegmentDuration: 1h
+  recordDeleteAfter: 1d
+
+  # Publisher
+  overridePublisher: yes
+  srtPublishPassphrase:
+
+###############################################
+# Paths
+
+paths:
+  all_others:
+
+  # Enable recording for THINKLET streams under thinklet/<device_id>
+  "~^thinklet/.+$":
+    record: yes
+    recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+    recordSegmentDuration: 15m
+    recordDeleteAfter: 0s
+  # Also support single-segment variant thinklet-<device_id>
+  "~^thinklet-.+$":
+    record: yes
+    recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+    recordSegmentDuration: 15m
+    recordDeleteAfter: 0s

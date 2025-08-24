@@ -42,6 +42,8 @@ case "$ACTION" in
         echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
         echo "  - gRPC Gateway: http://localhost:8080/health"
         echo "  - Kafka: localhost:9094"
+        echo "  - MediaMTX HLS: http://localhost:8888/{path}/index.m3u8"
+        echo "  - MediaMTX API: http://localhost:9997/v3/paths/list"
         echo ""
         echo "📊 Service status:"
         docker compose ps
@@ -97,6 +99,8 @@ case "$ACTION" in
         echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
         echo "  - gRPC Gateway: http://localhost:8080/health"
         echo "  - Kafka: localhost:9094"
+        echo "  - MediaMTX HLS: http://localhost:8888/{path}/index.m3u8"
+        echo "  - MediaMTX API: http://localhost:9997/v3/paths/list"
         ;;
     
     "stop")

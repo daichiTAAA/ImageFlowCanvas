@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Tabs,
@@ -12,6 +12,8 @@ import {
   Box,
   useMediaQuery,
   useTheme,
+  Menu,
+  MenuItem,
 } from "@mui/material";
 import {
   Dashboard as DashboardIcon,
@@ -22,6 +24,7 @@ import {
   Assignment as InspectionIcon,
   Assessment as ResultsIcon,
   Menu as MenuIcon,
+  MoreHoriz as MoreIcon,
 } from "@mui/icons-material";
 
 export const Navigation: React.FC = () => {
@@ -29,11 +32,15 @@ export const Navigation: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moreAnchorEl, setMoreAnchorEl] = useState<null | HTMLElement>(null);
 
   // 画面幅によってレスポンシブ対応を判定
   const isMobile = useMediaQuery(theme.breakpoints.down("md")); // 768px以下
   const isTablet = useMediaQuery(theme.breakpoints.down("lg")); // 1024px以下
 
+  
+
+  const maxPrimary = useMemo(() => (isTablet ? 4 : 6), [isTablet]);
   const navigationItems = [
     { icon: <DashboardIcon />, label: "ダッシュボード", path: "/" },
     {
@@ -48,6 +55,11 @@ export const Navigation: React.FC = () => {
       path: "/camera-stream",
     },
     {
+      icon: <VideocamIcon />,
+      label: "THINKLET 映像",
+      path: "/thinklet",
+    },
+    {
       icon: <InspectionIcon />,
       label: "検査マスタ",
       path: "/inspection-masters",
@@ -56,27 +68,25 @@ export const Navigation: React.FC = () => {
     { icon: <ResultsIcon />, label: "検査結果", path: "/inspection-results" },
     { icon: <StorageIcon />, label: "gRPCサービス", path: "/grpc-services" },
   ];
+  const primaryItems = navigationItems.slice(0, Math.min(maxPrimary, navigationItems.length));
+  const overflowItems = navigationItems.slice(primaryItems.length);
 
-  const getTabValue = () => {
-    const pathMap: { [key: string]: number } = {
-      "/": 0,
-      "/pipeline-builder": 1,
-      "/executions": 2,
-      "/camera-stream": 3,
-      "/inspection-masters": 4,
-      "/order-info": 5,
-      "/inspection-results": 6,
-      "/grpc-services": 7,
-    };
-
-    if (location.pathname.startsWith("/execution")) return 2;
-    return pathMap[location.pathname] || 0;
-  };
+  const currentPath = location.pathname;
+  const activeIndexInPrimary = primaryItems.findIndex((i) => {
+    if (i.path === "/executions" && currentPath.startsWith("/execution")) return true;
+    return i.path === currentPath;
+  });
+  const isActiveInOverflow = overflowItems.some(
+    (i) => i.path === currentPath || (i.path === "/executions" && currentPath.startsWith("/execution"))
+  );
+  const tabValue = activeIndexInPrimary >= 0 ? activeIndexInPrimary : (isActiveInOverflow && overflowItems.length > 0 ? primaryItems.length : 0);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    if (newValue < navigationItems.length) {
-      navigate(navigationItems[newValue].path);
+    if (newValue < primaryItems.length) {
+      navigate(primaryItems[newValue].path);
+      return;
     }
+    // More tab clicked -> open menu (handled by onClick of the Tab)
   };
 
   const handleDrawerToggle = () => {
@@ -120,7 +130,7 @@ export const Navigation: React.FC = () => {
                 sx={{
                   cursor: "pointer",
                   backgroundColor:
-                    getTabValue() === index
+                    (item.path === currentPath || (item.path === "/executions" && currentPath.startsWith("/execution")))
                       ? "rgba(255, 255, 255, 0.1)"
                       : "transparent",
                   "&:hover": {
@@ -144,16 +154,16 @@ export const Navigation: React.FC = () => {
   return (
     <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
       <Tabs
-        value={getTabValue()}
+        value={tabValue}
         onChange={handleTabChange}
-        variant={isTablet ? "scrollable" : "standard"}
-        scrollButtons={isTablet ? "auto" : false}
-        allowScrollButtonsMobile={isTablet}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{
           flexGrow: 1,
           "& .MuiTab-root": {
             color: "rgba(255, 255, 255, 0.7)",
-            minWidth: isTablet ? 120 : "auto",
+            minWidth: 120,
             "&.Mui-selected": {
               color: "white",
             },
@@ -169,7 +179,7 @@ export const Navigation: React.FC = () => {
           },
         }}
       >
-        {navigationItems.map((item, index) => (
+        {primaryItems.map((item, index) => (
           <Tab
             key={index}
             icon={item.icon}
@@ -177,7 +187,24 @@ export const Navigation: React.FC = () => {
             iconPosition="start"
           />
         ))}
+        {overflowItems.length > 0 && (
+          <Tab
+            key="more"
+            icon={<MoreIcon />}
+            label="その他"
+            iconPosition="start"
+            onClick={(e: any) => setMoreAnchorEl(e.currentTarget)}
+          />
+        )}
       </Tabs>
+      <Menu anchorEl={moreAnchorEl} open={Boolean(moreAnchorEl)} onClose={() => setMoreAnchorEl(null)} keepMounted>
+        {overflowItems.map((item, idx) => (
+          <MenuItem key={idx} onClick={() => { setMoreAnchorEl(null); navigate(item.path); }}>
+            <ListItemIcon sx={{ minWidth: 32 }}>{item.icon}</ListItemIcon>
+            <ListItemText primary={item.label} />
+          </MenuItem>
+        ))}
+      </Menu>
     </Box>
   );
 };
