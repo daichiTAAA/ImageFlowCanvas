@@ -7,3 +7,6 @@
 [submodule "thinklet.app.developer"]
 	path = thinklet.app.developer
 	url = https://github.com/FairyDevicesRD/thinklet.app.developer.git
+[submodule "mediamtx"]
+	path = mediamtx
+	url = https://github.com/bluenviron/mediamtx.git
