@@ -776,3 +776,362 @@ THINKLETデバイスの健康状態と運用状況を包括的に監視します
 - **多言語対応**: グローバル展開に向けた言語サポート
 
 この設計により、THINKLETアプリはウェアラブルデバイスとハンディターミナルが連携した次世代品質管理システムの先駆けとなり、製造業のDXに大きく貢献することが期待されます。特に、一人称映像のリアルタイム解析とハンディターミナルアプリでの統合制御により、現場作業者が効率的に品質管理プロセスを実行できるシステムを実現します。
+
+---
+
+# 10. 一人称映像活用システム（統合映像管理基盤）
+
+## 10.1. システム概要
+
+THINKLET デバイスからの一人称映像を含む大規模映像管理システムの設計について以下に記述します。
+
+### 10.1.1. 基本要件
+
+| 項目                 | 仕様                                              |
+| -------------------- | ------------------------------------------------- |
+| **対象カメラ台数**   | 200台（THINKLET含む）                             |
+| **録画時間**         | 毎日13時間連続録画                                |
+| **保存期間**         | オンプレ90日 + クラウド3年（ハイブリッド構成）    |
+| **映像品質**         | H.264/H.265 1080p（15-30fps、用途別プロファイル） |
+| **リアルタイム配信** | WebRTC（WHEP）による超低遅延ストリーミング        |
+| **メタデータ統合**   | AI解析結果、検査データ、位置情報の統合管理        |
+| **SLO目標**          | API可用性99.9%、検索P95<1.5s、再生開始P95<2.5s    |
+
+### 10.1.2. THINKLET一人称映像の特殊要件
+
+- **装着者視点映像**: 作業者の一人称視点での品質検査記録
+- **広角映像対応**: 横広角（120°×90°）、縦広角（90°×120°）の動的切替
+- **作業連動録画**: 検査開始・終了の自動録画制御
+- **音声付き録画**: XFE技術による高品質音声の同期録画
+- **リアルタイム解析**: AI品質判定との即時連携
+- **トレーサビリティ**: 製品情報との自動紐付け
+
+## 10.2. 統合映像管理アーキテクチャ
+
+```mermaid
+flowchart TD
+  subgraph THINKLET[THINKLET デバイス群（200台）]
+    TH1[THINKLET-A<br/>一人称映像+音声<br/>メタデータ付与]:::thinklet
+    TH2[THINKLET-B<br/>作業者視点録画<br/>検査データ連携]:::thinklet
+    TH3[THINKLET-C<br/>品質検査特化<br/>リアルタイムAI連携]:::thinklet
+    THN[THINKLET-...<br/>（200台）]:::thinklet
+  end
+  
+  subgraph Edge[オンプレクラスタ]
+    MTX[MediaMTX Server<br/>WHEP受信・集約<br/>200ストリーム対応]:::svc
+    ING[Ingestion Workers<br/>映像処理・メタデータ統合<br/>THINKLET特化処理]:::svc
+    MQ[(NATS/Redis Streams<br/>メッセージキュー)]:::data
+    ENC[Encoder/Muxer<br/>FFmpeg/GStreamer<br/>プロファイル別最適化]:::svc
+    
+    subgraph Storage[ストレージ層]
+      MINIO[(MinIO S3<br/>EC 8+4<br/>90日保持)]:::data
+      PG[(PostgreSQL<br/>メタデータ・検査データ統合)]:::data
+    end
+    
+    subgraph App[アプリケーション層]
+      API[FastAPI/GraphQL API<br/>THINKLET連携API]:::svc
+      UI[Web UI（React）<br/>一人称映像プレイヤー]:::svc
+    end
+    
+    OBS[OpenTelemetry<br/>監視・分析]:::obs
+  end
+  
+  subgraph Cloud[クラウド]
+    ADLS[(ADLS<br/>3年長期保存)]:::data
+    AKV[Key Vault/KMS<br/>暗号化キー管理]:::sec
+  end
+  
+  TH1 -->|WHEP配信<br/>メタデータ付与| MTX
+  TH2 -->|WHEP配信<br/>検査データ連携| MTX
+  TH3 -->|WHEP配信<br/>AI解析データ付与| MTX
+  THN -->|WHEP配信<br/>200ストリーム| MTX
+  MTX --> ING
+  ING --> ENC
+  ING --> PG
+  ENC --> MINIO
+  API <--> PG
+  API <--> MINIO
+  UI --> API
+  MINIO -->|日次アーカイブ| ADLS
+  ADLS -.->|オンデマンド復元| API
+  
+  classDef svc fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
+  classDef data fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000;
+  classDef thinklet fill:#ffebee,stroke:#d32f2f,stroke-width:3px,color:#000;
+  classDef obs fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000;
+  classDef sec fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
+```
+
+## 10.3. THINKLET一人称映像処理パイプライン
+
+### 10.3.1. 映像受信・前処理
+
+**THINKLET専用受信処理:**
+- WebRTC（WHEP）による超低遅延受信（<20ms）
+- 装着者メタデータの自動付与（装着状態、作業コンテキスト）
+- 視野角情報の動的記録（横広角⇔縦広角切替履歴）
+- XFE音声処理結果との同期
+
+**メタデータ統合処理:**
+```python
+# THINKLET映像フレームへのメタデータ付与例
+thinklet_metadata = {
+    "device_id": "THINKLET-001",
+    "worker_id": "worker_123",
+    "view_angle": "horizontal_wide",  # horizontal_wide | vertical_wide | standard
+    "wearing_state": "proper",        # proper | unstable | detached
+    "work_context": {
+        "inspection_id": "INS-20250824-001",
+        "product_info": {
+            "type": "TYPE-ABC",
+            "serial": "MACH001"
+        },
+        "work_area": "assembly_line_3"
+    },
+    "sensor_data": {
+        "imu": {"pitch": 5.2, "roll": -1.8, "yaw": 180.5},
+        "position": {"lat": 35.6762, "lng": 139.6503},
+        "environment": {"noise_level": 72.5, "illuminance": 450}
+    }
+}
+```
+
+### 10.3.2. AI統合処理
+
+**THINKLET映像専用AI処理:**
+- **品質検査AI**: 一人称視点での製品品質判定
+- **作業分析AI**: 作業手順・効率性の自動分析
+- **安全監視AI**: 安全装具装着確認、危険行動検出
+- **トレーサビリティAI**: QRコード・バーコードの自動認識
+
+### 10.3.3. 検査データとの統合
+
+**検査結果との自動紐付け:**
+```sql
+-- THINKLET映像と検査データの統合テーブル
+CREATE TABLE thinklet_inspection_segments (
+  segment_id        BIGSERIAL PRIMARY KEY,
+  thinklet_device   TEXT NOT NULL,
+  worker_id         TEXT NOT NULL,
+  inspection_id     TEXT NOT NULL,
+  product_serial    TEXT,
+  ts_start          TIMESTAMPTZ NOT NULL,
+  ts_end            TIMESTAMPTZ NOT NULL,
+  s3_path           TEXT NOT NULL,
+  view_angles       JSONB,        -- 視野角切替履歴
+  ai_analysis       JSONB,        -- AI解析結果
+  quality_results   JSONB,        -- 品質検査結果
+  work_efficiency   JSONB         -- 作業効率分析結果
+) PARTITION BY RANGE (ts_start);
+```
+
+## 10.4. ストレージ設計（THINKLET対応）
+
+### 10.4.1. 容量見積（THINKLET含む200台）
+
+| プロファイル                             | 用途                        | ビットレート/台 | 1日/全体 | 90日/全体 | 3年/全体 |
+| ---------------------------------------- | --------------------------- | --------------: | -------: | --------: | -------: |
+| **THINKLET H.265 1080p/15fps（高効率）** | 一人称検査映像（200台）     |        1.2 Mbps |   3.65TB |  328.5 TB |  4.00 PB |
+| **THINKLET H.264 1080p/15fps（標準）**   | 一人称検査映像（200台）     |        2.5 Mbps |   7.31TB |  657.9 TB |  8.00 PB |
+| **THINKLET H.264 1080p/30fps（高品質）** | 詳細検査・証拠映像（200台） |        4.0 Mbps |  11.70TB | 1053.0 TB |  12.8 PB |
+
+**統合容量（標準構成 - H.264 1080p/15fps）:**
+- 90日保持: 約658TB（USABLE）
+- 3年保持: 約8.0PB
+- MinIO必要容量（EC 8+4 + 20%余裕）: 約1.18PB（RAW）
+
+### 10.4.2. THINKLET専用バケット設計
+
+```
+vms/
+├── thinklet/
+│   ├── {thinklet_id}/
+│   │   ├── {yyyy}/{mm}/{dd}/{hh}/
+│   │   │   ├── {thinklet_id}_{inspection_id}_{timestamp}.mp4
+│   │   │   ├── {thinklet_id}_{inspection_id}_{timestamp}_audio.aac
+│   │   │   └── {thinklet_id}_{inspection_id}_{timestamp}_meta.json
+│   └── thumbnails/
+│       └── {thinklet_id}/{yyyy}/{mm}/{dd}/
+```
+
+## 10.5. 検索・再生機能（THINKLET特化）
+
+### 10.5.1. THINKLET映像専用検索
+
+**一人称映像検索API:**
+```yaml
+/api/thinklet/search:
+  parameters:
+    - thinklet_id: string
+    - worker_id: string
+    - inspection_id: string
+    - product_serial: string
+    - time_range: object
+    - view_angle: enum[horizontal_wide, vertical_wide, standard]
+    - quality_result: enum[pass, fail, warning]
+    - work_efficiency_score: object
+```
+
+**検索クエリ例:**
+```sql
+SELECT 
+  t.segment_id,
+  t.thinklet_device,
+  t.worker_id,
+  t.inspection_id,
+  t.ts_start,
+  t.ts_end,
+  t.s3_path,
+  t.quality_results->>'overall_result' as quality_status,
+  t.work_efficiency->>'efficiency_score' as efficiency_score
+FROM thinklet_inspection_segments t
+WHERE t.thinklet_device = $1
+  AND t.ts_start >= $2 
+  AND t.ts_end <= $3
+  AND (t.quality_results->>'overall_result') = $4
+ORDER BY t.ts_start DESC;
+```
+
+### 10.5.2. 一人称映像プレイヤー
+
+**THINKLET専用プレイヤー機能:**
+- **視野角切替表示**: 横広角⇔縦広角の切替点を時系列表示
+- **検査結果オーバーレイ**: AI判定結果の映像重畳表示
+- **作業効率表示**: 作業手順・効率性の可視化
+- **音声同期再生**: XFE処理済み高品質音声の同期再生
+- **製品情報表示**: QRコード認識結果の表示
+- **センサーデータ表示**: IMU・位置情報・環境データの表示
+
+## 10.6. アーカイブ・ライフサイクル管理
+
+### 10.6.1. THINKLET映像のアーカイブ戦略
+
+**段階的アーカイブ:**
+1. **直近7日**: オンプレ高速ストレージ（即時アクセス）
+2. **8-90日**: オンプレ標準ストレージ（数秒でアクセス）
+3. **91日-1年**: クラウドホット層（数分でアクセス）
+4. **1-3年**: クラウドコールド層（数時間で復元）
+
+**THINKLET重要度別保持ポリシー:**
+```yaml
+retention_policies:
+  critical_inspection:    # 重大品質問題検出時
+    onpremise: 180days
+    cloud_hot: 2years
+    cloud_cold: 5years
+  standard_inspection:    # 通常検査
+    onpremise: 90days
+    cloud_hot: 1year
+    cloud_cold: 3years
+  training_footage:       # 作業訓練用映像
+    onpremise: 30days
+    cloud_hot: 6months
+    cloud_cold: 2years
+```
+
+## 10.7. 運用・監視（THINKLET統合）
+
+### 10.7.1. THINKLET専用メトリクス
+
+**デバイス固有監視項目:**
+- **装着状態監視**: 適切装着率、装着時間分布
+- **映像品質監視**: 手ブレレベル、フォーカス品質、照度適正性
+- **音声品質監視**: XFE処理効果、S/N比、音声認識精度
+- **バッテリー監視**: 消費パターン、8時間稼働達成率
+- **AI処理監視**: 品質判定精度、処理遅延、信頼度分布
+
+### 10.7.2. 統合ダッシュボード
+
+**THINKLET運用ダッシュボード:**
+- 作業者別稼働状況
+- デバイス別健康状態
+- 検査品質トレンド
+- 映像品質サマリー
+- アラート・異常検知状況
+
+## 10.8. コスト試算（THINKLET統合）
+
+### 10.8.1. 初期導入コスト
+
+| 区分                     | 金額          | 備考                               |
+| ------------------------ | ------------- | ---------------------------------- |
+| **オンプレ基盤**         | 3,820万円     | サーバー・ストレージ・ネットワーク |
+| **THINKLET統合開発**     | 1,200万円     | 専用API・プレイヤー・AI統合        |
+| **映像管理システム構築** | 800万円       | UI・検索・アーカイブ機能           |
+| **システム統合・テスト** | 500万円       | 統合テスト・性能調整               |
+| **初期導入費用合計**     | **6,320万円** |                                    |
+
+### 10.8.2. 年間運用コスト
+
+| 区分                   | 年額          | 備考                          |
+| ---------------------- | ------------- | ----------------------------- |
+| **クラウドストレージ** | 2,222万円     | ADLS 3年保存                  |
+| **オンプレ保守**       | 600万円       | ハードウェア保守              |
+| **電力・ラック**       | 400万円       | 30kW想定                      |
+| **運用人件費**         | 1,200万円     | 1.5名相当（THINKLET対応込み） |
+| **THINKLET保守・更新** | 300万円       | デバイス保守・ソフト更新      |
+| **年間運用費用合計**   | **4,722万円** |                               |
+
+### 10.8.3. ROI分析
+
+**THINKLET導入効果:**
+- 検査精度向上: 15-25%の品質向上
+- 作業効率改善: 20-30%の時間短縮
+- 人的ミス削減: 年間500万円の損失削減想定
+- トレーサビリティ強化: 品質問題対応コスト50%削減
+
+**投資回収期間: 約3.5年**
+
+## 10.9. セキュリティ・プライバシー
+
+### 10.9.1. THINKLET固有セキュリティ
+
+**デバイス認証:**
+- デバイス固有証明書による相互認証
+- 定期的な認証キーローテーション
+- 不正デバイス検出・遮断機能
+
+**作業者プライバシー:**
+- 顔認識データの暗号化保存
+- プライバシーマスク機能（設定可能エリア）
+- 作業者同意管理機能
+
+### 10.9.2. データガバナンス
+
+**一人称映像の適切な管理:**
+- 作業者個人情報の最小化
+- アクセス権限の厳格な管理
+- 監査ログの完全な記録
+- GDPR・個人情報保護法への準拠
+
+---
+
+# 11. 実装ロードマップ（統合）
+
+## 11.1. Phase 0: PoC（3ヶ月）
+
+**目標:** THINKLET 2台 + 18台での機能検証
+- THINKLET映像受信・処理パイプラインの構築
+- 基本的な検査データ統合
+- 一人称映像プレイヤーのプロトタイプ
+
+## 11.2. Phase 1: パイロット運用（6ヶ月）
+
+**目標:** THINKLET 50台での実運用検証
+- 本格的なAI統合処理の実装
+- アーカイブ機能の本番化
+- 運用監視機能の充実
+
+## 11.3. Phase 2: 本格運用（12ヶ月）
+
+**目標:** 全200台での本格運用開始
+- 性能最適化・スケーラビリティ確保
+- コスト最適化（圧縮・階層化）
+- 高度な分析・レポート機能
+
+## 11.4. Phase 3: 機能拡張（継続）
+
+**目標:** 次世代機能の追加
+- リアルタイム品質予測
+- 作業訓練システム統合
+- 他拠点展開への準備
