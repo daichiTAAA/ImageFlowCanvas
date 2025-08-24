@@ -5,9 +5,9 @@
 | 項目       | 内容                  |
 | ---------- | --------------------- |
 | 文書名     | THINKLET アプリ設計書 |
-| バージョン | 1.2                   |
+| バージョン | 1.3                   |
 | 作成日     | 2025年8月7日          |
-| 更新日     | 2025年8月12日         |
+| 更新日     | 2025年8月24日         |
 
 ---
 
@@ -808,59 +808,11 @@ THINKLET デバイスからの一人称映像を含む大規模映像管理シ�
 
 ## 10.2. 統合映像管理アーキテクチャ
 
-```mermaid
-flowchart TD
-  subgraph THINKLET[THINKLET デバイス群（200台）]
-    TH1[THINKLET-A<br/>一人称映像+音声<br/>メタデータ付与]:::thinklet
-    TH2[THINKLET-B<br/>作業者視点録画<br/>検査データ連携]:::thinklet
-    TH3[THINKLET-C<br/>品質検査特化<br/>リアルタイムAI連携]:::thinklet
-    THN[THINKLET-...<br/>（200台）]:::thinklet
-  end
-  
-  subgraph Edge[オンプレクラスタ]
-    MTX[MediaMTX Server<br/>WHEP受信・集約<br/>200ストリーム対応]:::svc
-    ING[Ingestion Workers<br/>映像処理・メタデータ統合<br/>THINKLET特化処理]:::svc
-    MQ[(NATS/Redis Streams<br/>メッセージキュー)]:::data
-    ENC[Encoder/Muxer<br/>FFmpeg/GStreamer<br/>プロファイル別最適化]:::svc
-    
-    subgraph Storage[ストレージ層]
-      MINIO[(MinIO S3<br/>EC 8+4<br/>90日保持)]:::data
-      PG[(PostgreSQL<br/>メタデータ・検査データ統合)]:::data
-    end
-    
-    subgraph App[アプリケーション層]
-      API[FastAPI/GraphQL API<br/>THINKLET連携API]:::svc
-      UI[Web UI（React）<br/>一人称映像プレイヤー]:::svc
-    end
-    
-    OBS[OpenTelemetry<br/>監視・分析]:::obs
-  end
-  
-  subgraph Cloud[クラウド]
-    ADLS[(ADLS<br/>3年長期保存)]:::data
-    AKV[Key Vault/KMS<br/>暗号化キー管理]:::sec
-  end
-  
-  TH1 -->|WHEP配信<br/>メタデータ付与| MTX
-  TH2 -->|WHEP配信<br/>検査データ連携| MTX
-  TH3 -->|WHEP配信<br/>AI解析データ付与| MTX
-  THN -->|WHEP配信<br/>200ストリーム| MTX
-  MTX --> ING
-  ING --> ENC
-  ING --> PG
-  ENC --> MINIO
-  API <--> PG
-  API <--> MINIO
-  UI --> API
-  MINIO -->|日次アーカイブ| ADLS
-  ADLS -.->|オンデマンド復元| API
-  
-  classDef svc fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  classDef data fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000;
-  classDef thinklet fill:#ffebee,stroke:#d32f2f,stroke-width:3px,color:#000;
-  classDef obs fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000;
-  classDef sec fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
-```
+サーバー側（VMS: Video Management Service）の詳細は「0302_サーバーBackend設計.md」2.4章に集約しました。THINKLETアプリ側で扱う範囲は以下です。
+- メディア送出: WHEP/WebRTC（単一路インジェスト）
+- メタ付与: worker_id, view_angle, wearing_state, work_context, sensor_data
+- セグメント区切り: 検査開始/終了イベント
+- 制御連携: 録画開始/停止、QoSプリセット切替（サーバーAPI経由）
 
 ## 10.3. THINKLET一人称映像処理パイプライン
 
@@ -872,30 +824,6 @@ flowchart TD
 - 視野角情報の動的記録（横広角⇔縦広角切替履歴）
 - XFE音声処理結果との同期
 
-**メタデータ統合処理:**
-```python
-# THINKLET映像フレームへのメタデータ付与例
-thinklet_metadata = {
-    "device_id": "THINKLET-001",
-    "worker_id": "worker_123",
-    "view_angle": "horizontal_wide",  # horizontal_wide | vertical_wide | standard
-    "wearing_state": "proper",        # proper | unstable | detached
-    "work_context": {
-        "inspection_id": "INS-20250824-001",
-        "product_info": {
-            "type": "TYPE-ABC",
-            "serial": "MACH001"
-        },
-        "work_area": "assembly_line_3"
-    },
-    "sensor_data": {
-        "imu": {"pitch": 5.2, "roll": -1.8, "yaw": 180.5},
-        "position": {"lat": 35.6762, "lng": 139.6503},
-        "environment": {"noise_level": 72.5, "illuminance": 450}
-    }
-}
-```
-
 ### 10.3.2. AI統合処理
 
 **THINKLET映像専用AI処理:**
@@ -906,148 +834,23 @@ thinklet_metadata = {
 
 ### 10.3.3. 検査データとの統合
 
-**検査結果との自動紐付け:**
-```sql
--- THINKLET映像と検査データの統合テーブル
-CREATE TABLE thinklet_inspection_segments (
-  segment_id        BIGSERIAL PRIMARY KEY,
-  thinklet_device   TEXT NOT NULL,
-  worker_id         TEXT NOT NULL,
-  inspection_id     TEXT NOT NULL,
-  product_serial    TEXT,
-  ts_start          TIMESTAMPTZ NOT NULL,
-  ts_end            TIMESTAMPTZ NOT NULL,
-  s3_path           TEXT NOT NULL,
-  view_angles       JSONB,        -- 視野角切替履歴
-  ai_analysis       JSONB,        -- AI解析結果
-  quality_results   JSONB,        -- 品質検査結果
-  work_efficiency   JSONB         -- 作業効率分析結果
-) PARTITION BY RANGE (ts_start);
-```
+検査結果との自動紐付けのスキーマ/インデックスは「0303_データベース設計.md」1.7章（THINKLET拡張）に集約。THINKLET側はセグメントID/製品ID/作業者ID等のメタを送出します。
 
 ## 10.4. ストレージ設計（THINKLET対応）
 
-### 10.4.1. 容量見積（THINKLET含む200台）
+サーバー側の保存パス/保持/アーカイブは「0302_サーバーBackend設計.md」2.4.3、データモデルは「0303_データベース設計.md」1.7 に集約。THINKLET側は必要な識別情報（device_id/segment_id/タイムスタンプ等）をメタで提供します。
 
-| プロファイル                             | 用途                        | ビットレート/台 | 1日/全体 | 90日/全体 | 3年/全体 |
-| ---------------------------------------- | --------------------------- | --------------: | -------: | --------: | -------: |
-| **THINKLET H.265 1080p/15fps（高効率）** | 一人称検査映像（200台）     |        1.2 Mbps |   3.65TB |  328.5 TB |  4.00 PB |
-| **THINKLET H.264 1080p/15fps（標準）**   | 一人称検査映像（200台）     |        2.5 Mbps |   7.31TB |  657.9 TB |  8.00 PB |
-| **THINKLET H.264 1080p/30fps（高品質）** | 詳細検査・証拠映像（200台） |        4.0 Mbps |  11.70TB | 1053.0 TB |  12.8 PB |
+## 10.5. 検索・再生機能（参照）
 
-**統合容量（標準構成 - H.264 1080p/15fps）:**
-- 90日保持: 約658TB（USABLE）
-- 3年保持: 約8.0PB
-- MinIO必要容量（EC 8+4 + 20%余裕）: 約1.18PB（RAW）
+検索・再生API仕様は「0304_API設計.md」の VMS セクション（/api/v1/vms/*）に集約。プレイヤーUIはWeb/端末アプリ設計（0301/0309）で定義。THINKLET側はメタデータ付与とセグメント区切りイベント送出に注力します。
 
-### 10.4.2. THINKLET専用バケット設計
+## 10.6. アーカイブ・ライフサイクル管理（参照）
 
-```
-vms/
-├── thinklet/
-│   ├── {thinklet_id}/
-│   │   ├── {yyyy}/{mm}/{dd}/{hh}/
-│   │   │   ├── {thinklet_id}_{inspection_id}_{timestamp}.mp4
-│   │   │   ├── {thinklet_id}_{inspection_id}_{timestamp}_audio.aac
-│   │   │   └── {thinklet_id}_{inspection_id}_{timestamp}_meta.json
-│   └── thumbnails/
-│       └── {thinklet_id}/{yyyy}/{mm}/{dd}/
-```
+保持・アーカイブ戦略はサーバー設計に集約しています。「0302_サーバーBackend設計.md」2.4.9 を参照してください。
 
-## 10.5. 検索・再生機能（THINKLET特化）
+## 10.7. 運用・監視（参照）
 
-### 10.5.1. THINKLET映像専用検索
-
-**一人称映像検索API:**
-```yaml
-/api/thinklet/search:
-  parameters:
-    - thinklet_id: string
-    - worker_id: string
-    - inspection_id: string
-    - product_serial: string
-    - time_range: object
-    - view_angle: enum[horizontal_wide, vertical_wide, standard]
-    - quality_result: enum[pass, fail, warning]
-    - work_efficiency_score: object
-```
-
-**検索クエリ例:**
-```sql
-SELECT 
-  t.segment_id,
-  t.thinklet_device,
-  t.worker_id,
-  t.inspection_id,
-  t.ts_start,
-  t.ts_end,
-  t.s3_path,
-  t.quality_results->>'overall_result' as quality_status,
-  t.work_efficiency->>'efficiency_score' as efficiency_score
-FROM thinklet_inspection_segments t
-WHERE t.thinklet_device = $1
-  AND t.ts_start >= $2 
-  AND t.ts_end <= $3
-  AND (t.quality_results->>'overall_result') = $4
-ORDER BY t.ts_start DESC;
-```
-
-### 10.5.2. 一人称映像プレイヤー
-
-**THINKLET専用プレイヤー機能:**
-- **視野角切替表示**: 横広角⇔縦広角の切替点を時系列表示
-- **検査結果オーバーレイ**: AI判定結果の映像重畳表示
-- **作業効率表示**: 作業手順・効率性の可視化
-- **音声同期再生**: XFE処理済み高品質音声の同期再生
-- **製品情報表示**: QRコード認識結果の表示
-- **センサーデータ表示**: IMU・位置情報・環境データの表示
-
-## 10.6. アーカイブ・ライフサイクル管理
-
-### 10.6.1. THINKLET映像のアーカイブ戦略
-
-**段階的アーカイブ:**
-1. **直近7日**: オンプレ高速ストレージ（即時アクセス）
-2. **8-90日**: オンプレ標準ストレージ（数秒でアクセス）
-3. **91日-1年**: クラウドホット層（数分でアクセス）
-4. **1-3年**: クラウドコールド層（数時間で復元）
-
-**THINKLET重要度別保持ポリシー:**
-```yaml
-retention_policies:
-  critical_inspection:    # 重大品質問題検出時
-    onpremise: 180days
-    cloud_hot: 2years
-    cloud_cold: 5years
-  standard_inspection:    # 通常検査
-    onpremise: 90days
-    cloud_hot: 1year
-    cloud_cold: 3years
-  training_footage:       # 作業訓練用映像
-    onpremise: 30days
-    cloud_hot: 6months
-    cloud_cold: 2years
-```
-
-## 10.7. 運用・監視（THINKLET統合）
-
-### 10.7.1. THINKLET専用メトリクス
-
-**デバイス固有監視項目:**
-- **装着状態監視**: 適切装着率、装着時間分布
-- **映像品質監視**: 手ブレレベル、フォーカス品質、照度適正性
-- **音声品質監視**: XFE処理効果、S/N比、音声認識精度
-- **バッテリー監視**: 消費パターン、8時間稼働達成率
-- **AI処理監視**: 品質判定精度、処理遅延、信頼度分布
-
-### 10.7.2. 統合ダッシュボード
-
-**THINKLET運用ダッシュボード:**
-- 作業者別稼働状況
-- デバイス別健康状態
-- 検査品質トレンド
-- 映像品質サマリー
-- アラート・異常検知状況
+運用メトリクス・ダッシュボードのサーバ側仕様は「0302_サーバーBackend設計.md」2.4.8 に集約しました。THINKLET側はテレメトリ（wearing_state/view_angle/fps等）の定期送信を実装します。
 
 ## 10.8. コスト試算（THINKLET統合）
 
@@ -1096,7 +899,9 @@ retention_policies:
 - プライバシーマスク機能（設定可能エリア）
 - 作業者同意管理機能
 
-### 10.9.2. データガバナンス
+### 10.9.2. データガバナンス（参照）
+
+サーバー側のアクセス制御・監査・ライフサイクルは「0302_サーバーBackend設計.md」2.4.10 を参照してください。
 
 **一人称映像の適切な管理:**
 - 作業者個人情報の最小化
