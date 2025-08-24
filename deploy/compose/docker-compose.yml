@@ -306,6 +306,7 @@ services:
     ports:
       - "8888:8888"   # HLS playback
       - "8889:8889"   # WebRTC (WHIP/WHEP)
+      - "9996:9996"   # Playback server (recordings)
       - "9997:9997"   # Control API
     volumes:
       - ../../mediamtx_server/mediamtx.yml:/mediamtx.yml:ro

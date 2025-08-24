@@ -25,6 +25,16 @@ export default function ThinkletViewer() {
   const [mode, setMode] = useState<'hls' | 'whep'>('whep');
   const [whepStatus, setWhepStatus] = useState('');
   const [whepError, setWhepError] = useState('');
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState('');
+  const [recPath, setRecPath] = useState('');
+  const [recSegments, setRecSegments] = useState<any[]>([]);
+  const [recPlayback, setRecPlayback] = useState<any[]>([]);
+  const [recFormatMp4, setRecFormatMp4] = useState(true);
+  const [rangeStart, setRangeStart] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
+  const [recActiveStartIso, setRecActiveStartIso] = useState<string | null>(null);
+  const [recActiveDuration, setRecActiveDuration] = useState<number | null>(null);
 
   const fetchStreams = async () => {
     try {
@@ -41,11 +51,22 @@ export default function ThinkletViewer() {
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    // convenience: prefill recordings path when selecting a device
+    const s = streams.find(x => x.device_id === deviceId);
+    const path = s ? s.path : (deviceId ? `thinklet/${deviceId}` : '');
+    if (path) setRecPath(path);
+  }, [deviceId, streams]);
+
   const play = (hlsUrl: string) => {
     setActiveUrl(hlsUrl);
     setHlsError('');
     const video = videoRef.current;
     if (!video) return;
+    // fully reset any previous file playback to avoid contention
+    try { video.pause(); } catch {}
+    try { (video as any).srcObject = null; } catch {}
+    try { video.removeAttribute('src'); video.load(); } catch {}
     if (Hls.isSupported()) {
       // clean up previous instance
       if (hlsRef.current) {
@@ -123,7 +144,7 @@ export default function ThinkletViewer() {
     return `http://${host}:${port}/${path}/whep`;
   };
 
-  const waitIceComplete = (pc: RTCPeerConnection) => new Promise<void>((resolve) => {
+  const waitIceComplete = (pc: RTCPeerConnection, timeoutMs = 1200) => new Promise<void>((resolve) => {
     if (pc.iceGatheringState === 'complete') return resolve();
     const check = () => {
       if (pc.iceGatheringState === 'complete') {
@@ -132,6 +153,11 @@ export default function ThinkletViewer() {
       }
     };
     pc.addEventListener('icegatheringstatechange', check);
+    // fail-safe: don't wait too long; speed up WHEP start
+    setTimeout(() => {
+      try { pc.removeEventListener('icegatheringstatechange', check); } catch {}
+      resolve();
+    }, timeoutMs);
   });
 
   const stopWhep = async () => {
@@ -152,6 +178,10 @@ export default function ThinkletViewer() {
     if (hlsRef.current) { try { hlsRef.current.destroy(); } catch {}; hlsRef.current = null; }
     await stopWhep();
     const video = videoRef.current; if (!video) return;
+    // ensure file playback is fully cleared before attaching streams
+    try { video.pause(); } catch {}
+    try { (video as any).srcObject = null; } catch {}
+    try { video.removeAttribute('src'); video.load(); } catch {}
     const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     pcRef.current = pc;
     pc.addTransceiver('video', { direction: 'recvonly' });
@@ -168,7 +198,7 @@ export default function ThinkletViewer() {
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await waitIceComplete(pc);
+      await waitIceComplete(pc, 1200);
       const whepUrl = buildWhepUrlFromDevice();
       const resp = await fetch(whepUrl, {
         method: 'POST',
@@ -192,6 +222,7 @@ export default function ThinkletViewer() {
   const stopAll = async () => {
     if (hlsRef.current) { try { hlsRef.current.destroy(); } catch {}; hlsRef.current = null; }
     await stopWhep();
+    const v = videoRef.current; if (v) { v.pause(); v.removeAttribute('src'); (v as any).srcObject = null; v.load(); }
     setActiveUrl('');
   };
 
@@ -233,7 +264,7 @@ export default function ThinkletViewer() {
             <Button
               variant="contained"
               disabled={!deviceId}
-              onClick={() => mode === 'whep' ? playWhep() : play(buildUrlFromDevice())}
+              onClick={async () => { await stopAll(); mode === 'whep' ? await playWhep() : play(buildUrlFromDevice()); }}
             >
               ライブ再生開始
             </Button>
@@ -253,8 +284,205 @@ export default function ThinkletViewer() {
           controls
           style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
           onDoubleClick={goFullscreen}
+          onSeeking={async (e) => {
+            // implement pseudo-seek for recording playback by restarting stream at new start
+            if (!recActiveStartIso) return;
+            const v = e.currentTarget as HTMLVideoElement;
+            const seekSec = Math.max(0, Math.floor(v.currentTime || 0));
+            const base = new Date(recActiveStartIso).getTime();
+            if (!base || isNaN(base)) return;
+            const newStart = new Date(base + seekSec * 1000).toISOString();
+            const loc = window.location;
+            const getBase = `${loc.protocol}//${loc.hostname}:9996`;
+            const dur = recActiveDuration != null ? Math.max(1, recActiveDuration - seekSec) : undefined;
+            const url = `${getBase}/get?path=${encodeURIComponent(recPath)}&start=${encodeURIComponent(newStart)}${dur ? `&duration=${dur}` : ''}${recFormatMp4 ? '&format=mp4' : ''}`;
+            try {
+              await stopAll();
+              (v as any).srcObject = null;
+              v.src = url;
+              setActiveUrl(url);
+              await v.play();
+              setRecActiveStartIso(newStart);
+              setRecActiveDuration(dur ?? null);
+            } catch (err) {
+              setHlsError(String(err));
+            }
+          }}
         />
       </Box>
+
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>録画一覧と再生</Typography>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
+            <TextField
+              size="small"
+              sx={{ minWidth: 420 }}
+              label="録画パス (例: thinklet/<device_id>)"
+              value={recPath}
+              onChange={(e) => setRecPath(e.target.value)}
+              placeholder="thinklet/xxxxxxxxxxxxxxxx"
+            />
+            <Button
+              variant="outlined"
+              disabled={!recPath}
+              onClick={async () => {
+                setRecError(''); setRecLoading(true); setRecSegments([]); setRecPlayback([]);
+                try {
+                  const resp = await axios.get(`/api/thinklet/recordings/${encodeURIComponent(recPath)}`);
+                  const data = resp.data || {};
+                  setRecSegments(data.segments || []);
+                  setRecPlayback(data.playback || []);
+                } catch (e: any) {
+                  setRecError(String(e?.message || e));
+                } finally {
+                  setRecLoading(false);
+                }
+              }}
+            >
+              録画一覧を取得
+            </Button>
+            <FormControl sx={{ minWidth: 160 }}>
+              <InputLabel id="fmt-label">録画フォーマット</InputLabel>
+              <Select labelId="fmt-label" label="録画フォーマット" value={recFormatMp4 ? 'mp4' : 'fmp4'} onChange={(e) => setRecFormatMp4((e.target.value as string) === 'mp4')}>
+                <MenuItem value="mp4">MP4（互換性高）</MenuItem>
+                <MenuItem value="fmp4">fMP4（デフォルト）</MenuItem>
+              </Select>
+            </FormControl>
+            <Button
+              variant="text"
+              onClick={() => {
+                const s = streams.find(x => x.device_id === deviceId);
+                const path = s ? s.path : (deviceId ? `thinklet/${deviceId}` : '');
+                if (path) setRecPath(path);
+              }}
+            >
+              現在のデバイスから入力
+            </Button>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
+            <TextField size="small" sx={{ minWidth: 320 }} label="開始 (RFC3339, 例: 2025-08-24T09:00:00Z)" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+            <TextField size="small" sx={{ minWidth: 320 }} label="終了 (RFC3339, 空なら単一指定)" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
+            <Button
+              color="error"
+              variant="outlined"
+              disabled={!recPath || !rangeStart}
+              onClick={async () => {
+                if (!confirm(`この範囲の録画を削除しますか？\npath=${recPath}\nstart=${rangeStart}\nend=${rangeEnd || '(なし)'}\n注意: この操作は元に戻せません。`)) return;
+                try {
+                  await axios.delete('/api/thinklet/recordings/range', { params: { path: recPath, start: rangeStart, ...(rangeEnd ? { end: rangeEnd } : {}) } });
+                  // 再取得
+                  setRecLoading(true);
+                  try {
+                    const resp = await axios.get(`/api/thinklet/recordings/${encodeURIComponent(recPath)}`);
+                    const data = resp.data || {};
+                    setRecSegments(data.segments || []);
+                    setRecPlayback(data.playback || []);
+                  } finally {
+                    setRecLoading(false);
+                  }
+                } catch (e: any) {
+                  setRecError(`範囲削除に失敗しました: ${String(e?.message || e)}`);
+                }
+              }}
+            >
+              期間内を削除
+            </Button>
+            <Button
+              color="error"
+              variant="outlined"
+              disabled={!recPath}
+              onClick={async () => {
+                if (!confirm(`このパスの全録画を削除しますか？\npath=${recPath}\n注意: この操作は元に戻せません。`)) return;
+                try {
+                  await axios.delete('/api/thinklet/recordings/all', { params: { path: recPath } });
+                  // 再取得
+                  setRecLoading(true);
+                  try {
+                    const resp = await axios.get(`/api/thinklet/recordings/${encodeURIComponent(recPath)}`);
+                    const data = resp.data || {};
+                    setRecSegments([]);
+                    setRecPlayback([]);
+                  } finally {
+                    setRecLoading(false);
+                  }
+                } catch (e: any) {
+                  setRecError(`全削除に失敗しました: ${String(e?.message || e)}`);
+                }
+              }}
+            >
+              すべて削除
+            </Button>
+          </Box>
+          {recLoading && <Typography variant="body2">読み込み中...</Typography>}
+          {recError && <Typography variant="body2" color="error">{recError}</Typography>}
+          {(!recLoading && (recPlayback.length > 0 || recSegments.length > 0)) && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto auto', rowGap: 1, columnGap: 8, alignItems: 'center' }}>
+              <Typography variant="subtitle2">開始時刻</Typography>
+              <Typography variant="subtitle2" sx={{ textAlign: 'right' }}>長さ</Typography>
+              <Typography variant="subtitle2" sx={{ textAlign: 'right' }}>操作</Typography>
+              {(recPlayback.length > 0 ? recPlayback : recSegments).map((it: any) => {
+                const start = it.start as string;
+                const dur = (it as any).duration as number | undefined;
+                let url = (it as any).url as string | undefined;
+                if (!url && (it as any).playback_url) url = (it as any).playback_url as string;
+                if (!url && start) {
+                  const loc = window.location;
+                  const base = `${loc.protocol}//${loc.hostname}:9996`;
+                  const p = recPath;
+                  url = `${base}/get?path=${encodeURIComponent(p)}&start=${encodeURIComponent(start)}${dur ? `&duration=${dur}` : ''}`;
+                }
+                if (url && recFormatMp4) {
+                  url += (url.includes('?') ? '&' : '?') + 'format=mp4';
+                }
+                return (
+                  <React.Fragment key={start}>
+                    <Typography variant="body2">{start}</Typography>
+                    <Typography variant="body2" sx={{ textAlign: 'right' }}>{dur ? `${dur.toFixed(1)}s` : '-'}</Typography>
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                      <Button size="small" variant="outlined" onClick={async () => {
+                        await stopAll();
+                        const v = videoRef.current; if (!v || !url) return;
+                        try {
+                          (v as any).srcObject = null;
+                          v.src = url;
+                          setActiveUrl(url);
+                          await v.play();
+                          // 保存: 録画の基準開始・長さ（擬似シーク用）
+                          setRecActiveStartIso(start || null);
+                          setRecActiveDuration(dur ?? null);
+                        } catch (e) {
+                          setHlsError(String(e));
+                        }
+                      }}>再生</Button>
+                      {url && <Button size="small" component="a" href={url} target="_blank" rel="noreferrer">開く</Button>}
+                      <Button size="small" color="error" variant="outlined" onClick={async () => {
+                        if (!recPath || !start) return;
+                        if (!confirm(`この録画を削除しますか？\npath=${recPath}\nstart=${start}`)) return;
+                        try {
+                          await axios.delete('/api/thinklet/recordings/segment', { params: { path: recPath, start } });
+                          // 再取得
+                          setRecLoading(true);
+                          try {
+                            const resp = await axios.get(`/api/thinklet/recordings/${encodeURIComponent(recPath)}`);
+                            const data = resp.data || {};
+                            setRecSegments(data.segments || []);
+                            setRecPlayback(data.playback || []);
+                          } finally {
+                            setRecLoading(false);
+                          }
+                        } catch (e: any) {
+                          setRecError(`削除に失敗しました: ${String(e?.message || e)}`);
+                        }
+                      }}>削除</Button>
+                    </Box>
+                  </React.Fragment>
+                );
+              })}
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
       <Box sx={{ mt: 2 }}>
         <Typography variant="body2">現在のURL: {activeUrl || '-'}</Typography>
