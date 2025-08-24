@@ -1,0 +1,9 @@
+[submodule "thinklet.app.sdk"]
+	path = thinklet.app.sdk
+	url = https://github.com/FairyDevicesRD/thinklet.app.sdk
+[submodule "thinklet.video.recorder"]
+	path = thinklet.video.recorder
+	url = https://github.com/FairyDevicesRD/thinklet.video.recorder.git
+[submodule "thinklet.app.developer"]
+	path = thinklet.app.developer
+	url = https://github.com/FairyDevicesRD/thinklet.app.developer.git

@@ -123,6 +123,9 @@ pip install requests ultralytics grpcio==1.74.0 grpcio-tools==1.74.0
 # YOLOモデルをダウンロード
 python scripts/setup-yolo11.py
 
+# git submoduleをダウンロード
+git submodule update --init --recursive
+
 # Protocol Buffersとサービスをビルド
 ./scripts/generate_protos.sh
 ./scripts/build_base_image.sh
