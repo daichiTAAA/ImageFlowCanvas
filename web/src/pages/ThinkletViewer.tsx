@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Box, Button, Card, CardContent, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from '@mui/material';
+import { Box, Button, Card, CardContent, FormControl, InputLabel, MenuItem, Select, Slider, TextField, Typography } from '@mui/material';
 import axios from 'axios';
 
 type StreamItem = {
@@ -33,8 +33,11 @@ export default function ThinkletViewer() {
   const [recFormatMp4, setRecFormatMp4] = useState(true);
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
-  const [recActiveStartIso, setRecActiveStartIso] = useState<string | null>(null);
-  const [recActiveDuration, setRecActiveDuration] = useState<number | null>(null);
+  // 録画シーク用の絶対オフセット方式
+  const [recClipStartIso, setRecClipStartIso] = useState<string | null>(null); // クリップ全体の開始ISO
+  const [recClipDuration, setRecClipDuration] = useState<number | null>(null); // クリップ総尺（秒）
+  const [recBaseOffsetSec, setRecBaseOffsetSec] = useState<number>(0); // 現ストリームの先頭がクリップ先頭から何秒か
+  const [recSeekPos, setRecSeekPos] = useState<number>(0); // 表示用の絶対位置（秒）
 
   const fetchStreams = async () => {
     try {
@@ -284,29 +287,14 @@ export default function ThinkletViewer() {
           controls
           style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
           onDoubleClick={goFullscreen}
-          onSeeking={async (e) => {
-            // implement pseudo-seek for recording playback by restarting stream at new start
-            if (!recActiveStartIso) return;
+          onTimeUpdate={(e) => {
+            if (!recClipStartIso) return;
+            if ((window as any).__recSeeking) return; // シーク確定中はバー更新を抑止
             const v = e.currentTarget as HTMLVideoElement;
-            const seekSec = Math.max(0, Math.floor(v.currentTime || 0));
-            const base = new Date(recActiveStartIso).getTime();
-            if (!base || isNaN(base)) return;
-            const newStart = new Date(base + seekSec * 1000).toISOString();
-            const loc = window.location;
-            const getBase = `${loc.protocol}//${loc.hostname}:9996`;
-            const dur = recActiveDuration != null ? Math.max(1, recActiveDuration - seekSec) : undefined;
-            const url = `${getBase}/get?path=${encodeURIComponent(recPath)}&start=${encodeURIComponent(newStart)}${dur ? `&duration=${dur}` : ''}${recFormatMp4 ? '&format=mp4' : ''}`;
-            try {
-              await stopAll();
-              (v as any).srcObject = null;
-              v.src = url;
-              setActiveUrl(url);
-              await v.play();
-              setRecActiveStartIso(newStart);
-              setRecActiveDuration(dur ?? null);
-            } catch (err) {
-              setHlsError(String(err));
-            }
+            const rel = Math.max(0, Math.floor(v.currentTime || 0));
+            const abs = recBaseOffsetSec + rel;
+            const capped = recClipDuration != null ? Math.min(abs, Math.max(0, Math.floor(recClipDuration))) : abs;
+            setRecSeekPos(capped);
           }}
         />
       </Box>
@@ -314,6 +302,47 @@ export default function ThinkletViewer() {
       <Card sx={{ mt: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>録画一覧と再生</Typography>
+          {recClipStartIso && recClipDuration != null && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2">録画シーク（このクリップ内）</Typography>
+              <Slider
+                value={Math.min(recSeekPos, Math.max(0, (recClipDuration ?? 0)))}
+                min={0}
+                max={Math.max(1, Math.floor(recClipDuration ?? 0))}
+                valueLabelDisplay="auto"
+                onChange={(_, val) => {
+                  if (typeof val === 'number') { setRecSeekPos(val); }
+                }}
+                onChangeCommitted={async (_, val) => {
+                  if (typeof val !== 'number') return;
+                  if (!recClipStartIso) return;
+                  const baseMs = new Date(recClipStartIso).getTime();
+                  if (!baseMs || isNaN(baseMs)) return;
+                  const seekAbsSec = Math.max(0, Math.floor(val));
+                  const newStart = new Date(baseMs + seekAbsSec * 1000).toISOString();
+                  const loc = window.location;
+                  const getBase = `${loc.protocol}//${loc.hostname}:9996`;
+                  const newDur = recClipDuration != null ? Math.max(1, recClipDuration - seekAbsSec) : undefined;
+                  const url = `${getBase}/get?path=${encodeURIComponent(recPath)}&start=${encodeURIComponent(newStart)}${newDur ? `&duration=${newDur}` : ''}${recFormatMp4 ? '&format=mp4' : ''}`;
+                  try {
+                    (window as any).__recSeeking = true; // timeupdate抑止
+                    await stopAll();
+                    const v = videoRef.current; if (!v) return;
+                    (v as any).srcObject = null;
+                    v.src = url;
+                    setActiveUrl(url);
+                    await v.play();
+                    setRecBaseOffsetSec(seekAbsSec);
+                    setRecSeekPos(seekAbsSec);
+                    (window as any).__recSeeking = false;
+                  } catch (e) {
+                    setHlsError(String(e));
+                    (window as any).__recSeeking = false;
+                  }
+                }}
+              />
+            </Box>
+          )}
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
             <TextField
               size="small"
@@ -448,9 +477,11 @@ export default function ThinkletViewer() {
                           v.src = url;
                           setActiveUrl(url);
                           await v.play();
-                          // 保存: 録画の基準開始・長さ（擬似シーク用）
-                          setRecActiveStartIso(start || null);
-                          setRecActiveDuration(dur ?? null);
+                          // クリップ基準開始・総尺・現ストリーム基準オフセット（0から）
+                          setRecClipStartIso(start || null);
+                          setRecClipDuration((dur ?? null) as any);
+                          setRecBaseOffsetSec(0);
+                          setRecSeekPos(0);
                         } catch (e) {
                           setHlsError(String(e));
                         }
