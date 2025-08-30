@@ -58,7 +58,4 @@ spec:
           - pillow
           - requests
           - pandas
-  workflows:
-    - name: llm_image_flow
-      path: workflows/llm_image_flow.py
-      engine: kfp
+  # Workflows are deprecated in favor of Serving
