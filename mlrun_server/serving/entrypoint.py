@@ -13,8 +13,8 @@ import importlib.util
 
 def _load_serving_chain():
     # Dynamically load serving/llm_image_flow.py to avoid name clash with the mlrun library
-    project_dir = Path(os.environ.get("MLRUN_PROJECT_DIR", "/workspace/mlrun"))
-    fallback_dir = Path("/opt/mlrun-app/mlrun")
+    project_dir = Path(os.environ.get("MLRUN_PROJECT_DIR", "/workspace/mlrun_server"))
+    fallback_dir = Path("/opt/mlrun-app/mlrun_server")
     root = project_dir if (project_dir / "serving/llm_image_flow.py").exists() else fallback_dir
     mod_path = root / "serving/llm_image_flow.py"
     if not mod_path.exists():

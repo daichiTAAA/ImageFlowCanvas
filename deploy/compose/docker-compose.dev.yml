@@ -49,10 +49,10 @@ services:
     image: imageflow/mlrun-serving:local
     build:
       context: ../../
-      dockerfile: mlrun/docker/Dockerfile
+      dockerfile: mlrun_server/docker/Dockerfile
     environment:
       - PORT=8085
-      - MLRUN_PROJECT_DIR=/workspace/mlrun
+      - MLRUN_PROJECT_DIR=/workspace/mlrun_server
     ports:
       - "8085:8085"
     volumes:

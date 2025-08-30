@@ -4,7 +4,7 @@ ENV PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8085 \
-    MLRUN_PROJECT_DIR=/workspace/mlrun
+    MLRUN_PROJECT_DIR=/workspace/mlrun_server
 
 WORKDIR /opt/mlrun-app
 
@@ -23,9 +23,8 @@ RUN pip install --no-cache-dir \
     pillow requests pandas
 
 # Copy minimal app code; volume mount can override at runtime
-COPY mlrun /opt/mlrun-app/mlrun
+COPY mlrun_server /opt/mlrun-app/mlrun_server
 
 EXPOSE 8085
 
-CMD ["python", "-u", "mlrun/serving/entrypoint.py"]
-
+CMD ["python", "-u", "mlrun_server/serving/entrypoint.py"]

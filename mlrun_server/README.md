@@ -28,7 +28,7 @@ python - << 'PY'
 import json, mlrun
 from mlrun import get_or_create_project
 
-project = get_or_create_project("imageflowcanvas", context_dir="./mlrun")
+project = get_or_create_project("imageflowcanvas", context_dir="./mlrun_server")
 fn = project.set_function("serving/llm_image_flow.py", name="serving-llm", kind="serving", image="mlrun/mlrun")
 server = fn.to_mock_server()
 
@@ -36,7 +36,7 @@ payload = {
   "input_urls": [
     "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg"
   ],
-  "steps": json.loads(open("mlrun/examples/steps_example.json").read())
+  "steps": json.loads(open("mlrun_server/examples/steps_example.json").read())
 }
 resp = server.test("/", body=payload)
 print("final:", json.dumps(resp.get("final_results"), ensure_ascii=False))

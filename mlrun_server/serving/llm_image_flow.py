@@ -238,7 +238,7 @@ def init_context(context):
       POST /  with JSON body
       {
         "input_urls": ["https://.../image.jpg"],
-        "steps": { ...  (mlrun/examples/steps_example.json と同等) ... },
+        "steps": { ...  (mlrun_server/examples/steps_example.json と同等) ... },
         "triton_url": "http://triton:8000",
         "model_name": "yolov5"
       }
@@ -280,4 +280,3 @@ if __name__ == "__main__":
         )
     )
     print(json.dumps(out["final_results"], ensure_ascii=False, indent=2))
-

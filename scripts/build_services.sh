@@ -83,7 +83,7 @@ if [[ "$BUILD_TYPE" == "all" || "$BUILD_TYPE" == "web" ]]; then
     echo "🚀 Building web services..."
     build_service "backend" "$BASE_DIR/backend"
     build_service "web" "$BASE_DIR/web"
-    build_service "mlrun-serving" "$BASE_DIR/mlrun/docker"
+    build_service "mlrun-serving" "$BASE_DIR/mlrun_server/docker"
     echo "✅ Web services built successfully!"
 fi
 
