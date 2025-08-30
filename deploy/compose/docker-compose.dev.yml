@@ -43,3 +43,25 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # MLRun Serving (dev)
+  mlrun-serving:
+    image: imageflow/mlrun-serving:local
+    build:
+      context: ../../
+      dockerfile: mlrun/docker/Dockerfile
+    environment:
+      - PORT=8085
+      - MLRUN_PROJECT_DIR=/workspace/mlrun
+    ports:
+      - "8085:8085"
+    volumes:
+      - ../../:/workspace
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

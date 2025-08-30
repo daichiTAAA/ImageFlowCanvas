@@ -1,0 +1,34 @@
+{
+  "version": "0.1",
+  "steps": [
+    {
+      "name": "resize",
+      "params": {
+        "width": 640,
+        "height": 640,
+        "keep_aspect": true
+      }
+    },
+    {
+      "name": "detect",
+      "params": {
+        "simulate": true,
+        "score_threshold": 0.3
+      }
+    },
+    {
+      "name": "filter",
+      "params": {
+        "min_score": 0.5,
+        "label_in": ["person", "car", "cat", "dog"]
+      }
+    },
+    {
+      "name": "aggregate",
+      "params": {
+        "format": "json"
+      }
+    }
+  ]
+}
+
