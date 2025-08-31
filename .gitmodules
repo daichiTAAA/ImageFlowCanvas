@@ -10,6 +10,3 @@
 [submodule "mediamtx"]
 	path = mediamtx
 	url = https://github.com/bluenviron/mediamtx.git
-[submodule "mlrun"]
-	path = mlrun
-	url = https://github.com/mlrun/mlrun.git
