@@ -142,6 +142,31 @@ sequenceDiagram
 - 帯域/CPUスロットリング: セッション同時数/AI投入fpsの上限を動的制御。
 - Backpressure/トークン制御: AIワーカーからの需要信号で抽出レート調整。
 
+---
+
+## 2.4. プライバシーゾーン制御（サーバー強制ガード）
+
+### 2.4.1. セッション状態遷移
+- `ACTIVE`（通常） → `SUSPENDING(privacy)` → `SUSPENDED(privacy)` → `RESUMING` → `ACTIVE`。
+- 端末・サーバ双方で冪等に処理。`SUSPENDED(privacy)` 中は Ingest/Recorder/配信は破棄・非保存。
+
+### 2.4.2. 制御エンドポイント（詳細はAPI設計参照）
+- `POST /api/v1/thinklet/control`
+  - `action`: `privacy_suspend` | `privacy_resume`
+  - `session_id`, `zone_id`, `rssi`, `device_id`, `timestamp`
+  - 認可: デバイス自身/管理者のみ。リクエストは監査に記録。
+- `POST /api/v1/thinklet/sessions/{id}/telemetry`
+  - `event`: `privacy_enter` | `privacy_exit` | `beacon_lost` | `beacon_battery_low`
+  - 付帯: `zone_id`, `beacon_id`, `vbatt`, `rssi` 等
+
+### 2.4.3. Ingest/Recorder ガード処理
+- IngestGWは `SUSPENDED(privacy)` のセッションからのRTPを破棄。Recorderはセグメントを生成しない。
+- Extractor/AIもフレーム抽出を停止。Distributorは配信しない。
+
+### 2.4.4. 監視とアラート
+- `beacon_last_seen` と TLM（電圧）を監視し、しきい値超過でSlack/Emailに通知。
+- 「予定ゾーンでビーコン未検知」イベントは月次レポートに集計。
+
 #### 2.2.2.2. 録画パイプラインのギャップ最小化
 - セグメント時間境界にスナップ、PTS連続性チェック、微小欠損の補正。
 - 再接続時は前後セグメントの再結合オプション。
