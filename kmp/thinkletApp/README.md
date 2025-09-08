@@ -11,8 +11,10 @@ THINKLET（Androidベース）にインストールして使う簡易配信ア�
 
 ### ビルド（Debug APK 作成）
 ```bash
-cd kmp
-./gradlew :thinkletApp:assembleDebug
+# ビルド
+cd kmp && ./gradlew :thinkletApp:assembleDebug
+# インストール
+cd kmp && ./gradlew :thinkletApp:installDebug
 ```
 
 生成物: `kmp/thinkletApp/build/outputs/apk/debug/thinkletApp-debug.apk`
@@ -25,17 +27,38 @@ THINKLET は画面が無いため、インストール時に権限を付与し�
 APK=kmp/thinkletApp/build/outputs/apk/debug/thinkletApp-debug.apk
 adb install -g -r "$APK"
 ```
+または、
+```bash
+adb install -r kmp/thinkletApp/build/outputs/apk/debug/thinkletApp-debug.apk
+```
 
 すでにインストール済みの場合は、権限のみ付与できます。
 
 ```bash
 adb shell pm grant com.imageflow.thinklet.app android.permission.CAMERA
 adb shell pm grant com.imageflow.thinklet.app android.permission.RECORD_AUDIO
+adb shell pm grant com.imageflow.thinklet.app android.permission.ACCESS_FINE_LOCATION
 ```
+
+- 端末の「位置情報」をON
+  - Android 6–11系ではBLEスキャンに「位置情報の権限」＋「位置情報スイッチON」が必須です。
+  - 確認: adb shell settings get secure location_mode の結果が 0 ならOFFです（3が高精度ON）。
+  - 対処: 端末の設定で位置情報をONにして、アプリを再起動。
+
+- BluetoothをONにする
+  - 端末で設定 > Bluetooth を開きONにする
+  - もしくはコマンドで設定画面を開く: adb shell am start -a android.settings.BLUETOOTH_SETTINGS
 
 ### 起動
 ```bash
 adb shell am start -n com.imageflow.thinklet.app/.MainActivity
+```
+
+### ログの確認
+```bash
+adb shell logcat | grep -i BlePrivacy # BlePrivacyの箇所は任意のタグに置換
+adb logcat -v time -s BlePrivacy:D 'ActivityManager:I' 'AndroidRuntime:E' # 期待: “BLE scanning started (type=any)” もしくは “(fallback)”
+adb logcat -v time -s BlePrivacy:D # 期待ログ: BLE service created または BLE scanning started (type=any) または ensure: ... starting scan
 ```
 
 ## 使い方
@@ -47,6 +70,7 @@ THINKLET はディスプレイ非搭載想定のため、配信先や権限は�
 ```bash
 adb shell pm grant com.imageflow.thinklet.app android.permission.CAMERA
 adb shell pm grant com.imageflow.thinklet.app android.permission.RECORD_AUDIO
+adb shell pm grant com.imageflow.thinklet.app android.permission.ACCESS_FINE_LOCATION
 ```
 
 2) WHIP URL と自動起動の設定（ブロードキャスト）

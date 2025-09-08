@@ -16,8 +16,14 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.webrtc.*
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
+import com.imageflow.thinklet.app.ble.BlePrivacyService
+import com.imageflow.thinklet.app.ble.PrivacyEvents
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,7 +85,11 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
     val context = LocalContext.current
     var log by remember { mutableStateOf("Ready.") }
     var isStreaming by remember { mutableStateOf(false) }
+    var privacyActive by remember { mutableStateOf(false) }
+    var bleRssi by remember { mutableStateOf<Int?>(null) }
+    var bleProximity by remember { mutableStateOf("") }
     val controller = remember { WhipController(activity) }
+    // Read-at-start convenience values. For runtime decisions we re-read directly from AppConfig.
     val configuredUrl = remember { AppConfig.getWhipUrl(context) }
     val autoStart = remember { AppConfig.getAutoStart(context) }
 
@@ -99,6 +109,68 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
         }
     }
 
+    // Start BLE privacy service
+    LaunchedEffect(Unit) {
+        try {
+            BlePrivacyService.start(context)
+            log = "BLEスキャンを開始しました"
+        } catch (e: Exception) {
+            log = "BLEスキャン開始エラー: ${e.message}"
+        }
+    }
+
+    // Subscribe privacy enter/exit
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, i: Intent?) {
+                when (i?.action) {
+                    PrivacyEvents.ACTION_PRIVACY_ENTER -> {
+                        privacyActive = true
+                        if (isStreaming) {
+                            controller.stop { msg -> log = msg }
+                            isStreaming = false
+                        }
+                        log = "プライバシーゾーン検知: 配信を停止しました"
+                    }
+                    PrivacyEvents.ACTION_PRIVACY_EXIT -> {
+                        privacyActive = false
+                        // Re-read latest config and permissions at the moment of EXIT
+                        val shouldAutoResume = AppConfig.getAutoResume(context)
+                        val urlNow = AppConfig.getWhipUrl(context)
+                        val permsNow = listOf(
+                            Manifest.permission.CAMERA,
+                            Manifest.permission.RECORD_AUDIO,
+                        ).all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+
+                        if (shouldAutoResume && !isStreaming && permsNow && urlNow.isNotBlank()) {
+                            controller.start(urlNow,
+                                onLog = { log = it },
+                                onError = { log = it },
+                                onConnected = { isStreaming = true },
+                                onDisconnected = { isStreaming = false })
+                            log = "プライバシーゾーン外: 配信を再開します"
+                        } else {
+                            log = "プライバシーゾーン外: 自動再開は無効（設定/権限/URLを確認）"
+                        }
+                    }
+                    PrivacyEvents.ACTION_PRIVACY_UPDATE -> {
+                        bleRssi = if (i.hasExtra(PrivacyEvents.EXTRA_RSSI)) i.getIntExtra(PrivacyEvents.EXTRA_RSSI, -127) else null
+                        bleProximity = i.getStringExtra(PrivacyEvents.EXTRA_PROXIMITY) ?: ""
+                        val inP = i.getBooleanExtra(PrivacyEvents.EXTRA_IN_PRIVACY, false)
+                        if (inP != privacyActive) privacyActive = inP
+                    }
+                }
+            }
+        }
+        val f = IntentFilter().apply {
+            addAction(PrivacyEvents.ACTION_PRIVACY_ENTER)
+            addAction(PrivacyEvents.ACTION_PRIVACY_EXIT)
+            addAction(PrivacyEvents.ACTION_PRIVACY_UPDATE)
+        }
+        context.registerReceiver(receiver, f)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
     // Minimal status-only UI for debugging; THINKLETでは表示されません
     Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("THINKLET ライブ配信 (WHIP)")
@@ -106,7 +178,17 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
         Text("設定URL: ${configuredUrl}")
         Text("POST先URL: ${postUrl}")
         Text("状態: ${log}")
-        if (isStreaming) Text("配信中") else Text("待機中")
+        val whipStatus = if (isStreaming) "WHIP: 配信中" else "WHIP: 停止中"
+        Text(whipStatus)
+        val rssiText = bleRssi?.let { "$it dBm" } ?: "未検出"
+        val proxLabel = when (bleProximity) {
+            "near" -> "近接"
+            "mid" -> "境界"
+            "far" -> "遠隔"
+            else -> ""
+        }
+        Text("BLE信号強度: $rssiText ${if (proxLabel.isNotEmpty()) "($proxLabel)" else ""}")
+        if (privacyActive) Text("プライバシーモード中（BLE）")
 
         // Connectivity test display
         Text("接続テスト: whip/test")
@@ -302,7 +384,7 @@ private class WhipController(private val activity: ComponentActivity) {
                                     .url(publishUrl)
                                     .addHeader("Content-Type", "application/sdp")
                                     .addHeader("Accept", "application/sdp")
-                                    .post(RequestBody.create(mediaType, offerSdp.toByteArray()))
+                                    .post(offerSdp.toByteArray().toRequestBody(mediaType))
                                     .build()
                                 Thread {
                                     try {
@@ -312,7 +394,7 @@ private class WhipController(private val activity: ComponentActivity) {
                                                 .url(url)
                                                 .addHeader("Content-Type", "application/sdp")
                                                 .addHeader("Accept", "application/sdp")
-                                                .post(RequestBody.create(mediaType, offerSdp.toByteArray()))
+                                                .post(offerSdp.toByteArray().toRequestBody(mediaType))
                                                 .build()
                                             http.newCall(r).execute().use { resp ->
                                                 return Pair(resp.code, if (resp.isSuccessful) (resp.body?.string() ?: "") else null).also {
