@@ -212,8 +212,8 @@ private fun AndroidStreamScreen(activity: ComponentActivity) {
         }
     }
 
-    LaunchedEffect(hasStreamPermissions, autoStart) {
-        if (hasStreamPermissions && autoStart && !streaming) {
+    LaunchedEffect(hasStreamPermissions, autoStart, privacyActive) {
+        if (hasStreamPermissions && autoStart && !streaming && !privacyActive) {
             startStreaming(AppConfig.getWhipUrl(context))
         }
     }
@@ -262,7 +262,7 @@ private fun AndroidStreamScreen(activity: ComponentActivity) {
                         val permsOk = streamPermissions.all {
                             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
                         }
-                        if (shouldAutoResume && permsOk) {
+                        if (shouldAutoResume && permsOk && !privacyActive) {
                             autoResume = true
                             startStreaming(urlNow)
                             logText = "プライバシーゾーン解除: 配信を再開します"

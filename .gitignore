@@ -410,3 +410,5 @@ signing.properties
 
 # Gradle distributions (temporary build files)
 kmp/gradle-*/
+
+.DS_Store
