@@ -19,13 +19,16 @@ object AppConfig {
     private const val KEY_RSSI_EXIT = "privacy.exit.rssi"   // default -80
     private const val KEY_ENTER_SEC = "privacy.enter.seconds" // default 2
     private const val KEY_EXIT_SEC = "privacy.exit.seconds"   // default 5
+    private const val KEY_MATCH_STRICT = "privacy.match.strict" // only control by whitelisted beacons
+    private const val KEY_HOLD_SEC = "privacy.hold.seconds" // presence hold to tolerate sparse adverts (default 30)
+    private const val KEY_HOLD_EXTEND_NONUID = "privacy.hold.extendNonUid" // extend hold with non-UID frames from same MAC
 
     fun getWhipUrl(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val existing = prefs.getString(KEY_URL, null)
         if (!existing.isNullOrBlank()) return existing
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        return "http://192.168.0.9:8889/whip/thinklet/${deviceId}"
+        return "http://192.168.0.5:8889/whip/thinklet/${deviceId}"
     }
 
     fun setWhipUrl(context: Context, url: String) {
@@ -127,5 +130,29 @@ object AppConfig {
     fun setExitSeconds(context: Context, sec: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putInt(KEY_EXIT_SEC, sec).apply()
+    }
+
+    fun isMatchStrict(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_MATCH_STRICT, true)
+
+    fun setMatchStrict(context: Context, strict: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_MATCH_STRICT, strict).apply()
+    }
+
+    fun getPresenceHoldSeconds(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_HOLD_SEC, 30)
+
+    fun setPresenceHoldSeconds(context: Context, sec: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putInt(KEY_HOLD_SEC, sec).apply()
+    }
+
+    fun getHoldExtendNonUid(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_HOLD_EXTEND_NONUID, true)
+
+    fun setHoldExtendNonUid(context: Context, enable: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_HOLD_EXTEND_NONUID, enable).apply()
     }
 }

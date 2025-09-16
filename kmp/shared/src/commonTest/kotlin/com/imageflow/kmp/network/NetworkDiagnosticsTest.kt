@@ -11,8 +11,8 @@ class NetworkDiagnosticsTest {
     @Test
     fun testUrlValidationAndNormalization() {
         // Test basic URL validation
-        val (normalized1, error1) = UrlUtils.validateAndNormalizeBaseUrl("http://192.168.0.9:8000")
-        assertEquals("http://192.168.0.9:8000/v1", normalized1)
+        val (normalized1, error1) = UrlUtils.validateAndNormalizeBaseUrl("http://192.168.0.5:8000")
+        assertEquals("http://192.168.0.5:8000/v1", normalized1)
         assertEquals(null, error1)
         
         // Test URL with existing /api/v1
@@ -21,12 +21,12 @@ class NetworkDiagnosticsTest {
         assertEquals(null, error2)
         
         // Test invalid URL (no scheme)
-        val (normalized3, error3) = UrlUtils.validateAndNormalizeBaseUrl("192.168.0.9:8000")
+        val (normalized3, error3) = UrlUtils.validateAndNormalizeBaseUrl("192.168.0.5:8000")
         assertEquals(null, normalized3)
         assertTrue(error3?.contains("http://") ?: false)
         
         // Test URL with invalid endpoint
-        val (normalized4, error4) = UrlUtils.validateAndNormalizeBaseUrl("http://192.168.0.9:8000/v1/products")
+        val (normalized4, error4) = UrlUtils.validateAndNormalizeBaseUrl("http://192.168.0.5:8000/v1/products")
         assertEquals(null, normalized4)
         assertTrue(error4?.contains("エンドポイントを含めないでください") ?: false)
     }
@@ -40,8 +40,8 @@ class NetworkDiagnosticsTest {
     
     @Test
     fun testWhitespaceHandling() {
-        val (normalized, error) = UrlUtils.validateAndNormalizeBaseUrl("  http://192.168.0.9:8000  ")
-        assertEquals("http://192.168.0.9:8000/v1", normalized)
+        val (normalized, error) = UrlUtils.validateAndNormalizeBaseUrl("  http://192.168.0.5:8000  ")
+        assertEquals("http://192.168.0.5:8000/v1", normalized)
         assertEquals(null, error)
     }
     

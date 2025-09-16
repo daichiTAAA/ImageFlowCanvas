@@ -88,6 +88,7 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
     var privacyActive by remember { mutableStateOf(false) }
     var bleRssi by remember { mutableStateOf<Int?>(null) }
     var bleProximity by remember { mutableStateOf("") }
+    var bleBeaconId by remember { mutableStateOf("") }
     val controller = remember { WhipController(activity) }
     // Read-at-start convenience values. For runtime decisions we re-read directly from AppConfig.
     val configuredUrl = remember { AppConfig.getWhipUrl(context) }
@@ -154,6 +155,7 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
                         }
                     }
                     PrivacyEvents.ACTION_PRIVACY_UPDATE -> {
+                        bleBeaconId = i.getStringExtra(PrivacyEvents.EXTRA_BEACON_ID) ?: ""
                         bleRssi = if (i.hasExtra(PrivacyEvents.EXTRA_RSSI)) i.getIntExtra(PrivacyEvents.EXTRA_RSSI, -127) else null
                         bleProximity = i.getStringExtra(PrivacyEvents.EXTRA_PROXIMITY) ?: ""
                         val inP = i.getBooleanExtra(PrivacyEvents.EXTRA_IN_PRIVACY, false)
@@ -188,6 +190,7 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
             else -> ""
         }
         Text("BLE信号強度: $rssiText ${if (proxLabel.isNotEmpty()) "($proxLabel)" else ""}")
+        if (bleBeaconId.isNotBlank()) Text("検出ビーコン: $bleBeaconId")
         if (privacyActive) Text("プライバシーモード中（BLE）")
 
         // Connectivity test display

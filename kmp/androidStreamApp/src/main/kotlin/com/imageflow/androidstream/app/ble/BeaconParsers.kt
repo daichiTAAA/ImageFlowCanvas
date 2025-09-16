@@ -1,4 +1,4 @@
-package com.imageflow.thinklet.app.ble
+package com.imageflow.androidstream.app.ble
 
 import android.bluetooth.le.ScanRecord
 import java.nio.ByteBuffer
@@ -19,16 +19,14 @@ object BeaconParsers {
     fun parseEddystoneUid(record: ScanRecord): EddystoneUid? {
         val svcData = record.getServiceData(android.os.ParcelUuid.fromString(String.format("0000%04x-0000-1000-8000-00805f9b34fb", EDDYSTONE_SVC)))
         if (svcData == null || svcData.size < 20) return null
-        // frameType(0x00=UID), txPower, 10-byte namespace, 6-byte instance
         if (svcData[0].toInt() != 0x00) return null
         val ns = svcData.copyOfRange(2, 12)
         val inst = svcData.copyOfRange(12, 18)
         return EddystoneUid(ns, inst)
     }
 
-    fun getEddystoneServiceData(record: ScanRecord): ByteArray? {
-        return record.getServiceData(android.os.ParcelUuid.fromString(String.format("0000%04x-0000-1000-8000-00805f9b34fb", EDDYSTONE_SVC)))
-    }
+    fun getEddystoneServiceData(record: ScanRecord): ByteArray? =
+        record.getServiceData(android.os.ParcelUuid.fromString(String.format("0000%04x-0000-1000-8000-00805f9b34fb", EDDYSTONE_SVC)))
 
     fun getEddystoneFrameType(record: ScanRecord): Int? {
         val d = getEddystoneServiceData(record) ?: return null
@@ -47,7 +45,6 @@ object BeaconParsers {
     }
 
     fun parseIBeacon(record: ScanRecord): IBeacon? {
-        // iBeacon = Manufacturer Specific Data (Apple Company ID 0x004C) with type 0x02, len 0x15
         val mfg = record.manufacturerSpecificData ?: return null
         for (i in 0 until mfg.size()) {
             val companyId = mfg.keyAt(i)
@@ -70,6 +67,8 @@ object BeaconParsers {
         if (hex.isNullOrBlank()) return null
         val s = hex.lowercase(Locale.US).replace("[^0-9a-f]".toRegex(), "")
         if (s.length % 2 != 0) return null
-        return ByteArray(s.length / 2) { idx -> s.substring(idx * 2, idx * 2 + 2).toInt(16).toByte() }
+        return ByteArray(s.length / 2) { idx ->
+            s.substring(idx * 2, idx * 2 + 2).toInt(16).toByte()
+        }
     }
 }

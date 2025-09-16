@@ -19,7 +19,7 @@ object ConnectionTroubleshootingGuide {
                 3. Check for corporate/MDM proxy policies
                 4. Try using airplane mode then reconnect to Wi-Fi
                 5. For emulator: Use 10.0.2.2 instead of localhost
-                6. For real device: Use the actual PC IP address (e.g., 192.168.0.9)
+                6. For real device: Use the actual PC IP address (e.g., 192.168.0.5)
                 
                 TECHNICAL DETAILS:
                 - The app explicitly disables proxy usage
@@ -81,7 +81,7 @@ object ConnectionTroubleshootingGuide {
                 4. Verify URL format: http://IP:8000/v1 (no extra paths)
                 
                 NETWORK SETUP:
-                - Real device: Use PC's IP address (e.g., http://192.168.0.9:8000/v1)
+                - Real device: Use PC's IP address (e.g., http://192.168.0.5:8000/v1)
                 - Emulator: Use http://10.0.2.2:8000/v1
                 - Always use HTTP (not HTTPS) for local development
                 """.trimIndent()

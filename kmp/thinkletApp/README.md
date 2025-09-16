@@ -1,5 +1,8 @@
 # THINKLET App (Android)
 
+./kmp/thinkletApp を元に、Androidのスマートフォンで実行できるよう、./kmp/androidStreamApp にWebRTCストリームとBLEビーコンを使用した配信オンオフ機能を実装したアプリ
+▌ ケーションを作成してください。
+
 THINKLET（Androidベース）にインストールして使う簡易配信アプリ。WHIP/RTMP の配信 URL を入力し、配信操作の UI を提供します（配信ロジックは未実装のスタブ）。
 
 ## 機能
@@ -49,6 +52,33 @@ adb shell pm grant com.imageflow.thinklet.app android.permission.ACCESS_FINE_LOC
   - 端末で設定 > Bluetooth を開きONにする
   - もしくはコマンドで設定画面を開く: adb shell am start -a android.settings.BLUETOOTH_SETTINGS
 
+- BLEビーコンの指定(ibeacon使用時)
+```bash
+# 手動設定の例
+adb shell am broadcast -a com.imageflow.thinklet.SET_CONFIG \
+  --es beacon.type ibeacon \
+  --es ibeacon.uuid "50765CB7-D9EA-4E21-99A4-FA879613A492" \
+  --ei ibeacon.major 19441 \
+  --ei ibeacon.minor 42098 \
+  --ez privacy.match.strict true
+```
+- uuid/major/minor は設置したビーコンに合わせて変更してください。
+例
+```bash
+adb shell am broadcast -a com.imageflow.thinklet.SET_CONFIG \
+  --es beacon.type ibeacon \
+  --es ibeacon.uuid "12345678-ABCD-EFGH-IJKL-123456789abc" \
+  --ei ibeacon.major 1000 \
+  --ei ibeacon.minor 2000 \
+  --ez privacy.match.strict true
+```
+
+- BLEビーコンの指定(eddystone使用時)
+- namespace/instance は設置したビーコンに合わせて変更してください。
+```bash
+adb shell am broadcast -a com.imageflow.thinklet.SET_CONFIG --es beacon.type eddystone_uid --es eddystone.namespace 00112233445566778899 --es eddystone.instance a1b2c3d4e5f6 --ez privacy.match.strict true
+```
+
 ### 起動
 ```bash
 adb shell am start -n com.imageflow.thinklet.app/.MainActivity
@@ -59,6 +89,7 @@ adb shell am start -n com.imageflow.thinklet.app/.MainActivity
 adb shell logcat | grep -i BlePrivacy # BlePrivacyの箇所は任意のタグに置換
 adb logcat -v time -s BlePrivacy:D 'ActivityManager:I' 'AndroidRuntime:E' # 期待: “BLE scanning started (type=any)” もしくは “(fallback)”
 adb logcat -v time -s BlePrivacy:D # 期待ログ: BLE service created または BLE scanning started (type=any) または ensure: ... starting scan
+adb logcat -v time -s BlePrivacy:I
 ```
 
 ## 使い方
