@@ -258,8 +258,8 @@ THINKLETは画面を持たないため、端末アプリ（ハンディターミ
 - LED/音/振動で「プライバシーモード中」を明示。
 
 ## 3.3.3. サーバ連携
-- `POST /api/v1/thinklet/control` で `privacy_suspend` / `privacy_resume` を送信。`zone_id`,`rssi`,`session_id` を含む。
-- `POST /api/v1/thinklet/sessions/{id}/telemetry` に入退室イベントとメトリクスを送信（監査）。
+- `POST /api/v1/uplink/control` で `privacy_suspend` / `privacy_resume` を送信。`zone_id`,`rssi`,`session_id` を含む。
+- `POST /api/v1/uplink/sessions/{id}/telemetry` に入退室イベントとメトリクスを送信（監査）。
 - サーバは当該セッションのIngest/Recorder/配信を強制停止（保存不可）。
 
 ## 3.3.4. 署名付きQR（フォールバック）

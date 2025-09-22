@@ -181,14 +181,14 @@ pathDefaults:
 paths:
   all_others:
 
-  # Enable recording for THINKLET streams under thinklet/<device_id>
-  "~^thinklet/.+$":
+  # Enable recording for uplink streams under uplink/<device_id>
+  "~^uplink/.+$":
     record: yes
     recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
     recordSegmentDuration: 15m
     recordDeleteAfter: 0s
-  # Also support single-segment variant thinklet-<device_id>
-  "~^thinklet-.+$":
+  # Also support single-segment variant uplink-<device_id>
+  "~^uplink-.+$":
     record: yes
     recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
     recordSegmentDuration: 15m

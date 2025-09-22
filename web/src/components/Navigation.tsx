@@ -38,8 +38,6 @@ export const Navigation: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md")); // 768px以下
   const isTablet = useMediaQuery(theme.breakpoints.down("lg")); // 1024px以下
 
-  
-
   const maxPrimary = useMemo(() => (isTablet ? 4 : 6), [isTablet]);
   const navigationItems = [
     { icon: <DashboardIcon />, label: "ダッシュボード", path: "/" },
@@ -56,8 +54,8 @@ export const Navigation: React.FC = () => {
     },
     {
       icon: <VideocamIcon />,
-      label: "THINKLET 映像",
-      path: "/thinklet",
+      label: "カメラ映像",
+      path: "/uplink",
     },
     {
       icon: <InspectionIcon />,
@@ -68,18 +66,29 @@ export const Navigation: React.FC = () => {
     { icon: <ResultsIcon />, label: "検査結果", path: "/inspection-results" },
     { icon: <StorageIcon />, label: "gRPCサービス", path: "/grpc-services" },
   ];
-  const primaryItems = navigationItems.slice(0, Math.min(maxPrimary, navigationItems.length));
+  const primaryItems = navigationItems.slice(
+    0,
+    Math.min(maxPrimary, navigationItems.length)
+  );
   const overflowItems = navigationItems.slice(primaryItems.length);
 
   const currentPath = location.pathname;
   const activeIndexInPrimary = primaryItems.findIndex((i) => {
-    if (i.path === "/executions" && currentPath.startsWith("/execution")) return true;
+    if (i.path === "/executions" && currentPath.startsWith("/execution"))
+      return true;
     return i.path === currentPath;
   });
   const isActiveInOverflow = overflowItems.some(
-    (i) => i.path === currentPath || (i.path === "/executions" && currentPath.startsWith("/execution"))
+    (i) =>
+      i.path === currentPath ||
+      (i.path === "/executions" && currentPath.startsWith("/execution"))
   );
-  const tabValue = activeIndexInPrimary >= 0 ? activeIndexInPrimary : (isActiveInOverflow && overflowItems.length > 0 ? primaryItems.length : 0);
+  const tabValue =
+    activeIndexInPrimary >= 0
+      ? activeIndexInPrimary
+      : isActiveInOverflow && overflowItems.length > 0
+      ? primaryItems.length
+      : 0;
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     if (newValue < primaryItems.length) {
@@ -130,7 +139,9 @@ export const Navigation: React.FC = () => {
                 sx={{
                   cursor: "pointer",
                   backgroundColor:
-                    (item.path === currentPath || (item.path === "/executions" && currentPath.startsWith("/execution")))
+                    item.path === currentPath ||
+                    (item.path === "/executions" &&
+                      currentPath.startsWith("/execution"))
                       ? "rgba(255, 255, 255, 0.1)"
                       : "transparent",
                   "&:hover": {
@@ -197,9 +208,20 @@ export const Navigation: React.FC = () => {
           />
         )}
       </Tabs>
-      <Menu anchorEl={moreAnchorEl} open={Boolean(moreAnchorEl)} onClose={() => setMoreAnchorEl(null)} keepMounted>
+      <Menu
+        anchorEl={moreAnchorEl}
+        open={Boolean(moreAnchorEl)}
+        onClose={() => setMoreAnchorEl(null)}
+        keepMounted
+      >
         {overflowItems.map((item, idx) => (
-          <MenuItem key={idx} onClick={() => { setMoreAnchorEl(null); navigate(item.path); }}>
+          <MenuItem
+            key={idx}
+            onClick={() => {
+              setMoreAnchorEl(null);
+              navigate(item.path);
+            }}
+          >
             <ListItemIcon sx={{ minWidth: 32 }}>{item.icon}</ListItemIcon>
             <ListItemText primary={item.label} />
           </MenuItem>

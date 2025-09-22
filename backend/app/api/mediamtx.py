@@ -29,8 +29,8 @@ def _playback_public_base() -> str:
 
 
 @router.get("/streams", response_model=Dict[str, Any])
-async def list_thinklet_streams(page: int = 0, items_per_page: int = 100):
-    """List active thinklet streams (paths that match thinklet/<deviceId>)."""
+async def list_uplink_streams(page: int = 0, items_per_page: int = 100):
+    """List active uplink streams (paths that match uplink/<deviceId>)."""
     api = _mediamtx_base()
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
@@ -44,7 +44,7 @@ async def list_thinklet_streams(page: int = 0, items_per_page: int = 100):
             raise HTTPException(status_code=502, detail=f"MediaMTX API error: {e}")
 
     items = data.get("items", [])
-    patt = re.compile(r"^(thinklet/.+|thinklet-.+|[a-f0-9]{16})$")
+    patt = re.compile(r"^(uplink/.+|uplink-.+|[a-f0-9]{16})$")
     hls_base = _mediamtx_playback_base().rstrip("/")
 
     streams: List[Dict[str, Any]] = []
@@ -54,8 +54,8 @@ async def list_thinklet_streams(page: int = 0, items_per_page: int = 100):
             continue
         if "/" in name:
             device_id = name.split("/", 1)[1]
-        elif name.startswith("thinklet-"):
-            device_id = name.split("thinklet-",1)[1]
+        elif name.startswith("uplink-"):
+            device_id = name.split("uplink-",1)[1]
         else:
             device_id = name
         streams.append({
@@ -76,7 +76,7 @@ async def list_thinklet_streams(page: int = 0, items_per_page: int = 100):
 
 @router.get("/recordings/{path:path}", response_model=Dict[str, Any])
 async def get_recordings(path: str):
-    """List recordings for a given thinklet path."""
+    """List recordings for a given uplink path."""
     api = _mediamtx_base()
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:

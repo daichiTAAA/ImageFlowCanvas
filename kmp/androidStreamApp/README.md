@@ -91,7 +91,7 @@ UI 以外にも、以下のように設定ブロードキャストで各種値�
 
 ```bash
 adb shell am broadcast -a com.imageflow.androidstream.SET_CONFIG \\
-  --es url http://192.168.1.10:8889/whip/thinklet/<deviceId> \\
+  --es url http://192.168.1.10:8889/whip/uplink/<deviceId> \\
   --ez autoStart true \\
   --ez autoResume true \\
   --es beacon.type eddystone_uid \\

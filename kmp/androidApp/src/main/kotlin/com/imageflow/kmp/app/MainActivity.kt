@@ -213,7 +213,7 @@ fun ImageFlowMobileApp() {
             AppScreen.THINKLET_STREAM -> {
                 ScreenWithTopBar(title = "THINKLET 配信", onBack = { currentScreen = AppScreen.MAIN }) {
                     ThinkletStreamingScreen(
-                        defaultUrl = "http://" + ("localhost") + ":8889/whip/thinklet/demo1",
+                        defaultUrl = "http://" + ("localhost") + ":8889/whip/uplink/demo1",
                         onBack = { currentScreen = AppScreen.MAIN }
                     )
                 }

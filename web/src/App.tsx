@@ -7,7 +7,7 @@ import { ExecutionList } from "./pages/ExecutionList";
 import { Login } from "./pages/Login";
 import { GrpcServicesStatus } from "./pages/GrpcServicesStatus";
 import { CameraStream } from "./pages/CameraStream";
-import ThinkletViewer from "./pages/ThinkletViewer";
+import UplinkViewer from "./pages/UplinkViewer";
 import { InspectionMasters } from "./pages/InspectionMasters";
 import { InspectionResults } from "./pages/InspectionResults";
 import { OrderInfo } from "./pages/OrderInfo";
@@ -39,7 +39,7 @@ function AppContent() {
           <Route path="/execution/:id" element={<ExecutionMonitor />} />
           <Route path="/grpc-services" element={<GrpcServicesStatus />} />
           <Route path="/camera-stream" element={<CameraStream />} />
-          <Route path="/thinklet" element={<ThinkletViewer />} />
+          <Route path="/uplink" element={<UplinkViewer />} />
           <Route path="/inspection-masters" element={<InspectionMasters />} />
           <Route path="/inspection-results" element={<InspectionResults />} />
           <Route path="/order-info" element={<OrderInfo />} />

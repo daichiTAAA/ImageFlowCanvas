@@ -151,11 +151,11 @@ sequenceDiagram
 - 端末・サーバ双方で冪等に処理。`SUSPENDED(privacy)` 中は Ingest/Recorder/配信は破棄・非保存。
 
 ### 2.4.2. 制御エンドポイント（詳細はAPI設計参照）
-- `POST /api/v1/thinklet/control`
+- `POST /api/v1/uplink/control`
   - `action`: `privacy_suspend` | `privacy_resume`
   - `session_id`, `zone_id`, `rssi`, `device_id`, `timestamp`
   - 認可: デバイス自身/管理者のみ。リクエストは監査に記録。
-- `POST /api/v1/thinklet/sessions/{id}/telemetry`
+- `POST /api/v1/uplink/sessions/{id}/telemetry`
   - `event`: `privacy_enter` | `privacy_exit` | `beacon_lost` | `beacon_battery_low`
   - 付帯: `zone_id`, `beacon_id`, `vbatt`, `rssi` 等
 
@@ -347,7 +347,7 @@ graph LR
 
 ### 2.4.3. ストレージ設計
 
-- バケット/パス: `vms/thinklet/{device_id}/{yyyy}/{mm}/{dd}/{hh}/...`（サムネ/メタJSON併置）
+- バケット/パス: `vms/uplink/{device_id}/{yyyy}/{mm}/{dd}/{hh}/...`（サムネ/メタJSON併置）
 - オブジェクト: `mp4` 本体、`_meta.json`（メタ）、`_audio.aac`（分離時）
 - MinIO EC構成（例: 8+4）で90日保持。クラウド（例: ADLS）へ日次アーカイブ。
 
@@ -378,7 +378,7 @@ graph LR
 
 ### 2.4.8. テレメトリ・監視
 
-- デバイス→API: `POST /thinklet/sessions/{id}/telemetry` を受信し `thinklet_stream_metrics` へ保存。
+- デバイス→API: `POST /uplink/sessions/{id}/telemetry` を受信し `uplink_stream_metrics` へ保存。
 - 指標: fps/bitrate/packet_loss/rtt/view_angle/wearing_state/qos 等。保持は30–90日でロールオフ。
 - 可観測性: OpenTelemetryでメトリクス/トレース収集、ダッシュボード（fps, latency, ingest errors, record gaps）。
 

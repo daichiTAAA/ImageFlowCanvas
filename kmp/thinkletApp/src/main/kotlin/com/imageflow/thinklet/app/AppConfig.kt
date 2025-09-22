@@ -14,7 +14,7 @@ object AppConfig {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val existing = prefs.getString(KEY_URL, null)
         if (!existing.isNullOrBlank()) {
-            val migrated = existing.replace("/whip/mobile/", "/whip/thinklet/")
+            val migrated = existing.replace("/whip/mobile/", "/whip/uplink/").replace("/whip/thinklet/", "/whip/uplink/")
             val sanitized = sanitizeWhipUrl(context, migrated)
             if (sanitized != existing) {
                 prefs.edit().putString(KEY_URL, sanitized).apply()
@@ -22,7 +22,7 @@ object AppConfig {
             return sanitized
         }
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        return "http://192.168.0.5:8889/whip/thinklet/${deviceId}"
+        return "http://192.168.0.5:8889/whip/uplink/${deviceId}"
     }
 
     fun setWhipUrl(context: Context, url: String) {
@@ -61,7 +61,8 @@ object AppConfig {
             } else {
                 val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
                 val segments = parsed.pathSegments ?: emptyList()
-                val currentId = if (segments.size >= 3 && segments[0] == "whip" && segments[1] == "thinklet") {
+                val slug = segments.getOrNull(1)
+                val currentId = if (segments.size >= 3 && segments[0] == "whip" && slug in setOf("uplink", "thinklet", "mobile")) {
                     segments[2].ifBlank { deviceId }
                 } else {
                     null
@@ -73,7 +74,7 @@ object AppConfig {
                     host + port
                 }
                 if (authority.isNotBlank()) builder.encodedAuthority(authority)
-                builder.encodedPath("/whip/thinklet/${currentId ?: deviceId}")
+                builder.encodedPath("/whip/uplink/${currentId ?: deviceId}")
                 if (!parsed.encodedQuery.isNullOrBlank()) builder.encodedQuery(parsed.encodedQuery)
                 if (!parsed.fragment.isNullOrBlank()) builder.fragment(parsed.fragment)
                 builder.build().toString()

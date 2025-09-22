@@ -22,7 +22,7 @@ import androidx.core.content.ContextCompat
  *   implementation("com.github.pedroSG94.rtmp-rtsp-stream-client-java:rtplibrary:2.3.9")
  *   implementation("com.github.pedroSG94.rtmp-rtsp-stream-client-java:encoder:2.3.9")
  *
- * Then a simple RTMP URL is: rtmp://<host>:1935/live/thinklet/<deviceId>
+ * Then a simple RTMP URL is: rtmp://<host>:1935/live/uplink/<deviceId>
  * (Enable RTMP in MediaMTX if you want to use RTMP instead of WHIP.)
  */
 @Composable
@@ -56,11 +56,11 @@ fun ThinkletStreamingScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(text = "THINKLET 映像配信 (RTMP/WHIP 準備)")
+        Text(text = "カメラ 映像配信 (RTMP/WHIP 準備)")
         OutlinedTextField(
             value = rtmpUrl,
             onValueChange = { rtmpUrl = it },
-            label = { Text("配信URL (例: http://<host>:8889/whip/thinklet/<deviceId> or rtmp://<host>:1935/thinklet/<deviceId>)") },
+            label = { Text("配信URL (例: http://<host>:8889/whip/uplink/<deviceId> or rtmp://<host>:1935/uplink/<deviceId>)") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
