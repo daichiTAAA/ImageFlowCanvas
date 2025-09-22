@@ -72,15 +72,15 @@ export default function UplinkViewer() {
   const [recPath, setRecPath] = useState("");
   const [recSegments, setRecSegments] = useState<any[]>([]);
   const [recPlayback, setRecPlayback] = useState<any[]>([]);
-  const [recFormatMp4, setRecFormatMp4] = useState(true);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
-  const [segmentQuery, setSegmentQuery] = useState("");
   // 録画シーク用の絶対オフセット方式
   const [recClipStartIso, setRecClipStartIso] = useState<string | null>(null); // クリップ全体の開始ISO
   const [recClipDuration, setRecClipDuration] = useState<number | null>(null); // クリップ総尺（秒）
   const [recBaseOffsetSec, setRecBaseOffsetSec] = useState<number>(0); // 現ストリームの先頭がクリップ先頭から何秒か
   const [recSeekPos, setRecSeekPos] = useState<number>(0); // 表示用の絶対位置（秒）
+
+  const RECORDING_PLAYBACK_FORMAT = "mp4";
 
   const deriveDeviceId = useCallback((path: string) => {
     if (!path) return path;
@@ -224,7 +224,6 @@ export default function UplinkViewer() {
         setRecordingSelectionMode("auto");
         setSelectedRecordingPath(initialPath);
         setRecPath(initialPath);
-        setSegmentQuery("");
         await loadRecordingPath(initialPath, { force: true });
       } else if (currentSelected) {
         setRecPath(currentSelected);
@@ -259,7 +258,6 @@ export default function UplinkViewer() {
     setRecordingSelectionMode("auto");
     setSelectedRecordingPath(path);
     setRecPath(path);
-    setSegmentQuery("");
     void loadRecordingPath(path, { resetSeek: false });
   }, [deviceId, streams, loadRecordingPath, recordingSelectionMode, selectedRecordingPath]);
 
@@ -278,14 +276,10 @@ export default function UplinkViewer() {
     [recordingIndex, selectedRecordingPath]
   );
 
-  const filteredSegments = useMemo(() => {
-    const source = (recPlayback.length > 0 ? recPlayback : recSegments) as any[];
-    const q = segmentQuery.trim().toLowerCase();
-    if (!q) return source;
-    return source.filter((seg) =>
-      String(seg?.start || "").toLowerCase().includes(q)
-    );
-  }, [recPlayback, recSegments, segmentQuery]);
+  const displaySegments = useMemo(
+    () => (recPlayback.length > 0 ? recPlayback : recSegments) as any[],
+    [recPlayback, recSegments]
+  );
 
   const play = (hlsUrl: string) => {
     setHlsError("");
@@ -765,7 +759,6 @@ export default function UplinkViewer() {
                         setRecordingSelectionMode("manual");
                         setSelectedRecordingPath(item.path);
                         setRecPath(item.path);
-                        setSegmentQuery("");
                         void loadRecordingPath(item.path, { resetSeek: false });
                       }}
                     >
@@ -793,98 +786,9 @@ export default function UplinkViewer() {
                       {activeRecordingMeta.segment_count} 件
                     </Typography>
                   )}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 2,
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      mb: 2,
-                    }}
-                  >
-                    <TextField
-                      size="small"
-                      sx={{ minWidth: 320, flexGrow: 1 }}
-                      label="録画パス"
-                      value={recPath}
-                      id="recording-path-input"
-                      name="recordingPath"
-                      onChange={(e) => setRecPath(e.target.value)}
-                      placeholder="uplink/xxxxxxxxxxxxxxxx"
-                    />
-                    <Button
-                      variant="outlined"
-                      disabled={!recPath}
-                      onClick={() => {
-                        const safe = recPath.trim();
-                        if (!safe) {
-                          setRecError("録画パスが空です");
-                          return;
-                        }
-                        setRecordingSelectionMode("manual");
-                        setSelectedRecordingPath(safe);
-                        setSegmentQuery("");
-                        void loadRecordingPath(safe, { resetSeek: true, force: true });
-                      }}
-                    >
-                      選択パスを読込
-                    </Button>
-                    <FormControl sx={{ minWidth: 140 }}>
-                      <InputLabel id="fmt-label">録画フォーマット</InputLabel>
-                      <Select
-                        id="recording-format-select"
-                        labelId="fmt-label"
-                        label="録画フォーマット"
-                        value={recFormatMp4 ? "mp4" : "fmp4"}
-                        name="recordingFormat"
-                        onChange={(e) =>
-                          setRecFormatMp4((e.target.value as string) === "mp4")
-                        }
-                      >
-                        <MenuItem value="mp4">MP4（互換性高）</MenuItem>
-                        <MenuItem value="fmp4">fMP4（デフォルト）</MenuItem>
-                      </Select>
-                    </FormControl>
-                    <Button
-                      variant="text"
-                      onClick={() => {
-                        const s = streams.find((x) => x.device_id === deviceId);
-                        const raw = s ? s.path : deviceId ? `uplink/${deviceId}` : "";
-                        if (raw) {
-                          setRecordingSelectionMode("auto");
-                          setRecPath(raw);
-                          setSelectedRecordingPath(raw);
-                          setSegmentQuery("");
-                          void loadRecordingPath(raw, { resetSeek: false });
-                        }
-                      }}
-                    >
-                      現在のデバイスから入力
-                    </Button>
-                  </Box>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 2,
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      mb: 2,
-                    }}
-                  >
-                    <TextField
-                      size="small"
-                      sx={{ minWidth: 280, flexGrow: 1 }}
-                      label="録画検索 (開始時刻)"
-                      value={segmentQuery}
-                      id="segment-query"
-                      name="segmentQuery"
-                      onChange={(e) => setSegmentQuery(e.target.value)}
-                      placeholder="2025-09-22T10:00"
-                    />
-                    <Typography variant="body2">
-                      表示件数: {filteredSegments.length}
-                    </Typography>
-                  </Box>
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    表示件数: {displaySegments.length}
+                  </Typography>
                   {recClipStartIso && recClipDuration != null && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2">録画シーク（このクリップ内）</Typography>
@@ -916,11 +820,14 @@ export default function UplinkViewer() {
                             recClipDuration != null
                               ? Math.max(1, recClipDuration - seekAbsSec)
                               : undefined;
-                          const url = `${getBase}/get?path=${encodeURIComponent(
-                            recPath
-                          )}&start=${encodeURIComponent(newStart)}${
-                            newDur ? `&duration=${newDur}` : ""
-                          }${recFormatMp4 ? "&format=mp4" : ""}`;
+                          const params = new URLSearchParams();
+                          params.set("path", recPath);
+                          params.set("start", newStart);
+                          if (newDur) params.set("duration", String(newDur));
+                          if (RECORDING_PLAYBACK_FORMAT) {
+                            params.set("format", RECORDING_PLAYBACK_FORMAT);
+                          }
+                          const url = `${getBase}/get?${params.toString()}`;
                           try {
                             (window as any).__recSeeking = true;
                             await stopAll();
@@ -1032,7 +939,7 @@ export default function UplinkViewer() {
                       {recError}
                     </Typography>
                   )}
-                  {!recLoading && filteredSegments.length > 0 ? (
+                  {!recLoading && displaySegments.length > 0 ? (
                     <Box
                       sx={{
                         display: "grid",
@@ -1049,7 +956,7 @@ export default function UplinkViewer() {
                       <Typography variant="subtitle2" sx={{ textAlign: "right" }}>
                         操作
                       </Typography>
-                      {filteredSegments.map((it: any) => {
+                      {displaySegments.map((it: any) => {
                         const start = it.start as string;
                         const dur = (it as any).duration as number | undefined;
                         let url = (it as any).url as string | undefined;
@@ -1058,14 +965,22 @@ export default function UplinkViewer() {
                         if (!url && start) {
                           const loc = window.location;
                           const base = `${loc.protocol}//${loc.hostname}:9996`;
-                          url = `${base}/get?path=${encodeURIComponent(
-                            recPath
-                          )}&start=${encodeURIComponent(start)}${
-                            dur ? `&duration=${dur}` : ""
-                          }`;
-                        }
-                        if (url && recFormatMp4) {
-                          url += (url.includes("?") ? "&" : "?") + "format=mp4";
+                          const params = new URLSearchParams();
+                          params.set("path", recPath);
+                          params.set("start", start);
+                          if (dur) params.set("duration", String(dur));
+                          if (RECORDING_PLAYBACK_FORMAT) {
+                            params.set("format", RECORDING_PLAYBACK_FORMAT);
+                          }
+                          url = `${base}/get?${params.toString()}`;
+                        } else if (
+                          url &&
+                          RECORDING_PLAYBACK_FORMAT &&
+                          !url.includes("format=")
+                        ) {
+                          url +=
+                            (url.includes("?") ? "&" : "?") +
+                            `format=${RECORDING_PLAYBACK_FORMAT}`;
                         }
                         return (
                           <React.Fragment key={start}>
