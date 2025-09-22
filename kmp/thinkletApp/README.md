@@ -41,6 +41,69 @@ adb shell am broadcast   -a com.imageflow.thinklet.SET_CONFIG   --es url http://
 - `autoStart`: true の場合、アプリ起動時に自動配信を開始します。
 - `autoResume`: true の場合、内部ロジック（今後拡張予定）で停止後に再開を試みます。
 
+## THINKLET起動時の自動立ち上げ
+
+THINKLET Launcher が読み込む `key_config.json` に `launch-app` アクションを設定すると、端末起動直後にキーイベントが入ったタイミングで `thinkletApp` を自動起動できます。以下の手順で設定します。
+
+1. `key_config.json` を作成
+
+   ```json
+   {
+     "key-config": [
+       {
+         "key-name": "center",
+         "key-event": "single-released",
+         "key-action": {
+           "action-type": "launch-app",
+           "action-param": {
+             "package-name": "com.imageflow.thinklet.app",
+             "class-name": "com.imageflow.thinklet.app.MainActivity",
+             "action-name": "android.intent.action.MAIN",
+             "flags": [
+               "FLAG_ACTIVITY_NEW_TASK",
+               "FLAG_ACTIVITY_RESET_TASK_IF_NEEDED"
+             ]
+           }
+         }
+       }
+     ]
+   }
+   ```
+
+   - `key-name` はアーム中央ボタン（`KEYCODE_CAMERA`）に対応します。
+   - `single-released` を使うと、短押し時のリリースでアプリが立ち上がります（`first-pressed` では `launch-app` が使えないため非推奨）。
+   - テンプレートは `kmp/thinkletApp/provisioning/key_config_autostart.json` に保存しています。
+
+2. THINKLET に反映
+
+   ```bash
+   adb push kmp/thinkletApp/provisioning/key_config_autostart.json /sdcard/Android/data/ai.fd.thinklet.app.launcher/files/key_config.json
+   adb shell input keyevent KEYCODE_APP_SWITCH
+   adb shell input keyevent HOME
+   ```
+
+- `KEYCODE_APP_SWITCH` → `HOME` を送ることで Launcher に設定を再読込させます。
+- `kmp/thinkletApp/scripts/setup-thinklet-autostart.sh` を使うと JSON の配置と Launcher リロードを一括で実行できます。
+
+3. 起動直後の自動実行
+
+   THINKLET の電源投入後、端末が起動完了したタイミングで中央ボタン（`KEYCODE_CAMERA`）の短押しを一度送ると、上記設定により `thinkletApp` が即時起動します。PC から制御する場合は、プロビジョニングスクリプトなどで次のコマンドを発行してください。
+
+   ```bash
+   adb wait-for-device
+   adb shell input keyevent KEYCODE_CAMERA
+   ```
+
+- 物理ボタンを手動で押す場合でも同等に動作します。`thinkletApp` 側で `autoStart` を `true` に設定しておけば、起動直後に WHIP 配信が開始されます。
+- スクリプトから自動トリガーする場合は `./kmp/thinkletApp/scripts/setup-thinklet-autostart.sh --trigger-start` を利用してください。
+
+```bash
+# リポジトリルートで実行
+./kmp/thinkletApp/scripts/setup-thinklet-autostart.sh
+# 電源投入直後の起動まで自動化したい場合
+./kmp/thinkletApp/scripts/setup-thinklet-autostart.sh --trigger-start
+```
+
 ## 起動
 
 ```bash
