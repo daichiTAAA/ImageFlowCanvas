@@ -19,11 +19,6 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.webrtc.*
-import android.content.Intent
-import android.content.IntentFilter
-import android.content.BroadcastReceiver
-import com.imageflow.thinklet.app.ble.BlePrivacyService
-import com.imageflow.thinklet.app.ble.PrivacyEvents
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,96 +80,31 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
     val context = LocalContext.current
     var log by remember { mutableStateOf("Ready.") }
     var isStreaming by remember { mutableStateOf(false) }
-    var privacyActive by remember { mutableStateOf(false) }
-    var bleRssi by remember { mutableStateOf<Int?>(null) }
-    var bleProximity by remember { mutableStateOf("") }
-    var bleBeaconId by remember { mutableStateOf("") }
     val controller = remember { WhipController(activity) }
-    // Read-at-start convenience values. For runtime decisions we re-read directly from AppConfig.
     val configuredUrl = remember { AppConfig.getWhipUrl(context) }
     val autoStart = remember { AppConfig.getAutoStart(context) }
 
-    // Connectivity test states
-    var testUrlTest by remember { mutableStateOf("") }
-    var testResultTest by remember { mutableStateOf("") }
+    var testUrl by remember { mutableStateOf("") }
+    var testResult by remember { mutableStateOf("") }
 
     LaunchedEffect(hasPermissions, configuredUrl, autoStart) {
         if (autoStart && hasPermissions && !isStreaming && configuredUrl.isNotBlank()) {
-            controller.start(configuredUrl,
+            controller.start(
+                configuredUrl,
                 onLog = { log = it },
                 onError = { log = it },
                 onConnected = { isStreaming = true },
-                onDisconnected = { isStreaming = false })
+                onDisconnected = { isStreaming = false }
+            )
         } else if (!hasPermissions) {
             log = "権限が未許可です (adb で事前付与してください)"
         }
     }
 
-    // Start BLE privacy service
-    LaunchedEffect(Unit) {
-        try {
-            BlePrivacyService.start(context)
-            log = "BLEスキャンを開始しました"
-        } catch (e: Exception) {
-            log = "BLEスキャン開始エラー: ${e.message}"
-        }
-    }
-
-    // Subscribe privacy enter/exit
-    DisposableEffect(Unit) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(c: android.content.Context?, i: Intent?) {
-                when (i?.action) {
-                    PrivacyEvents.ACTION_PRIVACY_ENTER -> {
-                        privacyActive = true
-                        if (isStreaming) {
-                            controller.stop { msg -> log = msg }
-                            isStreaming = false
-                        }
-                        log = "プライバシーゾーン検知: 配信を停止しました"
-                    }
-                    PrivacyEvents.ACTION_PRIVACY_EXIT -> {
-                        privacyActive = false
-                        // Re-read latest config and permissions at the moment of EXIT
-                        val shouldAutoResume = AppConfig.getAutoResume(context)
-                        val urlNow = AppConfig.getWhipUrl(context)
-                        val permsNow = listOf(
-                            Manifest.permission.CAMERA,
-                            Manifest.permission.RECORD_AUDIO,
-                        ).all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-
-                        if (shouldAutoResume && !isStreaming && permsNow && urlNow.isNotBlank()) {
-                            controller.start(urlNow,
-                                onLog = { log = it },
-                                onError = { log = it },
-                                onConnected = { isStreaming = true },
-                                onDisconnected = { isStreaming = false })
-                            log = "プライバシーゾーン外: 配信を再開します"
-                        } else {
-                            log = "プライバシーゾーン外: 自動再開は無効（設定/権限/URLを確認）"
-                        }
-                    }
-                    PrivacyEvents.ACTION_PRIVACY_UPDATE -> {
-                        bleBeaconId = i.getStringExtra(PrivacyEvents.EXTRA_BEACON_ID) ?: ""
-                        bleRssi = if (i.hasExtra(PrivacyEvents.EXTRA_RSSI)) i.getIntExtra(PrivacyEvents.EXTRA_RSSI, -127) else null
-                        bleProximity = i.getStringExtra(PrivacyEvents.EXTRA_PROXIMITY) ?: ""
-                        val inP = i.getBooleanExtra(PrivacyEvents.EXTRA_IN_PRIVACY, false)
-                        if (inP != privacyActive) privacyActive = inP
-                    }
-                }
-            }
-        }
-        val f = IntentFilter().apply {
-            addAction(PrivacyEvents.ACTION_PRIVACY_ENTER)
-            addAction(PrivacyEvents.ACTION_PRIVACY_EXIT)
-            addAction(PrivacyEvents.ACTION_PRIVACY_UPDATE)
-        }
-        context.registerReceiver(receiver, f)
-        onDispose { context.unregisterReceiver(receiver) }
-    }
-
-    // Minimal status-only UI for debugging; THINKLETでは表示されません
-    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        Modifier.fillMaxSize().padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         Text("THINKLET ライブ配信 (WHIP)")
         val postUrl = remember(configuredUrl) { normalizeWhipPostUrl(configuredUrl) }
         Text("設定URL: ${configuredUrl}")
@@ -182,32 +112,20 @@ private fun WhipHeadlessScreen(activity: ComponentActivity, hasPermissions: Bool
         Text("状態: ${log}")
         val whipStatus = if (isStreaming) "WHIP: 配信中" else "WHIP: 停止中"
         Text(whipStatus)
-        val rssiText = bleRssi?.let { "$it dBm" } ?: "未検出"
-        val proxLabel = when (bleProximity) {
-            "near" -> "近接"
-            "mid" -> "境界"
-            "far" -> "遠隔"
-            else -> ""
-        }
-        Text("BLE信号強度: $rssiText ${if (proxLabel.isNotEmpty()) "($proxLabel)" else ""}")
-        if (bleBeaconId.isNotBlank()) Text("検出ビーコン: $bleBeaconId")
-        if (privacyActive) Text("プライバシーモード中（BLE）")
 
-        // Connectivity test display
         Text("接続テスト: whip/test")
-        if (testUrlTest.isNotBlank()) Text("URL: ${testUrlTest}")
-        if (testResultTest.isNotBlank()) Text("結果: ${testResultTest}")
+        if (testUrl.isNotBlank()) Text("URL: ${testUrl}")
+        if (testResult.isNotBlank()) Text("結果: ${testResult}")
 
         Button(onClick = {
-            // Derive test URL against server origin
             val origin = extractOrigin(configuredUrl) ?: configuredUrl
-            val urlTest = origin.trimEnd('/') + "/whip/test/"
+            val urlToTest = origin.trimEnd('/') + "/whip/test/"
 
-            testUrlTest = urlTest
-            testResultTest = ""
+            testUrl = urlToTest
+            testResult = ""
 
-            controller.testWhipEndpoint(urlTest) { result ->
-                testResultTest = result
+            controller.testWhipEndpoint(urlToTest) { result ->
+                testResult = result
             }
         }) { Text("接続テストを実行") }
     }
