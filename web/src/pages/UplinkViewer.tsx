@@ -311,13 +311,13 @@ export default function UplinkViewer() {
         lowLatencyMode: true,
         enableWorker: true,
         startPosition: -1,
-        // keep buffers tiny for live
+        // keep history minimal but allow full 2s+ segments to buffer
         backBufferLength: 0,
-        maxBufferLength: 1,
+        maxBufferLength: 6,
         maxBufferHole: 0.5,
-        // chase live edge aggressively
-        liveSyncDurationCount: 1,
-        liveMaxLatencyDurationCount: 3,
+        // chase live edge aggressively while leaving small headroom
+        liveSyncDurationCount: 2,
+        liveMaxLatencyDurationCount: 4,
         maxLiveSyncPlaybackRate: 1.5,
       });
       hlsRef.current = hls;
@@ -333,6 +333,17 @@ export default function UplinkViewer() {
         } catch {}
       });
       hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.details === "fragGap") {
+          const v = videoRef.current;
+          if (v && v.seekable && v.seekable.length > 0) {
+            const end = v.seekable.end(v.seekable.length - 1);
+            v.currentTime = Math.max(0, end - 0.5);
+          }
+          try {
+            hls.startLoad();
+          } catch {}
+          return;
+        }
         const msg = `${data.type}: ${data.details}`;
         setHlsError(msg);
         if (data.fatal) {
