@@ -45,7 +45,7 @@ object AppConfig {
         }
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         // Streaming backend enumerates streams under /whip/uplink/<deviceId>
-        return "http://192.168.0.5:8889/whip/uplink/${deviceId}"
+        return "http://192.168.0.5:8889/uplink/${deviceId}/whip"
     }
 
     fun setWhipUrl(context: Context, url: String) {
@@ -268,7 +268,7 @@ object AppConfig {
                 }
                 if (authority.isNotBlank()) builder.encodedAuthority(authority)
 
-                builder.encodedPath("/whip/uplink/${currentId ?: deviceId}")
+                builder.encodedPath("/uplink/${currentId ?: deviceId}/whip")
 
                 if (!parsed.encodedQuery.isNullOrBlank()) builder.encodedQuery(parsed.encodedQuery)
                 if (!parsed.fragment.isNullOrBlank()) builder.fragment(parsed.fragment)

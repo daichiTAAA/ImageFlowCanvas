@@ -34,10 +34,10 @@ adb shell pm grant com.imageflow.thinklet.app android.permission.RECORD_AUDIO
 配信 URL や自動開始の設定はブロードキャストで更新できます。
 
 ```bash
-adb shell am broadcast   -a com.imageflow.thinklet.SET_CONFIG   --es url http://192.168.1.10:8889/whip/uplink/<deviceId>   --ez autoStart true   --ez autoResume true
+adb shell am broadcast   -a com.imageflow.thinklet.SET_CONFIG   --es url http://192.168.1.10:8889/uplink/<deviceId>/whip   --ez autoStart true   --ez autoResume true
 ```
 
-- `url`: WHIP エンドポイント。省略時は `http://192.168.0.5:8889/whip/uplink/<androidId>` が使用されます。
+- `url`: WHIP エンドポイント。省略時は `http://192.168.0.5:8889/uplink/<androidId>/whip` が使用されます。
 - `autoStart`: true の場合、アプリ起動時に自動配信を開始します。
 - `autoResume`: true の場合、内部ロジック（今後拡張予定）で停止後に再開を試みます。
 
