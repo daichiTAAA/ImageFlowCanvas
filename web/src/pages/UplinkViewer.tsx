@@ -60,6 +60,8 @@ export default function UplinkViewer() {
   const [recordingIndexError, setRecordingIndexError] = useState("");
   const [recordingFilter, setRecordingFilter] = useState("");
   const [selectedRecordingPath, setSelectedRecordingPath] = useState("");
+  const [recordingSelectionMode, setRecordingSelectionMode] =
+    useState<"auto" | "manual">("auto");
 
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState("");
@@ -194,6 +196,7 @@ export default function UplinkViewer() {
       setRecordingIndex(mapped);
 
       if (mapped.length === 0) {
+        setRecordingSelectionMode("auto");
         setSelectedRecordingPath("");
         setRecPath("");
         setRecSegments([]);
@@ -212,6 +215,7 @@ export default function UplinkViewer() {
 
       if (!hasSelected) {
         const initialPath = mapped[0].path;
+        setRecordingSelectionMode("auto");
         setSelectedRecordingPath(initialPath);
         setRecPath(initialPath);
         setSegmentQuery("");
@@ -240,15 +244,18 @@ export default function UplinkViewer() {
   }, [fetchRecordingIndex]);
 
   useEffect(() => {
+    if (recordingSelectionMode === "manual") return;
     if (!deviceId) return;
     const s = streams.find((x) => x.device_id === deviceId);
     const path = s ? s.path : `uplink/${deviceId}`;
     if (!path) return;
+    if (selectedRecordingPath === path) return;
+    setRecordingSelectionMode("auto");
     setSelectedRecordingPath(path);
     setRecPath(path);
     setSegmentQuery("");
     void loadRecordingPath(path, { resetSeek: false });
-  }, [deviceId, streams, loadRecordingPath]);
+  }, [deviceId, streams, loadRecordingPath, recordingSelectionMode, selectedRecordingPath]);
 
   const filteredRecordingIndex = useMemo(() => {
     const q = recordingFilter.trim().toLowerCase();
@@ -532,7 +539,10 @@ export default function UplinkViewer() {
                 label="オンラインのカメラ"
                 value={deviceId}
                 name="deviceId"
-                onChange={(e) => setDeviceId(e.target.value)}
+                onChange={(e) => {
+                  setRecordingSelectionMode("auto");
+                  setDeviceId(e.target.value);
+                }}
               >
                 {streams.map((s) => (
                   <MenuItem key={s.path} value={s.device_id}>
@@ -723,6 +733,7 @@ export default function UplinkViewer() {
                         },
                       }}
                       onClick={() => {
+                        setRecordingSelectionMode("manual");
                         setSelectedRecordingPath(item.path);
                         setRecPath(item.path);
                         setSegmentQuery("");
@@ -781,6 +792,7 @@ export default function UplinkViewer() {
                           setRecError("録画パスが空です");
                           return;
                         }
+                        setRecordingSelectionMode("manual");
                         setSelectedRecordingPath(safe);
                         setSegmentQuery("");
                         void loadRecordingPath(safe, { resetSeek: true, force: true });
@@ -810,6 +822,7 @@ export default function UplinkViewer() {
                         const s = streams.find((x) => x.device_id === deviceId);
                         const raw = s ? s.path : deviceId ? `uplink/${deviceId}` : "";
                         if (raw) {
+                          setRecordingSelectionMode("auto");
                           setRecPath(raw);
                           setSelectedRecordingPath(raw);
                           setSegmentQuery("");
