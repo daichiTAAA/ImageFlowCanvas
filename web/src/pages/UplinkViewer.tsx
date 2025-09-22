@@ -51,7 +51,6 @@ export default function UplinkViewer() {
 
   const [deviceId, setDeviceId] = useState("");
   const [streams, setStreams] = useState<StreamItem[]>([]);
-  const [manualUrl, setManualUrl] = useState("");
   const [hlsError, setHlsError] = useState("");
   const [mode, setMode] = useState<"hls" | "whep">("whep");
   const [whepStatus, setWhepStatus] = useState("");
@@ -619,18 +618,6 @@ export default function UplinkViewer() {
               onClick={stopAll}
             >
               {isLivePlaying ? "停止" : "停止済み"}
-            </Button>
-            <TextField
-              size="small"
-              label="HLS URL (手動)"
-              sx={{ minWidth: 360 }}
-              value={manualUrl}
-              id="manual-hls-url"
-              name="manualHlsUrl"
-              onChange={(e) => setManualUrl(e.target.value)}
-            />
-            <Button variant="outlined" onClick={() => play(manualUrl)}>
-              手動URLで再生
             </Button>
           </Box>
         </CardContent>
