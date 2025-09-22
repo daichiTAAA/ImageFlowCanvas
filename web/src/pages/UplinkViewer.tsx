@@ -13,6 +13,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import StopIcon from "@mui/icons-material/Stop";
 import axios from "axios";
 
 type StreamItem = {
@@ -63,6 +65,8 @@ export default function UplinkViewer() {
   const [recordingSelectionMode, setRecordingSelectionMode] =
     useState<"auto" | "manual">("auto");
   const selectedRecordingPathRef = useRef<string>("");
+
+  const [isLivePlaying, setIsLivePlaying] = useState(false);
 
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState("");
@@ -287,7 +291,10 @@ export default function UplinkViewer() {
   const play = (hlsUrl: string) => {
     setHlsError("");
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) {
+      setIsLivePlaying(false);
+      return;
+    }
     // fully reset any previous file playback to avoid contention
     try {
       video.pause();
@@ -321,10 +328,13 @@ export default function UplinkViewer() {
         maxLiveSyncPlaybackRate: 1.5,
       });
       hlsRef.current = hls;
+      setIsLivePlaying(true);
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {});
+        video.play().catch(() => {
+          setIsLivePlaying(false);
+        });
       });
       hls.on(Hls.Events.LEVEL_LOADED, () => {
         // try to stick to live edge during live playback
@@ -373,11 +383,14 @@ export default function UplinkViewer() {
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = hlsUrl;
+      setIsLivePlaying(true);
       video.play().catch((e) => {
         setHlsError(String(e));
+        setIsLivePlaying(false);
       });
     } else {
       alert("HLS is not supported in this browser");
+      setIsLivePlaying(false);
     }
   };
 
@@ -445,7 +458,11 @@ export default function UplinkViewer() {
     }
     await stopWhep();
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) {
+      setIsLivePlaying(false);
+      return;
+    }
+    setIsLivePlaying(true);
     // ensure file playback is fully cleared before attaching streams
     try {
       video.pause();
@@ -492,10 +509,12 @@ export default function UplinkViewer() {
       if (loc) whepResourceRef.current = new URL(loc, whepUrl).toString();
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
       setWhepStatus("connected");
+      setIsLivePlaying(true);
     } catch (e: any) {
       setWhepError(String(e?.message || e));
       setWhepStatus("error");
       await stopWhep();
+      setIsLivePlaying(false);
     }
   };
 
@@ -514,6 +533,7 @@ export default function UplinkViewer() {
       (v as any).srcObject = null;
       v.load();
     }
+    setIsLivePlaying(false);
   };
 
   const goFullscreen = () => {
@@ -581,16 +601,24 @@ export default function UplinkViewer() {
             </FormControl>
             <Button
               variant="contained"
-              disabled={!deviceId}
+              startIcon={<PlayArrowIcon />}
+              disabled={!deviceId || isLivePlaying}
+              color={isLivePlaying ? "success" : "primary"}
               onClick={async () => {
                 await stopAll();
                 mode === "whep" ? await playWhep() : play(buildUrlFromDevice());
               }}
             >
-              ライブ再生開始
+              {isLivePlaying ? "ライブ再生中" : "ライブ再生開始"}
             </Button>
-            <Button variant="outlined" color="warning" onClick={stopAll}>
-              停止
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<StopIcon />}
+              disabled={!isLivePlaying}
+              onClick={stopAll}
+            >
+              {isLivePlaying ? "停止" : "停止済み"}
             </Button>
             <TextField
               size="small"
