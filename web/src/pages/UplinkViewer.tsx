@@ -62,6 +62,7 @@ export default function UplinkViewer() {
   const [selectedRecordingPath, setSelectedRecordingPath] = useState("");
   const [recordingSelectionMode, setRecordingSelectionMode] =
     useState<"auto" | "manual">("auto");
+  const selectedRecordingPathRef = useRef<string>("");
 
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState("");
@@ -84,6 +85,10 @@ export default function UplinkViewer() {
     if (path.startsWith("uplink-")) return path.split("uplink-", 1)[1];
     return path;
   }, []);
+
+  useEffect(() => {
+    selectedRecordingPathRef.current = selectedRecordingPath;
+  }, [selectedRecordingPath]);
 
   const formatTimestamp = useCallback((iso?: string | null) => {
     if (!iso) return "-";
@@ -195,10 +200,9 @@ export default function UplinkViewer() {
 
       setRecordingIndex(mapped);
 
+      const currentSelected = selectedRecordingPathRef.current;
+
       if (mapped.length === 0) {
-        setRecordingSelectionMode("auto");
-        setSelectedRecordingPath("");
-        setRecPath("");
         setRecSegments([]);
         setRecPlayback([]);
         setRecClipStartIso(null);
@@ -210,8 +214,7 @@ export default function UplinkViewer() {
       }
 
       const hasSelected =
-        selectedRecordingPath &&
-        mapped.some((item) => item.path === selectedRecordingPath);
+        currentSelected && mapped.some((item) => item.path === currentSelected);
 
       if (!hasSelected) {
         const initialPath = mapped[0].path;
@@ -220,16 +223,16 @@ export default function UplinkViewer() {
         setRecPath(initialPath);
         setSegmentQuery("");
         await loadRecordingPath(initialPath, { force: true });
-      } else if (selectedRecordingPath) {
-        setRecPath(selectedRecordingPath);
-        await loadRecordingPath(selectedRecordingPath, { resetSeek: false, force: true });
+      } else if (currentSelected) {
+        setRecPath(currentSelected);
+        await loadRecordingPath(currentSelected, { resetSeek: false, force: true });
       }
     } catch (e: any) {
       setRecordingIndexError(String(e?.message || e));
     } finally {
       setRecordingIndexLoading(false);
     }
-  }, [deriveDeviceId, loadRecordingPath, selectedRecordingPath]);
+  }, [deriveDeviceId, loadRecordingPath]);
 
   useEffect(() => {
     fetchStreams();
