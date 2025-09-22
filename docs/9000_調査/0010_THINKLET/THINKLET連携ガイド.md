@@ -67,10 +67,10 @@ KMP Android のスタブ（`ThinkletStreamingScreen`）に URL 入力/開始/停
 ## Backend API まとめ
 
 - `GET /api/uplink/streams` → MediaMTX `/v3/paths/list` の整形（`uplink/*` のみ）
+- `GET /api/uplink/recordings` → MediaMTX `/v3/recordings/list`
 - `GET /api/uplink/recordings/{path}` → MediaMTX `/v3/recordings/get/{name}`
 
 ## 注意
 
 - 本構成は最小機能実装です。認証・認可、保存ポリシー、録画管理 UI、WHIP 実装は段階的に拡張してください。
 - 既存のリアルタイム AI パイプライン（WebSocket→gRPC）は従来どおり利用可。THINKLET の配信は MediaMTX 経由で視聴/録画を担い、推論連携は別途計画に沿って拡張してください。
-

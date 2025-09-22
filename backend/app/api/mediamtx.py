@@ -52,12 +52,9 @@ async def list_uplink_streams(page: int = 0, items_per_page: int = 100):
         name = it.get("name") or it.get("path")
         if not name or not patt.match(name):
             continue
-        if "/" in name:
-            device_id = name.split("/", 1)[1]
-        elif name.startswith("uplink-"):
-            device_id = name.split("uplink-",1)[1]
-        else:
-            device_id = name
+        if not name.startswith("uplink/"):
+            continue
+        device_id = name.split("/", 1)[1] if "/" in name else name
         streams.append({
             "path": name,
             "device_id": device_id,
@@ -74,15 +71,17 @@ async def list_uplink_streams(page: int = 0, items_per_page: int = 100):
     }
 
 
-@router.get("/recordings/{path:path}", response_model=Dict[str, Any])
-async def get_recordings(path: str):
-    """List recordings for a given uplink path."""
+async def _read_recordings_payload(path: str) -> Dict[str, Any]:
+    if not path.startswith("uplink/"):
+        raise HTTPException(status_code=404, detail="Path not found or no recordings")
     api = _mediamtx_base()
+    record_data: Optional[Dict[str, Any]] = None
+
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             r = await client.get(f"{api}/v3/recordings/get/{path}")
             r.raise_for_status()
-            rec = r.json()
+            record_data = r.json()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 raise HTTPException(status_code=404, detail="Path not found or no recordings")
@@ -90,14 +89,11 @@ async def get_recordings(path: str):
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"MediaMTX API error: {e}")
 
-    # annotate playback URLs for each segment
     hls_base = _mediamtx_playback_base().rstrip("/")
-    segments = rec.get("segments", [])
+    segments = (record_data or {}).get("segments", [])
     for s in segments:
-        # MediaMTX returns relative file names; provide HLS base per path
         s["hls_url"] = f"{hls_base}/{path}/index.m3u8"
 
-    # query playback server for precise playable timespans and URLs
     pb_priv = _playback_private_base()
     pb_pub = _playback_public_base()
     playback_items: List[Dict[str, Any]] = []
@@ -106,18 +102,14 @@ async def get_recordings(path: str):
             lr = await client.get(f"{pb_priv}/list", params={"path": path})
             lr.raise_for_status()
             items = lr.json()
-            # items is a list like [{ start, duration, url }]
             for it in items:
                 start = it.get("start")
                 dur = it.get("duration")
-                # Rebuild URL with public base to ensure browser reachability
                 url = f"{pb_pub}/get?path={path}&start={start}&duration={dur}"
                 playback_items.append({"start": start, "duration": dur, "url": url})
     except httpx.HTTPError:
-        # playback server may be disabled or unreachable; continue without it
         playback_items = []
 
-    # best-effort: attach a playback_url to segments by matching start
     if playback_items:
         by_start = {it.get("start"): it for it in playback_items if it.get("start")}
         for s in segments:
@@ -131,6 +123,62 @@ async def get_recordings(path: str):
         "hls_base": hls_base,
         "playback_base": pb_pub,
         "playback": playback_items,
+    }
+
+
+@router.get("/recordings/{path:path}", response_model=Dict[str, Any])
+async def get_recordings(path: str):
+    """List recordings for a given uplink path."""
+    return await _read_recordings_payload(path)
+
+
+@router.get("/recordings", response_model=Dict[str, Any])
+async def list_recordings_index(page: int = 0, items_per_page: int = 200):
+    """Return a catalog of recordings grouped by path/device."""
+    api = _mediamtx_base()
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            r = await client.get(
+                f"{api}/v3/recordings/list",
+                params={"page": page, "itemsPerPage": items_per_page},
+            )
+            r.raise_for_status()
+            data = r.json()
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"MediaMTX API error: {e}")
+
+    items = data.get("items", []) or []
+    catalog: List[Dict[str, Any]] = []
+    for entry in items:
+        raw_name = entry.get("name") or entry.get("path")
+        if not raw_name:
+            continue
+        if not raw_name.startswith("uplink/"):
+            continue
+        segments_raw = entry.get("segments", []) or []
+        segments: List[Dict[str, Any]] = []
+        for seg in segments_raw:
+            start = seg.get("start")
+            if start is None:
+                continue
+            segments.append({"start": start if isinstance(start, str) else str(start)})
+        segments.sort(key=lambda s: s.get("start") or "", reverse=True)
+        segment_count = len(segments)
+        catalog.append(
+            {
+                "path": raw_name,
+                "device_id": raw_name.split("/", 1)[1] if "/" in raw_name else raw_name,
+                "segment_count": segment_count,
+                "latest_start": segments[0].get("start") if segment_count else None,
+                "earliest_start": segments[-1].get("start") if segment_count else None,
+                "segments": segments,
+            }
+        )
+
+    return {
+        "items": catalog,
+        "total": data.get("itemCount", len(catalog)),
+        "page_count": data.get("pageCount", 1),
     }
 
 

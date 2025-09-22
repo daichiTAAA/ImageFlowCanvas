@@ -14,8 +14,7 @@ object AppConfig {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val existing = prefs.getString(KEY_URL, null)
         if (!existing.isNullOrBlank()) {
-            val migrated = existing.replace("/whip/mobile/", "/whip/uplink/").replace("/whip/thinklet/", "/whip/uplink/")
-            val sanitized = sanitizeWhipUrl(context, migrated)
+            val sanitized = sanitizeWhipUrl(context, existing)
             if (sanitized != existing) {
                 prefs.edit().putString(KEY_URL, sanitized).apply()
             }
@@ -62,10 +61,10 @@ object AppConfig {
                 val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
                 val segments = parsed.pathSegments ?: emptyList()
                 val slug = segments.getOrNull(1)
-                val currentId = if (segments.size >= 3 && segments[0] == "whip" && slug in setOf("uplink", "thinklet", "mobile")) {
-                    segments[2].ifBlank { deviceId }
+                val currentId = if (segments.size >= 3 && segments[0] == "uplink") {
+                    segments[1].ifBlank { deviceId }
                 } else {
-                    null
+                    slug?.ifBlank { null }
                 }
                 val builder = Uri.Builder().scheme(parsed.scheme)
                 val authority = parsed.encodedAuthority ?: run {
