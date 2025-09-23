@@ -51,6 +51,72 @@ type RecordingIndexItem = {
 
 const API_PREFIX = "/api/uplink";
 
+const serializeStreams = (items: StreamItem[] | undefined) =>
+  (items ?? [])
+    .map(
+      (s) =>
+        `${s?.path ?? ""}|${s?.device_id ?? ""}|${s?.hls_url ?? ""}|${
+          s?.state ?? ""
+        }|${String(s?.readers ?? "")}|${String(s?.publishers ?? "")}`
+    )
+    .sort()
+    .join("||");
+
+const areStreamListsEqual = (
+  prev: StreamItem[] | undefined,
+  next: StreamItem[] | undefined
+) => serializeStreams(prev) === serializeStreams(next);
+
+const serializeIndexSegments = (
+  segments: RecordingIndexSegment[] | undefined
+) => (segments ?? []).map((s) => s?.start ?? "").join("|");
+
+const areRecordingIndexItemsEqual = (
+  a?: RecordingIndexItem | null,
+  b?: RecordingIndexItem | null
+) => {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if (a.path !== b.path) return false;
+  if ((a.device_id ?? "") !== (b.device_id ?? "")) return false;
+  if ((a.segment_count ?? 0) !== (b.segment_count ?? 0)) return false;
+  if ((a.latest_start ?? "") !== (b.latest_start ?? "")) return false;
+  if ((a.earliest_start ?? "") !== (b.earliest_start ?? "")) return false;
+  return (
+    serializeIndexSegments(a.segments) === serializeIndexSegments(b.segments)
+  );
+};
+
+const areRecordingIndexListsEqual = (
+  prev: RecordingIndexItem[] | undefined,
+  next: RecordingIndexItem[] | undefined
+) => {
+  const a = prev ?? [];
+  const b = next ?? [];
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (!areRecordingIndexItemsEqual(a[i], b[i])) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const areObjectArraysEqual = (prev: any[], next: any[], keys: string[]) => {
+  if (!Array.isArray(prev) || !Array.isArray(next)) return false;
+  if (prev.length !== next.length) return false;
+  for (let i = 0; i < prev.length; i += 1) {
+    const p = prev[i] ?? {};
+    const n = next[i] ?? {};
+    for (const key of keys) {
+      if ((p?.[key] ?? null) !== (n?.[key] ?? null)) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
+
 export default function UplinkViewer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -61,6 +127,7 @@ export default function UplinkViewer() {
 
   const [deviceId, setDeviceId] = useState("");
   const [streams, setStreams] = useState<StreamItem[]>([]);
+  const streamsRef = useRef<StreamItem[]>([]);
   const [hlsError, setHlsError] = useState("");
   const [mode, setMode] = useState<"hls" | "whep">("whep");
   const [whepStatus, setWhepStatus] = useState("");
@@ -89,6 +156,7 @@ export default function UplinkViewer() {
   const [rangeEnd, setRangeEnd] = useState("");
   const [rangeStartDt, setRangeStartDt] = useState<Date | null>(null);
   const [rangeEndDt, setRangeEndDt] = useState<Date | null>(null);
+  const recordingIndexRef = useRef<RecordingIndexItem[]>([]);
   // 録画シーク用の絶対オフセット方式
   const [recClipStartIso, setRecClipStartIso] = useState<string | null>(null); // クリップ全体の開始ISO
   const [recClipDuration, setRecClipDuration] = useState<number | null>(null); // クリップ総尺（秒）
@@ -107,6 +175,14 @@ export default function UplinkViewer() {
   useEffect(() => {
     selectedRecordingPathRef.current = selectedRecordingPath;
   }, [selectedRecordingPath]);
+
+  useEffect(() => {
+    recordingIndexRef.current = recordingIndex;
+  }, [recordingIndex]);
+
+  useEffect(() => {
+    streamsRef.current = streams;
+  }, [streams]);
 
   const timestampFormatter = useMemo(
     () =>
@@ -225,8 +301,23 @@ export default function UplinkViewer() {
           setRecBaseOffsetSec(0);
           setRecSeekPos(0);
         }
-        setRecSegments(data.segments || []);
-        setRecPlayback(data.playback || []);
+        const nextSegments = Array.isArray(data.segments) ? data.segments : [];
+        const nextPlayback = Array.isArray(data.playback) ? data.playback : [];
+        setRecSegments((prev) =>
+          areObjectArraysEqual(prev, nextSegments, [
+            "start",
+            "duration",
+            "url",
+            "playback_url",
+          ])
+            ? prev
+            : nextSegments
+        );
+        setRecPlayback((prev) =>
+          areObjectArraysEqual(prev, nextPlayback, ["start", "duration", "url"])
+            ? prev
+            : nextPlayback
+        );
         lastLoadedPathRef.current = safePath;
       } catch (e: any) {
         if (loadRequestIdRef.current === requestId) {
@@ -245,7 +336,9 @@ export default function UplinkViewer() {
     try {
       const resp = await axios.get(`${API_PREFIX}/streams`);
       const items: StreamItem[] = resp.data.items || [];
-      setStreams(items);
+      if (!areStreamListsEqual(streamsRef.current, items)) {
+        setStreams(items);
+      }
       if (!deviceId && items.length > 0) {
         setDeviceId(items[0].device_id);
       }
@@ -302,23 +395,34 @@ export default function UplinkViewer() {
         return a.device_id.localeCompare(b.device_id);
       });
 
+      const previousIndex = recordingIndexRef.current;
+      const currentSelected = selectedRecordingPathRef.current;
+      const indexChanged = !areRecordingIndexListsEqual(previousIndex, mapped);
+
+      if (!indexChanged) {
+        return;
+      }
+
       setRecordingIndex(mapped);
 
-      const currentSelected = selectedRecordingPathRef.current;
-
       if (mapped.length === 0) {
-        setRecSegments([]);
-        setRecPlayback([]);
+        setRecSegments((prev) => (prev.length === 0 ? prev : []));
+        setRecPlayback((prev) => (prev.length === 0 ? prev : []));
         setRecClipStartIso(null);
         setRecClipDuration(null);
         setRecBaseOffsetSec(0);
         setRecSeekPos(0);
         lastLoadedPathRef.current = null;
+        if (selectedRecordingPathRef.current) {
+          setSelectedRecordingPath("");
+          setRecPath("");
+        }
         return;
       }
 
-      const hasSelected =
-        currentSelected && mapped.some((item) => item.path === currentSelected);
+      const hasSelected = Boolean(
+        currentSelected && mapped.some((item) => item.path === currentSelected)
+      );
 
       if (!hasSelected) {
         const initialPath = mapped[0].path;
@@ -326,12 +430,26 @@ export default function UplinkViewer() {
         setSelectedRecordingPath(initialPath);
         setRecPath(initialPath);
         await loadRecordingPath(initialPath, { force: true });
-      } else if (currentSelected) {
-        setRecPath(currentSelected);
-        await loadRecordingPath(currentSelected, {
-          resetSeek: false,
-          force: true,
-        });
+        return;
+      }
+
+      if (currentSelected) {
+        const prevSelectedItem =
+          previousIndex.find((item) => item.path === currentSelected) ?? null;
+        const nextSelectedItem =
+          mapped.find((item) => item.path === currentSelected) ?? null;
+        const shouldReloadSelected =
+          nextSelectedItem &&
+          (!prevSelectedItem ||
+            !areRecordingIndexItemsEqual(prevSelectedItem, nextSelectedItem));
+
+        if (shouldReloadSelected) {
+          setRecPath(currentSelected);
+          await loadRecordingPath(currentSelected, {
+            resetSeek: false,
+            force: true,
+          });
+        }
       }
     } catch (e: any) {
       setRecordingIndexError(String(e?.message || e));
