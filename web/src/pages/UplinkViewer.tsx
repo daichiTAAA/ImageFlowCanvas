@@ -93,12 +93,34 @@ export default function UplinkViewer() {
     selectedRecordingPathRef.current = selectedRecordingPath;
   }, [selectedRecordingPath]);
 
-  const formatTimestamp = useCallback((iso?: string | null) => {
-    if (!iso) return "-";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString();
-  }, []);
+  const timestampFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+        timeZoneName: "short",
+      }),
+    []
+  );
+
+  const formatTimestamp = useCallback(
+    (iso?: string | null) => {
+      if (!iso) return "-";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      try {
+        return timestampFormatter.format(d);
+      } catch (err) {
+        return d.toLocaleString();
+      }
+    },
+    [timestampFormatter]
+  );
 
   const loadRecordingPath = useCallback(
     async (
@@ -958,6 +980,7 @@ export default function UplinkViewer() {
                       </Typography>
                       {displaySegments.map((it: any) => {
                         const start = it.start as string;
+                        const formattedStart = formatTimestamp(start);
                         const dur = (it as any).duration as number | undefined;
                         let url = (it as any).url as string | undefined;
                         if (!url && (it as any).playback_url)
@@ -984,7 +1007,12 @@ export default function UplinkViewer() {
                         }
                         return (
                           <React.Fragment key={start}>
-                            <Typography variant="body2">{start}</Typography>
+                            <Typography
+                              variant="body2"
+                              title={start || undefined}
+                            >
+                              {formattedStart}
+                            </Typography>
                             <Typography
                               variant="body2"
                               sx={{ textAlign: "right" }}
