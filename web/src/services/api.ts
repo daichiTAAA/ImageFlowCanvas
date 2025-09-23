@@ -559,6 +559,36 @@ class ApiService {
     return response.data
   }
 
+  // Process device links (device_id <-> process_code)
+  async listDeviceProcessLinks(params: any = {}): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get('/inspection/device-process-links', { params })
+    return response.data
+  }
+
+  async getDeviceProcessLinkByDevice(deviceId: string): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.get(`/inspection/device-process-links/by-device/${encodeURIComponent(deviceId)}`)
+    return response.data
+  }
+
+  async createDeviceProcessLink(data: { device_id: string; process_code: string }): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.post('/inspection/device-process-links', data)
+    return response.data
+  }
+
+  async updateDeviceProcessLink(id: string, data: { process_code: string }): Promise<any> {
+    const api = this.ensureApiInitialized()
+    const response = await api.put(`/inspection/device-process-links/${id}`, data)
+    return response.data
+  }
+
+  async deleteDeviceProcessLink(id: string): Promise<void> {
+    const api = this.ensureApiInitialized()
+    await api.delete(`/inspection/device-process-links/${id}`)
+  }
+
   async executeInspectionItem(executionId: string, itemId: string, imageFile: File): Promise<any> {
     const api = this.ensureApiInitialized()
     const formData = new FormData()

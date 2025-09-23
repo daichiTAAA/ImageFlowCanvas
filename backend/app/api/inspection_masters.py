@@ -18,6 +18,7 @@ from app.models.inspection import (
     ProductTypeGroup,
     ProductTypeGroupMember,
     ProductCodeName,
+    DeviceProcessMapping,
 )
 from app.models.product import ProductMaster
 from app.schemas.inspection import (
@@ -39,6 +40,9 @@ from app.schemas.inspection import (
     ProcessMasterCreate,
     ProcessMasterUpdate,
     ProcessMasterResponse,
+    DeviceProcessMappingCreate,
+    DeviceProcessMappingUpdate,
+    DeviceProcessMappingResponse,
     ProductCodeNameCreate,
     ProductCodeNameUpdate,
     ProductCodeNameResponse,
@@ -1518,4 +1522,244 @@ async def delete_process(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to delete process: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/device-process-links",
+    response_model=DeviceProcessMappingResponse,
+    tags=["inspection-masters"],
+)
+async def create_device_process_link(
+    payload: DeviceProcessMappingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+
+    try:
+        device_id = payload.device_id.strip()
+        if not device_id:
+            raise HTTPException(status_code=400, detail="device_id is required")
+
+        existing = (
+            await db.execute(
+                select(DeviceProcessMapping).where(
+                    DeviceProcessMapping.device_id == device_id
+                )
+            )
+        ).scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=400, detail="device_id already registered")
+
+        process = (
+            await db.execute(
+                select(ProcessMaster).where(
+                    ProcessMaster.process_code == payload.process_code
+                )
+            )
+        ).scalar_one_or_none()
+        if not process:
+            raise HTTPException(status_code=404, detail="Process not found")
+
+        row = DeviceProcessMapping(
+            device_id=device_id,
+            process_code=process.process_code,
+        )
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+        await db.refresh(row, attribute_names=["process"])
+        return row
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to create device process link: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/device-process-links",
+    response_model=PaginatedResponse[DeviceProcessMappingResponse],
+    tags=["inspection-masters"],
+)
+async def list_device_process_links(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, ge=1, le=500),
+    search: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+
+    try:
+        query = select(DeviceProcessMapping).options(
+            selectinload(DeviceProcessMapping.process)
+        )
+        count_query = select(func.count(DeviceProcessMapping.id))
+
+        if search:
+            like = f"%{search}%"
+            query = query.join(
+                ProcessMaster,
+                DeviceProcessMapping.process,
+                isouter=True,
+            ).where(
+                or_(
+                    DeviceProcessMapping.device_id.ilike(like),
+                    DeviceProcessMapping.process_code.ilike(like),
+                    ProcessMaster.process_name.ilike(like),
+                )
+            )
+            count_query = count_query.join(
+                ProcessMaster,
+                DeviceProcessMapping.process,
+                isouter=True,
+            ).where(
+                or_(
+                    DeviceProcessMapping.device_id.ilike(like),
+                    DeviceProcessMapping.process_code.ilike(like),
+                    ProcessMaster.process_name.ilike(like),
+                )
+            )
+
+        total = (await db.execute(count_query)).scalar() or 0
+        offset = (page - 1) * page_size
+        rows = (
+            (
+                await db.execute(
+                    query.order_by(DeviceProcessMapping.device_id.asc())
+                    .offset(offset)
+                    .limit(page_size)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        return PaginatedResponse(
+            items=rows,
+            total_count=total,
+            page=page,
+            page_size=page_size,
+            total_pages=(total + page_size - 1) // page_size,
+        )
+    except Exception as e:
+        logger.error(f"Failed to list device process links: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/device-process-links/{mapping_id}",
+    response_model=DeviceProcessMappingResponse,
+    tags=["inspection-masters"],
+)
+async def get_device_process_link(
+    mapping_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    row = (
+        await db.execute(
+            select(DeviceProcessMapping)
+            .options(selectinload(DeviceProcessMapping.process))
+            .where(DeviceProcessMapping.id == mapping_id)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Device link not found")
+    return row
+
+
+@router.get(
+    "/device-process-links/by-device/{device_id}",
+    response_model=DeviceProcessMappingResponse,
+    tags=["inspection-masters"],
+)
+async def get_device_process_link_by_device(
+    device_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    row = (
+        await db.execute(
+            select(DeviceProcessMapping)
+            .options(selectinload(DeviceProcessMapping.process))
+            .where(DeviceProcessMapping.device_id == device_id)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Device link not found")
+    return row
+
+
+@router.put(
+    "/device-process-links/{mapping_id}",
+    response_model=DeviceProcessMappingResponse,
+    tags=["inspection-masters"],
+)
+async def update_device_process_link(
+    mapping_id: uuid.UUID,
+    payload: DeviceProcessMappingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.inspection import ProcessMaster
+
+    try:
+        row = await db.get(DeviceProcessMapping, mapping_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Device link not found")
+
+        update_data = payload.model_dump(exclude_unset=True)
+        if "process_code" in update_data:
+            process = (
+                await db.execute(
+                    select(ProcessMaster).where(
+                        ProcessMaster.process_code == update_data["process_code"]
+                    )
+                )
+            ).scalar_one_or_none()
+            if not process:
+                raise HTTPException(status_code=404, detail="Process not found")
+            row.process_code = process.process_code
+
+        await db.commit()
+        await db.refresh(row)
+        await db.refresh(row, attribute_names=["process"])
+        return row
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to update device process link: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/device-process-links/{mapping_id}",
+    status_code=204,
+    tags=["inspection-masters"],
+)
+async def delete_device_process_link(
+    mapping_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        row = await db.get(DeviceProcessMapping, mapping_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Device link not found")
+        await db.delete(row)
+        await db.commit()
+        return None
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete device process link: {e}")
         raise HTTPException(status_code=500, detail=str(e))

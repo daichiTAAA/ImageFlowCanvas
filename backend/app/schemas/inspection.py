@@ -265,6 +265,27 @@ class ProcessMasterResponse(ProcessMasterBase):
     updated_at: datetime
 
 
+class DeviceProcessMappingBase(BaseModel):
+    device_id: str = Field(..., max_length=255)
+    process_code: str = Field(..., max_length=100)
+
+
+class DeviceProcessMappingCreate(DeviceProcessMappingBase):
+    pass
+
+
+class DeviceProcessMappingUpdate(BaseModel):
+    process_code: Optional[str] = Field(None, max_length=100)
+
+
+class DeviceProcessMappingResponse(DeviceProcessMappingBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    process: Optional[ProcessMasterResponse] = None
+
+
 # 型式コード・型式名マスタ
 class ProductCodeNameBase(BaseModel):
     product_code: str = Field(..., max_length=100)

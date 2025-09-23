@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Card,
@@ -39,6 +39,7 @@ import {
   QrCode as QrCodeIcon,
 } from "@mui/icons-material";
 import { inspectionApi } from "../services/api";
+import axios from "axios";
 
 interface inspectionInstruction {
   id: string;
@@ -75,6 +76,20 @@ interface ProductTypeGroup {
   updated_at: string;
 }
 
+const UPLINK_API_PREFIX = "/api/uplink";
+
+const deriveDeviceIdFromPath = (path?: string | null) => {
+  if (!path) return "";
+  if (path.includes("/")) {
+    const [, rest] = path.split("/", 2);
+    return rest || path;
+  }
+  if (path.startsWith("uplink-")) {
+    return path.replace("uplink-", "");
+  }
+  return path;
+};
+
 export function InspectionMasters() {
   const [instructions, setInstructions] = useState<inspectionInstruction[]>([]);
   const [selectedInstruction, setSelectedInstruction] =
@@ -110,6 +125,10 @@ export function InspectionMasters() {
   const [processes, setProcesses] = useState<any[]>([]);
   const [openProcessDialog, setOpenProcessDialog] = useState(false);
   const [editingProcess, setEditingProcess] = useState<any | null>(null);
+  const [deviceProcessLinks, setDeviceProcessLinks] = useState<any[]>([]);
+  const [openDeviceLinkDialog, setOpenDeviceLinkDialog] = useState(false);
+  const [editingDeviceLink, setEditingDeviceLink] = useState<any | null>(null);
+  const [uplinkDevices, setUplinkDevices] = useState<string[]>([]);
   // 型式コード・型式名マスタ一覧
   const [codeNameRows, setCodeNameRows] = useState<
     Array<{ product_code: string; product_name: string }>
@@ -118,6 +137,31 @@ export function InspectionMasters() {
   const [newName, setNewName] = useState("");
   // Pipeline list for item dialog
   const [pipelines, setPipelines] = useState<any[]>([]);
+
+  const processMap = React.useMemo(() => {
+    const map: Record<string, any> = {};
+    (processes || []).forEach((p: any) => {
+      if (p?.process_code) {
+        map[p.process_code] = p;
+      }
+    });
+    return map;
+  }, [processes]);
+
+  const deviceOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    uplinkDevices.forEach((id) => {
+      if (id) set.add(String(id));
+    });
+    deviceProcessLinks.forEach((link: any) => {
+      const id = link?.device_id;
+      if (id) set.add(String(id));
+    });
+    if (editingDeviceLink?.device_id) {
+      set.add(String(editingDeviceLink.device_id));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [uplinkDevices, deviceProcessLinks, editingDeviceLink?.device_id]);
 
   // 検査基準のバリデーション（保存ボタン制御用）
   const isCriteriaValid = React.useMemo(() => {
@@ -157,15 +201,6 @@ export function InspectionMasters() {
       return false;
     }
   }, [editingCriteria]);
-
-  useEffect(() => {
-    loadInstructions();
-    loadGroups();
-    loadCriterias();
-    loadProcesses();
-    loadPipelines();
-    loadCodeNames();
-  }, []);
 
   const loadInstructions = async () => {
     try {
@@ -223,6 +258,66 @@ export function InspectionMasters() {
       console.error("Failed to load processes", e);
     }
   };
+
+  const loadDeviceProcessLinks = async () => {
+    try {
+      const resp = await inspectionApi.listDeviceProcessLinks({
+        page_size: 300,
+      });
+      setDeviceProcessLinks(resp.items || []);
+    } catch (e) {
+      console.error("Failed to load device-process links", e);
+      setError("カメラ工程紐付けの読み込みに失敗しました");
+    }
+  };
+
+  const loadUplinkDevices = useCallback(async () => {
+    try {
+      const [streamsResult, recordingsResult] = await Promise.allSettled([
+        axios.get(`${UPLINK_API_PREFIX}/streams`),
+        axios.get(`${UPLINK_API_PREFIX}/recordings`),
+      ]);
+
+      const ids = new Set<string>();
+
+      if (streamsResult.status === "fulfilled") {
+        const items = streamsResult.value?.data?.items || [];
+        items.forEach((item: any) => {
+          const id = item?.device_id || deriveDeviceIdFromPath(item?.path);
+          if (id) ids.add(String(id));
+        });
+      }
+
+      if (recordingsResult.status === "fulfilled") {
+        const items = recordingsResult.value?.data?.items || [];
+        items.forEach((item: any) => {
+          const id = item?.device_id || deriveDeviceIdFromPath(item?.path);
+          if (id) ids.add(String(id));
+        });
+      }
+
+      setUplinkDevices(Array.from(ids).sort((a, b) => a.localeCompare(b)));
+    } catch (error) {
+      console.error("Failed to load uplink devices", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInstructions();
+    loadGroups();
+    loadCriterias();
+    loadProcesses();
+    loadDeviceProcessLinks();
+    loadUplinkDevices();
+    loadPipelines();
+    loadCodeNames();
+  }, [loadUplinkDevices]);
+
+  useEffect(() => {
+    if (openDeviceLinkDialog) {
+      loadUplinkDevices();
+    }
+  }, [openDeviceLinkDialog, loadUplinkDevices]);
 
   const loadPipelines = async () => {
     try {
@@ -1975,6 +2070,203 @@ export function InspectionMasters() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* カメラ工程紐付け 管理 */}
+      <Box mt={4}>
+        <Typography variant="h5" gutterBottom>
+          カメラ工程紐付け
+        </Typography>
+        <Button
+          sx={{ mt: 1 }}
+          variant="outlined"
+          onClick={() => {
+            setEditingDeviceLink({ device_id: "", process_code: "" });
+            setOpenDeviceLinkDialog(true);
+          }}
+        >
+          紐付けを追加
+        </Button>
+        <TableContainer component={Paper} variant="outlined" sx={{ mt: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>device_id</TableCell>
+                <TableCell>工程コード</TableCell>
+                <TableCell>工程名</TableCell>
+                <TableCell>操作</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {deviceProcessLinks.map((link: any) => (
+                <TableRow key={link.id || link.device_id}>
+                  <TableCell>{link.device_id}</TableCell>
+                  <TableCell>{link.process_code}</TableCell>
+                  <TableCell>
+                    {processMap[link.process_code]?.process_name || "-"}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingDeviceLink({ ...link });
+                        setOpenDeviceLinkDialog(true);
+                      }}
+                    >
+                      編集
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={async () => {
+                        if (!link.id) return;
+                        if (!confirm("削除しますか？")) return;
+                        try {
+                          setLoading(true);
+                          await inspectionApi.deleteDeviceProcessLink(link.id);
+                          await loadDeviceProcessLinks();
+                        } catch (e) {
+                          console.error("Failed to delete device link", e);
+                          setError("カメラ工程紐付けの削除に失敗しました");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    >
+                      削除
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {deviceProcessLinks.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <Typography variant="body2" color="text.secondary">
+                      登録されたカメラ工程紐付けがありません。
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+
+      <Dialog
+        open={openDeviceLinkDialog}
+        onClose={() => setOpenDeviceLinkDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {editingDeviceLink?.id
+            ? "カメラ工程紐付け編集"
+            : "カメラ工程紐付け追加"}
+        </DialogTitle>
+        <DialogContent>
+          <Autocomplete
+            freeSolo
+            options={deviceOptions}
+            value={editingDeviceLink?.device_id || ""}
+            onChange={(event, value) => {
+              if (editingDeviceLink?.id) return;
+              setEditingDeviceLink((prev: any) => ({
+                ...(prev || {}),
+                device_id: value || "",
+              }));
+            }}
+            onInputChange={(event, value, reason) => {
+              if (editingDeviceLink?.id) return;
+              if (reason === "input" || reason === "clear") {
+                setEditingDeviceLink((prev: any) => ({
+                  ...(prev || {}),
+                  device_id: value || "",
+                }));
+              }
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="device_id"
+                required
+                placeholder="オンラインのカメラ / 録画から選択"
+                sx={{ mt: 1 }}
+              />
+            )}
+            disabled={!!editingDeviceLink?.id}
+            ListboxProps={{ style: { maxHeight: 240 } }}
+          />
+          <FormControl fullWidth sx={{ mt: 3 }}>
+            <InputLabel id="device-link-process-label">工程コード</InputLabel>
+            <Select
+              labelId="device-link-process-label"
+              label="工程コード"
+              value={editingDeviceLink?.process_code || ""}
+              onChange={(e) =>
+                setEditingDeviceLink((prev: any) => ({
+                  ...(prev || {}),
+                  process_code: e.target.value,
+                }))
+              }
+            >
+              <MenuItem value="" disabled>
+                工程を選択
+              </MenuItem>
+              {processes.map((p: any) => (
+                <MenuItem key={p.process_code} value={p.process_code}>
+                  {p.process_name
+                    ? `${p.process_code} (${p.process_name})`
+                    : p.process_code}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDeviceLinkDialog(false)}>
+            キャンセル
+          </Button>
+          <Button
+            variant="contained"
+            disabled={
+              !editingDeviceLink?.device_id ||
+              !editingDeviceLink?.process_code ||
+              loading
+            }
+            onClick={async () => {
+              if (
+                !editingDeviceLink?.device_id ||
+                !editingDeviceLink?.process_code
+              )
+                return;
+              try {
+                setLoading(true);
+                if (editingDeviceLink.id) {
+                  await inspectionApi.updateDeviceProcessLink(
+                    editingDeviceLink.id,
+                    { process_code: editingDeviceLink.process_code }
+                  );
+                } else {
+                  await inspectionApi.createDeviceProcessLink({
+                    device_id: editingDeviceLink.device_id,
+                    process_code: editingDeviceLink.process_code,
+                  });
+                }
+                setOpenDeviceLinkDialog(false);
+                setEditingDeviceLink(null);
+                await loadDeviceProcessLinks();
+              } catch (e) {
+                console.error("Failed to save device link", e);
+                setError("カメラ工程紐付けの保存に失敗しました");
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            保存
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {error && (
         <Box mt={2}>
           <Alert severity="error" onClose={() => setError(null)}>

@@ -102,9 +102,43 @@ class ProcessMaster(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    device_mappings = relationship(
+        "DeviceProcessMapping",
+        back_populates="process",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     __table_args__ = (
         Index("idx_process_masters_code", "process_code"),
         Index("idx_process_masters_name", "process_name"),
+    )
+
+
+class DeviceProcessMapping(Base):
+    """カメラ device_id と工程コードの紐付け"""
+
+    __tablename__ = "device_process_mappings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    device_id = Column(String(255), unique=True, nullable=False)
+    process_code = Column(
+        String(100),
+        ForeignKey("process_masters.process_code", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    process = relationship(
+        "ProcessMaster",
+        back_populates="device_mappings",
+        lazy="joined",
+    )
+
+    __table_args__ = (
+        Index("idx_device_process_mappings_device_id", "device_id"),
+        Index("idx_device_process_mappings_process_code", "process_code"),
     )
 
 

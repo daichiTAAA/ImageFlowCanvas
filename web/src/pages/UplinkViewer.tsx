@@ -26,6 +26,7 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import axios from "axios";
 import { formatRFC3339, parseISO, isValid } from "date-fns";
+import { inspectionApi } from "../services/api";
 
 type StreamItem = {
   path: string;
@@ -47,6 +48,16 @@ type RecordingIndexItem = {
   latest_start?: string | null;
   earliest_start?: string | null;
   segments: RecordingIndexSegment[];
+};
+
+type DeviceProcessLink = {
+  id: string;
+  device_id: string;
+  process_code: string;
+  process?: {
+    process_code?: string;
+    process_name?: string;
+  } | null;
 };
 
 const API_PREFIX = "/api/uplink";
@@ -127,6 +138,8 @@ export default function UplinkViewer() {
 
   const [deviceId, setDeviceId] = useState("");
   const [streams, setStreams] = useState<StreamItem[]>([]);
+  const [deviceProcessLinks, setDeviceProcessLinks] =
+    useState<DeviceProcessLink[]>([]);
   const streamsRef = useRef<StreamItem[]>([]);
   const [hlsError, setHlsError] = useState("");
   const [mode, setMode] = useState<"hls" | "whep">("whep");
@@ -183,6 +196,23 @@ export default function UplinkViewer() {
   useEffect(() => {
     streamsRef.current = streams;
   }, [streams]);
+
+  const deviceProcessMap = useMemo(() => {
+    const map: Record<string, { process_code: string; process_name?: string }> = {};
+    deviceProcessLinks.forEach((link) => {
+      if (!link?.device_id) return;
+      map[link.device_id] = {
+        process_code: link.process_code,
+        process_name: link.process?.process_name ?? undefined,
+      };
+    });
+    return map;
+  }, [deviceProcessLinks]);
+
+  const selectedDeviceProcess = useMemo(() => {
+    if (!deviceId) return null;
+    return deviceProcessMap[deviceId] || null;
+  }, [deviceId, deviceProcessMap]);
 
   const timestampFormatter = useMemo(
     () =>
@@ -332,6 +362,16 @@ export default function UplinkViewer() {
     []
   );
 
+  const fetchDeviceProcessLinks = useCallback(async () => {
+    try {
+      const resp = await inspectionApi.listDeviceProcessLinks({ page_size: 300 });
+      const items: DeviceProcessLink[] = resp.items || [];
+      setDeviceProcessLinks(items);
+    } catch (e) {
+      console.error("Failed to fetch device-process links", e);
+    }
+  }, []);
+
   const fetchStreams = useCallback(async () => {
     try {
       const resp = await axios.get(`${API_PREFIX}/streams`);
@@ -465,6 +505,12 @@ export default function UplinkViewer() {
   }, [fetchStreams]);
 
   useEffect(() => {
+    fetchDeviceProcessLinks();
+    const t = setInterval(fetchDeviceProcessLinks, 60000);
+    return () => clearInterval(t);
+  }, [fetchDeviceProcessLinks]);
+
+  useEffect(() => {
     fetchRecordingIndex();
     const t = setInterval(fetchRecordingIndex, 60000);
     return () => clearInterval(t);
@@ -495,9 +541,21 @@ export default function UplinkViewer() {
     return recordingIndex.filter((item) => {
       const did = item.device_id?.toLowerCase?.() || "";
       const path = item.path?.toLowerCase?.() || "";
-      return did.includes(q) || path.includes(q);
+      const info = deviceProcessMap[item.device_id];
+      const processCode = info?.process_code
+        ? info.process_code.toLowerCase()
+        : "";
+      const processName = info?.process_name
+        ? info.process_name.toLowerCase()
+        : "";
+      return (
+        did.includes(q) ||
+        path.includes(q) ||
+        processCode.includes(q) ||
+        processName.includes(q)
+      );
     });
-  }, [recordingIndex, recordingFilter]);
+  }, [recordingIndex, recordingFilter, deviceProcessMap]);
 
   const activeRecordingMeta = useMemo(
     () => recordingIndex.find((item) => item.path === selectedRecordingPath),
@@ -825,13 +883,52 @@ export default function UplinkViewer() {
                     setDeviceId(e.target.value);
                   }}
                 >
-                  {streams.map((s) => (
-                    <MenuItem key={s.path} value={s.device_id}>
-                      {s.device_id}
-                    </MenuItem>
-                  ))}
+                  {streams.map((s) => {
+                    const info = deviceProcessMap[s.device_id];
+                    return (
+                      <MenuItem key={s.path} value={s.device_id}>
+                        <Box sx={{ display: "flex", flexDirection: "column" }}>
+                          <Typography variant="body2" component="span">
+                            {s.device_id}
+                          </Typography>
+                          {info ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              component="span"
+                            >
+                              工程: {info.process_code}
+                              {info.process_name
+                                ? ` (${info.process_name})`
+                                : ""}
+                            </Typography>
+                          ) : (
+                            <Typography
+                              variant="caption"
+                              color="text.disabled"
+                              component="span"
+                            >
+                              工程未登録
+                            </Typography>
+                          )}
+                        </Box>
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
+              <Box sx={{ minWidth: 200 }}>
+                <Typography variant="body2">
+                  {selectedDeviceProcess
+                    ? `工程コード: ${selectedDeviceProcess.process_code}`
+                    : "工程コード: 未登録"}
+                </Typography>
+                {selectedDeviceProcess?.process_name && (
+                  <Typography variant="caption" color="text.secondary">
+                    {selectedDeviceProcess.process_name}
+                  </Typography>
+                )}
+              </Box>
               <FormControl sx={{ minWidth: 140 }}>
                 <InputLabel id="mode-label">再生方式</InputLabel>
                 <Select
@@ -997,6 +1094,7 @@ export default function UplinkViewer() {
                 ) : (
                   filteredRecordingIndex.map((item) => {
                     const isActive = item.path === selectedRecordingPath;
+                    const info = deviceProcessMap[item.device_id];
                     return (
                       <Box
                         key={item.path}
@@ -1025,6 +1123,16 @@ export default function UplinkViewer() {
                         <Typography variant="subtitle2">
                           {item.device_id || deriveDeviceId(item.path)}
                         </Typography>
+                        {info && (
+                          <Typography
+                            variant="caption"
+                            sx={{ display: "block" }}
+                            color="text.secondary"
+                          >
+                            工程: {info.process_code}
+                            {info.process_name ? ` (${info.process_name})` : ""}
+                          </Typography>
+                        )}
                         <Typography variant="caption" sx={{ display: "block" }}>
                           最新 {formatTimestamp(item.latest_start)} ／{" "}
                           {item.segment_count}件
