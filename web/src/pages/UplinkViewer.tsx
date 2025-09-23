@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Hls from "hls.js";
 import {
   Box,
@@ -13,9 +19,13 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import axios from "axios";
+import { formatRFC3339, parseISO, isValid } from "date-fns";
 
 type StreamItem = {
   path: string;
@@ -56,13 +66,16 @@ export default function UplinkViewer() {
   const [whepStatus, setWhepStatus] = useState("");
   const [whepError, setWhepError] = useState("");
 
-  const [recordingIndex, setRecordingIndex] = useState<RecordingIndexItem[]>([]);
+  const [recordingIndex, setRecordingIndex] = useState<RecordingIndexItem[]>(
+    []
+  );
   const [recordingIndexLoading, setRecordingIndexLoading] = useState(false);
   const [recordingIndexError, setRecordingIndexError] = useState("");
   const [recordingFilter, setRecordingFilter] = useState("");
   const [selectedRecordingPath, setSelectedRecordingPath] = useState("");
-  const [recordingSelectionMode, setRecordingSelectionMode] =
-    useState<"auto" | "manual">("auto");
+  const [recordingSelectionMode, setRecordingSelectionMode] = useState<
+    "auto" | "manual"
+  >("auto");
   const selectedRecordingPathRef = useRef<string>("");
 
   const [isLivePlaying, setIsLivePlaying] = useState(false);
@@ -74,6 +87,8 @@ export default function UplinkViewer() {
   const [recPlayback, setRecPlayback] = useState<any[]>([]);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
+  const [rangeStartDt, setRangeStartDt] = useState<Date | null>(null);
+  const [rangeEndDt, setRangeEndDt] = useState<Date | null>(null);
   // 録画シーク用の絶対オフセット方式
   const [recClipStartIso, setRecClipStartIso] = useState<string | null>(null); // クリップ全体の開始ISO
   const [recClipDuration, setRecClipDuration] = useState<number | null>(null); // クリップ総尺（秒）
@@ -122,10 +137,69 @@ export default function UplinkViewer() {
     [timestampFormatter]
   );
 
+  const toRfc3339 = useCallback((date: Date) => {
+    try {
+      return formatRFC3339(date, { fractionDigits: 0 });
+    } catch (err) {
+      return date.toISOString();
+    }
+  }, []);
+
+  const handleRangeStartDateChange = useCallback(
+    (value: Date | null) => {
+      setRangeStartDt(value);
+      setRangeStart(value ? toRfc3339(value) : "");
+    },
+    [toRfc3339]
+  );
+
+  const handleRangeEndDateChange = useCallback(
+    (value: Date | null) => {
+      setRangeEndDt(value);
+      setRangeEnd(value ? toRfc3339(value) : "");
+    },
+    [toRfc3339]
+  );
+
+  const handleRangeStartTextChange = useCallback((value: string) => {
+    setRangeStart(value);
+    if (!value) {
+      setRangeStartDt(null);
+      return;
+    }
+    try {
+      const parsed = parseISO(value);
+      if (isValid(parsed)) {
+        setRangeStartDt(parsed);
+      }
+    } catch {
+      // ignore parse failures while user is typing free-form RFC3339 strings
+    }
+  }, []);
+
+  const handleRangeEndTextChange = useCallback((value: string) => {
+    setRangeEnd(value);
+    if (!value) {
+      setRangeEndDt(null);
+      return;
+    }
+    try {
+      const parsed = parseISO(value);
+      if (isValid(parsed)) {
+        setRangeEndDt(parsed);
+      }
+    } catch {
+      // ignore parse failures while user is typing free-form RFC3339 strings
+    }
+  }, []);
+
   const loadRecordingPath = useCallback(
     async (
       path: string,
-      { resetSeek = true, force = false }: { resetSeek?: boolean; force?: boolean } = {}
+      {
+        resetSeek = true,
+        force = false,
+      }: { resetSeek?: boolean; force?: boolean } = {}
     ) => {
       const safePath = path?.trim();
       if (!safePath) {
@@ -195,7 +269,9 @@ export default function UplinkViewer() {
             .map((seg) => {
               const start = seg?.start;
               if (!start) return null;
-              return { start: typeof start === "string" ? start : String(start) };
+              return {
+                start: typeof start === "string" ? start : String(start),
+              };
             })
             .filter(Boolean) as RecordingIndexSegment[];
           segments.sort((a, b) => b.start.localeCompare(a.start));
@@ -203,9 +279,12 @@ export default function UplinkViewer() {
             path,
             device_id: it.device_id || deriveDeviceId(path),
             segment_count:
-              typeof it.segment_count === "number" ? it.segment_count : segments.length,
+              typeof it.segment_count === "number"
+                ? it.segment_count
+                : segments.length,
             latest_start: it.latest_start || segments[0]?.start || null,
-            earliest_start: it.earliest_start || segments[segments.length - 1]?.start || null,
+            earliest_start:
+              it.earliest_start || segments[segments.length - 1]?.start || null,
             segments,
           } as RecordingIndexItem;
         })
@@ -249,7 +328,10 @@ export default function UplinkViewer() {
         await loadRecordingPath(initialPath, { force: true });
       } else if (currentSelected) {
         setRecPath(currentSelected);
-        await loadRecordingPath(currentSelected, { resetSeek: false, force: true });
+        await loadRecordingPath(currentSelected, {
+          resetSeek: false,
+          force: true,
+        });
       }
     } catch (e: any) {
       setRecordingIndexError(String(e?.message || e));
@@ -281,7 +363,13 @@ export default function UplinkViewer() {
     setSelectedRecordingPath(path);
     setRecPath(path);
     void loadRecordingPath(path, { resetSeek: false });
-  }, [deviceId, streams, loadRecordingPath, recordingSelectionMode, selectedRecordingPath]);
+  }, [
+    deviceId,
+    streams,
+    loadRecordingPath,
+    recordingSelectionMode,
+    selectedRecordingPath,
+  ]);
 
   const filteredRecordingIndex = useMemo(() => {
     const q = recordingFilter.trim().toLowerCase();
@@ -414,7 +502,9 @@ export default function UplinkViewer() {
     if (s && s.hls_url) return s.hls_url;
     const host = window.location.hostname;
     const port = 8888; // fallback
-    return `http://${host}:${port}/${deviceId ? `uplink/${deviceId}` : "uplink"}/index.m3u8`;
+    return `http://${host}:${port}/${
+      deviceId ? `uplink/${deviceId}` : "uplink"
+    }/index.m3u8`;
   };
 
   const buildWhepUrlFromDevice = () => {
@@ -564,555 +654,654 @@ export default function UplinkViewer() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        カメラ ライブ/録画 再生
-      </Typography>
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Box
-            sx={{
-              display: "flex",
-              gap: 2,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            <FormControl sx={{ minWidth: 220 }}>
-              <InputLabel id="stream-select-label">
-                オンラインのカメラ
-              </InputLabel>
-              <Select
-                id="stream-select"
-                labelId="stream-select-label"
-                label="オンラインのカメラ"
-                value={deviceId}
-                name="deviceId"
-                onChange={(e) => {
-                  setRecordingSelectionMode("auto");
-                  setDeviceId(e.target.value);
-                }}
-              >
-                {streams.map((s) => (
-                  <MenuItem key={s.path} value={s.device_id}>
-                    {s.device_id}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl sx={{ minWidth: 140 }}>
-              <InputLabel id="mode-label">再生方式</InputLabel>
-              <Select
-                id="mode-select"
-                labelId="mode-label"
-                label="再生方式"
-                value={mode}
-                name="playbackMode"
-                onChange={(e) => setMode(e.target.value as any)}
-              >
-                <MenuItem value="whep">低遅延（WHEP）</MenuItem>
-                <MenuItem value="hls">標準（HLS）</MenuItem>
-              </Select>
-            </FormControl>
-            <Button
-              variant="contained"
-              startIcon={<PlayArrowIcon />}
-              disabled={!deviceId || isLivePlaying}
-              color={isLivePlaying ? "success" : "primary"}
-              onClick={async () => {
-                await stopAll();
-                mode === "whep" ? await playWhep() : play(buildUrlFromDevice());
-              }}
-            >
-              {isLivePlaying ? "ライブ再生中" : "ライブ再生開始"}
-            </Button>
-            <Button
-              variant="outlined"
-              color="warning"
-              startIcon={<StopIcon />}
-              disabled={!isLivePlaying}
-              onClick={stopAll}
-            >
-              {isLivePlaying ? "停止" : "停止済み"}
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
-
-      <Box
-        sx={{
-          position: "relative",
-          width: "100%",
-          maxWidth: "min(100vw, 1280px)",
-          aspectRatio: "16 / 9",
-          background: "#000",
-        }}
-      >
-        <video
-          ref={videoRef}
-          controls
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            background: "#000",
-          }}
-          onDoubleClick={goFullscreen}
-          onTimeUpdate={(e) => {
-            if (!recClipStartIso) return;
-            if ((window as any).__recSeeking) return; // シーク確定中はバー更新を抑止
-            const v = e.currentTarget as HTMLVideoElement;
-            const rel = Math.max(0, Math.floor(v.currentTime || 0));
-            const abs = recBaseOffsetSec + rel;
-            const capped =
-              recClipDuration != null
-                ? Math.min(abs, Math.max(0, Math.floor(recClipDuration)))
-                : abs;
-            setRecSeekPos(capped);
-          }}
-        />
-      </Box>
-      {(hlsError || whepError || (mode === "whep" && whepStatus)) && (
-        <Box sx={{ mt: 1 }}>
-          {mode === "whep" && whepStatus && (
-            <Typography variant="body2" color="text.secondary">
-              WHEP 状態: {whepStatus}
-            </Typography>
-          )}
-          {hlsError && (
-            <Typography variant="body2" color="error">
-              HLS エラー: {hlsError}
-            </Typography>
-          )}
-          {whepError && (
-            <Typography variant="body2" color="error">
-              WHEP エラー: {whepError}
-            </Typography>
-          )}
-        </Box>
-      )}
-
-      <Card sx={{ mt: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            録画一覧と再生
-          </Typography>
-          <Box
-            sx={{
-              display: "flex",
-              gap: 2,
-              flexWrap: "wrap",
-              alignItems: "center",
-              mb: 2,
-            }}
-          >
-            <TextField
-              size="small"
-              sx={{ minWidth: 300 }}
-              label="デバイス/パス検索"
-              value={recordingFilter}
-              id="recording-filter"
-              name="recordingFilter"
-              onChange={(e) => setRecordingFilter(e.target.value)}
-              placeholder="device-id や path を入力"
-            />
-            <Button
-              variant="outlined"
-              onClick={fetchRecordingIndex}
-              disabled={recordingIndexLoading}
-            >
-              {recordingIndexLoading ? "更新中..." : "録画インデックス更新"}
-            </Button>
-            {recordingIndexError && (
-              <Typography variant="body2" color="error">
-                {recordingIndexError}
-              </Typography>
-            )}
-            {!recordingIndexLoading && recordingIndex.length > 0 && (
-              <Typography variant="body2" sx={{ ml: "auto" }}>
-                登録パス: {recordingIndex.length} 件
-              </Typography>
-            )}
-          </Box>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: { xs: "column", md: "row" },
-              gap: 2,
-            }}
-          >
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          カメラ ライブ/録画 再生
+        </Typography>
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
             <Box
               sx={{
-                flexBasis: { xs: "100%", md: 280 },
-                flexShrink: 0,
-                maxHeight: 320,
-                overflowY: "auto",
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 1,
+                display: "flex",
+                gap: 2,
+                flexWrap: "wrap",
+                alignItems: "center",
               }}
             >
-              {recordingIndexLoading ? (
-                <Typography variant="body2" sx={{ p: 2 }}>
-                  読み込み中...
+              <FormControl sx={{ minWidth: 220 }}>
+                <InputLabel id="stream-select-label">
+                  オンラインのカメラ
+                </InputLabel>
+                <Select
+                  id="stream-select"
+                  labelId="stream-select-label"
+                  label="オンラインのカメラ"
+                  value={deviceId}
+                  name="deviceId"
+                  onChange={(e) => {
+                    setRecordingSelectionMode("auto");
+                    setDeviceId(e.target.value);
+                  }}
+                >
+                  {streams.map((s) => (
+                    <MenuItem key={s.path} value={s.device_id}>
+                      {s.device_id}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl sx={{ minWidth: 140 }}>
+                <InputLabel id="mode-label">再生方式</InputLabel>
+                <Select
+                  id="mode-select"
+                  labelId="mode-label"
+                  label="再生方式"
+                  value={mode}
+                  name="playbackMode"
+                  onChange={(e) => setMode(e.target.value as any)}
+                >
+                  <MenuItem value="whep">低遅延（WHEP）</MenuItem>
+                  <MenuItem value="hls">標準（HLS）</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                startIcon={<PlayArrowIcon />}
+                disabled={!deviceId || isLivePlaying}
+                color={isLivePlaying ? "success" : "primary"}
+                onClick={async () => {
+                  await stopAll();
+                  mode === "whep"
+                    ? await playWhep()
+                    : play(buildUrlFromDevice());
+                }}
+              >
+                {isLivePlaying ? "ライブ再生中" : "ライブ再生開始"}
+              </Button>
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={<StopIcon />}
+                disabled={!isLivePlaying}
+                onClick={stopAll}
+              >
+                {isLivePlaying ? "停止" : "停止済み"}
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+
+        <Box
+          sx={{
+            position: "relative",
+            width: "100%",
+            maxWidth: "min(100vw, 1280px)",
+            aspectRatio: "16 / 9",
+            background: "#000",
+          }}
+        >
+          <video
+            ref={videoRef}
+            controls
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              background: "#000",
+            }}
+            onDoubleClick={goFullscreen}
+            onTimeUpdate={(e) => {
+              if (!recClipStartIso) return;
+              if ((window as any).__recSeeking) return; // シーク確定中はバー更新を抑止
+              const v = e.currentTarget as HTMLVideoElement;
+              const rel = Math.max(0, Math.floor(v.currentTime || 0));
+              const abs = recBaseOffsetSec + rel;
+              const capped =
+                recClipDuration != null
+                  ? Math.min(abs, Math.max(0, Math.floor(recClipDuration)))
+                  : abs;
+              setRecSeekPos(capped);
+            }}
+          />
+        </Box>
+        {(hlsError || whepError || (mode === "whep" && whepStatus)) && (
+          <Box sx={{ mt: 1 }}>
+            {mode === "whep" && whepStatus && (
+              <Typography variant="body2" color="text.secondary">
+                WHEP 状態: {whepStatus}
+              </Typography>
+            )}
+            {hlsError && (
+              <Typography variant="body2" color="error">
+                HLS エラー: {hlsError}
+              </Typography>
+            )}
+            {whepError && (
+              <Typography variant="body2" color="error">
+                WHEP エラー: {whepError}
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        <Card sx={{ mt: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              録画一覧と再生
+            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                gap: 2,
+                flexWrap: "wrap",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
+              <TextField
+                size="small"
+                sx={{ minWidth: 300 }}
+                label="デバイス/パス検索"
+                value={recordingFilter}
+                id="recording-filter"
+                name="recordingFilter"
+                onChange={(e) => setRecordingFilter(e.target.value)}
+                placeholder="device-id や path を入力"
+              />
+              <Button
+                variant="outlined"
+                onClick={fetchRecordingIndex}
+                disabled={recordingIndexLoading}
+              >
+                {recordingIndexLoading ? "更新中..." : "録画インデックス更新"}
+              </Button>
+              {recordingIndexError && (
+                <Typography variant="body2" color="error">
+                  {recordingIndexError}
                 </Typography>
-              ) : filteredRecordingIndex.length === 0 ? (
-                <Typography variant="body2" sx={{ p: 2 }}>
-                  一致する録画がありません。
+              )}
+              {!recordingIndexLoading && recordingIndex.length > 0 && (
+                <Typography variant="body2" sx={{ ml: "auto" }}>
+                  登録パス: {recordingIndex.length} 件
                 </Typography>
-              ) : (
-                filteredRecordingIndex.map((item) => {
-                  const isActive = item.path === selectedRecordingPath;
-                  return (
-                    <Box
-                      key={item.path}
-                      sx={{
-                        px: 1.5,
-                        py: 1,
-                        cursor: "pointer",
-                        borderBottom: "1px solid",
-                        borderColor: "divider",
-                        bgcolor: isActive ? "action.selected" : "transparent",
-                        "&:hover": {
-                          bgcolor: isActive ? "action.selected" : "action.hover",
-                        },
-                      }}
-                      onClick={() => {
-                        setRecordingSelectionMode("manual");
-                        setSelectedRecordingPath(item.path);
-                        setRecPath(item.path);
-                        void loadRecordingPath(item.path, { resetSeek: false });
-                      }}
-                    >
-                      <Typography variant="subtitle2">
-                        {item.device_id || deriveDeviceId(item.path)}
-                      </Typography>
-                      <Typography variant="caption" sx={{ display: "block" }}>
-                        最新 {formatTimestamp(item.latest_start)} ／ {item.segment_count}件
-                      </Typography>
-                    </Box>
-                  );
-                })
               )}
             </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              {selectedRecordingPath ? (
-                <>
-                  <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                    選択中: {deriveDeviceId(selectedRecordingPath)} ({selectedRecordingPath})
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: { xs: "column", md: "row" },
+                gap: 2,
+              }}
+            >
+              <Box
+                sx={{
+                  flexBasis: { xs: "100%", md: 280 },
+                  flexShrink: 0,
+                  maxHeight: 320,
+                  overflowY: "auto",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                }}
+              >
+                {recordingIndexLoading ? (
+                  <Typography variant="body2" sx={{ p: 2 }}>
+                    読み込み中...
                   </Typography>
-                  {activeRecordingMeta && (
+                ) : filteredRecordingIndex.length === 0 ? (
+                  <Typography variant="body2" sx={{ p: 2 }}>
+                    一致する録画がありません。
+                  </Typography>
+                ) : (
+                  filteredRecordingIndex.map((item) => {
+                    const isActive = item.path === selectedRecordingPath;
+                    return (
+                      <Box
+                        key={item.path}
+                        sx={{
+                          px: 1.5,
+                          py: 1,
+                          cursor: "pointer",
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          bgcolor: isActive ? "action.selected" : "transparent",
+                          "&:hover": {
+                            bgcolor: isActive
+                              ? "action.selected"
+                              : "action.hover",
+                          },
+                        }}
+                        onClick={() => {
+                          setRecordingSelectionMode("manual");
+                          setSelectedRecordingPath(item.path);
+                          setRecPath(item.path);
+                          void loadRecordingPath(item.path, {
+                            resetSeek: false,
+                          });
+                        }}
+                      >
+                        <Typography variant="subtitle2">
+                          {item.device_id || deriveDeviceId(item.path)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: "block" }}>
+                          最新 {formatTimestamp(item.latest_start)} ／{" "}
+                          {item.segment_count}件
+                        </Typography>
+                      </Box>
+                    );
+                  })
+                )}
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                {selectedRecordingPath ? (
+                  <>
+                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                      選択中: {deriveDeviceId(selectedRecordingPath)} (
+                      {selectedRecordingPath})
+                    </Typography>
+                    {activeRecordingMeta && (
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        最新:{" "}
+                        {formatTimestamp(activeRecordingMeta.latest_start)} ／
+                        最古:{" "}
+                        {formatTimestamp(activeRecordingMeta.earliest_start)} ／
+                        総 {activeRecordingMeta.segment_count} 件
+                      </Typography>
+                    )}
                     <Typography variant="body2" sx={{ mb: 2 }}>
-                      最新: {formatTimestamp(activeRecordingMeta.latest_start)} ／ 最古: {" "}
-                      {formatTimestamp(activeRecordingMeta.earliest_start)} ／ 総{" "}
-                      {activeRecordingMeta.segment_count} 件
+                      表示件数: {displaySegments.length}
                     </Typography>
-                  )}
-                  <Typography variant="body2" sx={{ mb: 2 }}>
-                    表示件数: {displaySegments.length}
-                  </Typography>
-                  {recClipStartIso && recClipDuration != null && (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2">録画シーク（このクリップ内）</Typography>
-                      <Slider
-                        value={Math.min(
-                          recSeekPos,
-                          Math.max(0, recClipDuration ?? 0)
-                        )}
-                        min={0}
-                        max={Math.max(1, Math.floor(recClipDuration ?? 0))}
-                        valueLabelDisplay="auto"
-                        onChange={(_, val) => {
-                          if (typeof val === "number") {
-                            setRecSeekPos(val);
-                          }
-                        }}
-                        onChangeCommitted={async (_, val) => {
-                          if (typeof val !== "number") return;
-                          if (!recClipStartIso) return;
-                          const baseMs = new Date(recClipStartIso).getTime();
-                          if (!baseMs || isNaN(baseMs)) return;
-                          const seekAbsSec = Math.max(0, Math.floor(val));
-                          const newStart = new Date(
-                            baseMs + seekAbsSec * 1000
-                          ).toISOString();
-                          const loc = window.location;
-                          const getBase = `${loc.protocol}//${loc.hostname}:9996`;
-                          const newDur =
-                            recClipDuration != null
-                              ? Math.max(1, recClipDuration - seekAbsSec)
-                              : undefined;
-                          const params = new URLSearchParams();
-                          params.set("path", recPath);
-                          params.set("start", newStart);
-                          if (newDur) params.set("duration", String(newDur));
-                          if (RECORDING_PLAYBACK_FORMAT) {
-                            params.set("format", RECORDING_PLAYBACK_FORMAT);
-                          }
-                          const url = `${getBase}/get?${params.toString()}`;
-                          try {
-                            (window as any).__recSeeking = true;
-                            await stopAll();
-                            const v = videoRef.current;
-                            if (!v) return;
-                            (v as any).srcObject = null;
-                            v.src = url;
-                            await v.play();
-                            setRecBaseOffsetSec(seekAbsSec);
-                            setRecSeekPos(seekAbsSec);
-                            (window as any).__recSeeking = false;
-                          } catch (e) {
-                            setHlsError(String(e));
-                            (window as any).__recSeeking = false;
-                          }
-                        }}
-                      />
-                    </Box>
-                  )}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 2,
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      mb: 2,
-                    }}
-                  >
-                    <TextField
-                      size="small"
-                      sx={{ minWidth: 320 }}
-                      label="開始 (RFC3339, 例: 2025-08-24T09:00:00Z)"
-                      value={rangeStart}
-                      id="range-start"
-                      name="rangeStart"
-                      onChange={(e) => setRangeStart(e.target.value)}
-                    />
-                    <TextField
-                      size="small"
-                      sx={{ minWidth: 320 }}
-                      label="終了 (RFC3339, 空なら単一指定)"
-                      value={rangeEnd}
-                      id="range-end"
-                      name="rangeEnd"
-                      onChange={(e) => setRangeEnd(e.target.value)}
-                    />
-                    <Button
-                      color="error"
-                      variant="outlined"
-                      disabled={!recPath || !rangeStart}
-                      onClick={async () => {
-                        if (
-                          !confirm(
-                            `この範囲の録画を削除しますか？\npath=${recPath}\nstart=${rangeStart}\nend=${
-                              rangeEnd || "(なし)"
-                            }\n注意: この操作は元に戻せません。`
-                          )
-                        )
-                          return;
-                        try {
-                          await axios.delete(`${API_PREFIX}/recordings/range`, {
-                            params: {
-                              path: recPath,
-                              start: rangeStart,
-                              ...(rangeEnd ? { end: rangeEnd } : {}),
-                            },
-                          });
-                          await loadRecordingPath(recPath, { force: true });
-                        } catch (e: any) {
-                          setRecError(
-                            `範囲削除に失敗しました: ${String(e?.message || e)}`
-                          );
-                        }
-                      }}
-                    >
-                      期間内を削除
-                    </Button>
-                    <Button
-                      color="error"
-                      variant="outlined"
-                      disabled={!recPath}
-                      onClick={async () => {
-                        if (
-                          !confirm(
-                            `このパスの全録画を削除しますか？\npath=${recPath}\n注意: この操作は元に戻せません。`
-                          )
-                        )
-                          return;
-                        try {
-                          await axios.delete(`${API_PREFIX}/recordings/all`, {
-                            params: { path: recPath },
-                          });
-                          await loadRecordingPath(recPath, { force: true });
-                        } catch (e: any) {
-                          setRecError(
-                            `全削除に失敗しました: ${String(e?.message || e)}`
-                          );
-                        }
-                      }}
-                    >
-                      すべて削除
-                    </Button>
-                  </Box>
-                  {recLoading && (
-                    <Typography variant="body2">読み込み中...</Typography>
-                  )}
-                  {recError && (
-                    <Typography variant="body2" color="error">
-                      {recError}
-                    </Typography>
-                  )}
-                  {!recLoading && displaySegments.length > 0 ? (
+                    {recClipStartIso && recClipDuration != null && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2">
+                          録画シーク（このクリップ内）
+                        </Typography>
+                        <Slider
+                          value={Math.min(
+                            recSeekPos,
+                            Math.max(0, recClipDuration ?? 0)
+                          )}
+                          min={0}
+                          max={Math.max(1, Math.floor(recClipDuration ?? 0))}
+                          valueLabelDisplay="auto"
+                          onChange={(_, val) => {
+                            if (typeof val === "number") {
+                              setRecSeekPos(val);
+                            }
+                          }}
+                          onChangeCommitted={async (_, val) => {
+                            if (typeof val !== "number") return;
+                            if (!recClipStartIso) return;
+                            const baseMs = new Date(recClipStartIso).getTime();
+                            if (!baseMs || isNaN(baseMs)) return;
+                            const seekAbsSec = Math.max(0, Math.floor(val));
+                            const newStart = new Date(
+                              baseMs + seekAbsSec * 1000
+                            ).toISOString();
+                            const loc = window.location;
+                            const getBase = `${loc.protocol}//${loc.hostname}:9996`;
+                            const newDur =
+                              recClipDuration != null
+                                ? Math.max(1, recClipDuration - seekAbsSec)
+                                : undefined;
+                            const params = new URLSearchParams();
+                            params.set("path", recPath);
+                            params.set("start", newStart);
+                            if (newDur) params.set("duration", String(newDur));
+                            if (RECORDING_PLAYBACK_FORMAT) {
+                              params.set("format", RECORDING_PLAYBACK_FORMAT);
+                            }
+                            const url = `${getBase}/get?${params.toString()}`;
+                            try {
+                              (window as any).__recSeeking = true;
+                              await stopAll();
+                              const v = videoRef.current;
+                              if (!v) return;
+                              (v as any).srcObject = null;
+                              v.src = url;
+                              await v.play();
+                              setRecBaseOffsetSec(seekAbsSec);
+                              setRecSeekPos(seekAbsSec);
+                              (window as any).__recSeeking = false;
+                            } catch (e) {
+                              setHlsError(String(e));
+                              (window as any).__recSeeking = false;
+                            }
+                          }}
+                        />
+                      </Box>
+                    )}
                     <Box
                       sx={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr auto auto",
-                        rowGap: 1,
-                        columnGap: 8,
-                        alignItems: "center",
+                        display: "flex",
+                        gap: 2,
+                        flexWrap: { xs: "wrap", md: "nowrap" },
+                        alignItems: "stretch",
+                        mb: 2,
+                        width: "100%",
                       }}
                     >
-                      <Typography variant="subtitle2">開始時刻</Typography>
-                      <Typography variant="subtitle2" sx={{ textAlign: "right" }}>
-                        長さ
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                          minWidth: 280,
+                          flexBasis: 280,
+                          flexGrow: 1,
+                          height: "100%",
+                        }}
+                      >
+                        <DateTimePicker
+                          label="開始 (ローカル時刻)"
+                          value={rangeStartDt}
+                          onChange={handleRangeStartDateChange}
+                          ampm={false}
+                          format="yyyy/MM/dd HH:mm:ss"
+                          slotProps={{
+                            textField: {
+                              size: "small",
+                              id: "range-start-datetime",
+                              sx: { minWidth: 280 },
+                            },
+                          }}
+                          views={[
+                            "year",
+                            "month",
+                            "day",
+                            "hours",
+                            "minutes",
+                            "seconds",
+                          ]}
+                        />
+                      </Box>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                          minWidth: 280,
+                          flexBasis: 280,
+                          flexGrow: 1,
+                          height: "100%",
+                        }}
+                      >
+                        <DateTimePicker
+                          label="終了 (ローカル時刻)"
+                          value={rangeEndDt}
+                          onChange={handleRangeEndDateChange}
+                          ampm={false}
+                          format="yyyy/MM/dd HH:mm:ss"
+                          slotProps={{
+                            textField: {
+                              size: "small",
+                              id: "range-end-datetime",
+                              sx: { minWidth: 280 },
+                            },
+                          }}
+                          views={[
+                            "year",
+                            "month",
+                            "day",
+                            "hours",
+                            "minutes",
+                            "seconds",
+                          ]}
+                        />
+                      </Box>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: { xs: "column", sm: "row" },
+                          gap: { xs: 1, sm: 2 },
+                          minWidth: 200,
+                          flexBasis: 220,
+                          flexGrow: 0,
+                          height: "100%",
+                          alignItems: "stretch",
+                          justifyContent: "flex-start",
+                        }}
+                      >
+                        <Button
+                          sx={{ minHeight: 40, whiteSpace: "nowrap" }}
+                          color="error"
+                          variant="outlined"
+                          disabled={!recPath || !rangeStart}
+                          onClick={async () => {
+                            if (
+                              !confirm(
+                                `この範囲の録画を削除しますか？\npath=${recPath}\nstart=${rangeStart}\nend=${
+                                  rangeEnd || "(なし)"
+                                }\n注意: この操作は元に戻せません。`
+                              )
+                            )
+                              return;
+                            try {
+                              await axios.delete(
+                                `${API_PREFIX}/recordings/range`,
+                                {
+                                  params: {
+                                    path: recPath,
+                                    start: rangeStart,
+                                    ...(rangeEnd ? { end: rangeEnd } : {}),
+                                  },
+                                }
+                              );
+                              await loadRecordingPath(recPath, { force: true });
+                            } catch (e: any) {
+                              setRecError(
+                                `範囲削除に失敗しました: ${String(
+                                  e?.message || e
+                                )}`
+                              );
+                            }
+                          }}
+                        >
+                          期間内を削除
+                        </Button>
+                        <Button
+                          sx={{ minHeight: 40, whiteSpace: "nowrap" }}
+                          color="error"
+                          variant="outlined"
+                          disabled={!recPath}
+                          onClick={async () => {
+                            if (
+                              !confirm(
+                                `このパスの全録画を削除しますか？\npath=${recPath}\n注意: この操作は元に戻せません。`
+                              )
+                            )
+                              return;
+                            try {
+                              await axios.delete(
+                                `${API_PREFIX}/recordings/all`,
+                                {
+                                  params: { path: recPath },
+                                }
+                              );
+                              await loadRecordingPath(recPath, { force: true });
+                            } catch (e: any) {
+                              setRecError(
+                                `全削除に失敗しました: ${String(
+                                  e?.message || e
+                                )}`
+                              );
+                            }
+                          }}
+                        >
+                          すべて削除
+                        </Button>
+                      </Box>
+                    </Box>
+                    {recLoading && (
+                      <Typography variant="body2">読み込み中...</Typography>
+                    )}
+                    {recError && (
+                      <Typography variant="body2" color="error">
+                        {recError}
                       </Typography>
-                      <Typography variant="subtitle2" sx={{ textAlign: "right" }}>
-                        操作
-                      </Typography>
-                      {displaySegments.map((it: any) => {
-                        const start = it.start as string;
-                        const formattedStart = formatTimestamp(start);
-                        const dur = (it as any).duration as number | undefined;
-                        let url = (it as any).url as string | undefined;
-                        if (!url && (it as any).playback_url)
-                          url = (it as any).playback_url as string;
-                        if (!url && start) {
-                          const loc = window.location;
-                          const base = `${loc.protocol}//${loc.hostname}:9996`;
-                          const params = new URLSearchParams();
-                          params.set("path", recPath);
-                          params.set("start", start);
-                          if (dur) params.set("duration", String(dur));
-                          if (RECORDING_PLAYBACK_FORMAT) {
-                            params.set("format", RECORDING_PLAYBACK_FORMAT);
+                    )}
+                    {!recLoading && displaySegments.length > 0 ? (
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto auto",
+                          rowGap: 1,
+                          columnGap: 8,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Typography variant="subtitle2">開始時刻</Typography>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{ textAlign: "right" }}
+                        >
+                          長さ
+                        </Typography>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{ textAlign: "right" }}
+                        >
+                          操作
+                        </Typography>
+                        {displaySegments.map((it: any) => {
+                          const start = it.start as string;
+                          const formattedStart = formatTimestamp(start);
+                          const dur = (it as any).duration as
+                            | number
+                            | undefined;
+                          let url = (it as any).url as string | undefined;
+                          if (!url && (it as any).playback_url)
+                            url = (it as any).playback_url as string;
+                          if (!url && start) {
+                            const loc = window.location;
+                            const base = `${loc.protocol}//${loc.hostname}:9996`;
+                            const params = new URLSearchParams();
+                            params.set("path", recPath);
+                            params.set("start", start);
+                            if (dur) params.set("duration", String(dur));
+                            if (RECORDING_PLAYBACK_FORMAT) {
+                              params.set("format", RECORDING_PLAYBACK_FORMAT);
+                            }
+                            url = `${base}/get?${params.toString()}`;
+                          } else if (
+                            url &&
+                            RECORDING_PLAYBACK_FORMAT &&
+                            !url.includes("format=")
+                          ) {
+                            url +=
+                              (url.includes("?") ? "&" : "?") +
+                              `format=${RECORDING_PLAYBACK_FORMAT}`;
                           }
-                          url = `${base}/get?${params.toString()}`;
-                        } else if (
-                          url &&
-                          RECORDING_PLAYBACK_FORMAT &&
-                          !url.includes("format=")
-                        ) {
-                          url +=
-                            (url.includes("?") ? "&" : "?") +
-                            `format=${RECORDING_PLAYBACK_FORMAT}`;
-                        }
-                        return (
-                          <React.Fragment key={start}>
-                            <Typography
-                              variant="body2"
-                              title={start || undefined}
-                            >
-                              {formattedStart}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ textAlign: "right" }}
-                            >
-                              {dur ? `${dur.toFixed(1)}s` : "-"}
-                            </Typography>
-                            <Box
-                              sx={{
-                                display: "flex",
-                                gap: 1,
-                                justifyContent: "flex-end",
-                              }}
-                            >
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={async () => {
-                                  await stopAll();
-                                  const v = videoRef.current;
-                                  if (!v || !url) return;
-                                  try {
-                                    (v as any).srcObject = null;
-                                    v.src = url;
-                                    await v.play();
-                                    setRecClipStartIso(start || null);
-                                    setRecClipDuration((dur ?? null) as any);
-                                    setRecBaseOffsetSec(0);
-                                    setRecSeekPos(0);
-                                  } catch (e) {
-                                    setHlsError(String(e));
-                                  }
+                          return (
+                            <React.Fragment key={start}>
+                              <Typography
+                                variant="body2"
+                                title={start || undefined}
+                              >
+                                {formattedStart}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{ textAlign: "right" }}
+                              >
+                                {dur ? `${dur.toFixed(1)}s` : "-"}
+                              </Typography>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  gap: 1,
+                                  justifyContent: "flex-end",
                                 }}
                               >
-                                再生
-                              </Button>
-                              {url && (
                                 <Button
                                   size="small"
-                                  component="a"
-                                  href={url}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                  variant="outlined"
+                                  onClick={async () => {
+                                    await stopAll();
+                                    const v = videoRef.current;
+                                    if (!v || !url) return;
+                                    try {
+                                      (v as any).srcObject = null;
+                                      v.src = url;
+                                      await v.play();
+                                      setRecClipStartIso(start || null);
+                                      setRecClipDuration((dur ?? null) as any);
+                                      setRecBaseOffsetSec(0);
+                                      setRecSeekPos(0);
+                                    } catch (e) {
+                                      setHlsError(String(e));
+                                    }
+                                  }}
                                 >
-                                  開く
+                                  再生
                                 </Button>
-                              )}
-                              <Button
-                                size="small"
-                                color="error"
-                                variant="outlined"
-                                onClick={async () => {
-                                  if (!recPath || !start) return;
-                                  if (
-                                    !confirm(
-                                      `この録画を削除しますか？\npath=${recPath}\nstart=${start}`
+                                {url && (
+                                  <Button
+                                    size="small"
+                                    component="a"
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    開く
+                                  </Button>
+                                )}
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  variant="outlined"
+                                  onClick={async () => {
+                                    if (!recPath || !start) return;
+                                    if (
+                                      !confirm(
+                                        `この録画を削除しますか？\npath=${recPath}\nstart=${start}`
+                                      )
                                     )
-                                  )
-                                    return;
-                                  try {
-                                    await axios.delete(
-                                      `${API_PREFIX}/recordings/segment`,
-                                      { params: { path: recPath, start } }
-                                    );
-                                    await loadRecordingPath(recPath, {
-                                      resetSeek: false,
-                                      force: true,
-                                    });
-                                  } catch (e: any) {
-                                    setRecError(
-                                      `削除に失敗しました: ${String(
-                                        e?.message || e
-                                      )}`
-                                    );
-                                  }
-                                }}
-                              >
-                                削除
-                              </Button>
-                            </Box>
-                          </React.Fragment>
-                        );
-                      })}
-                    </Box>
-                  ) : (
-                    !recLoading && (
-                      <Typography variant="body2" color="text.secondary">
-                        録画が見つかりません。
-                      </Typography>
-                    )
-                  )}
-                </>
-              ) : (
-                <Typography variant="body2">
-                  左の一覧から録画を選択してください。
-                </Typography>
-              )}
+                                      return;
+                                    try {
+                                      await axios.delete(
+                                        `${API_PREFIX}/recordings/segment`,
+                                        { params: { path: recPath, start } }
+                                      );
+                                      await loadRecordingPath(recPath, {
+                                        resetSeek: false,
+                                        force: true,
+                                      });
+                                    } catch (e: any) {
+                                      setRecError(
+                                        `削除に失敗しました: ${String(
+                                          e?.message || e
+                                        )}`
+                                      );
+                                    }
+                                  }}
+                                >
+                                  削除
+                                </Button>
+                              </Box>
+                            </React.Fragment>
+                          );
+                        })}
+                      </Box>
+                    ) : (
+                      !recLoading && (
+                        <Typography variant="body2" color="text.secondary">
+                          録画が見つかりません。
+                        </Typography>
+                      )
+                    )}
+                  </>
+                ) : (
+                  <Typography variant="body2">
+                    左の一覧から録画を選択してください。
+                  </Typography>
+                )}
+              </Box>
             </Box>
-          </Box>
-        </CardContent>
-      </Card>
-    </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    </LocalizationProvider>
   );
 }
