@@ -20,6 +20,24 @@ cd kmp && ./gradlew :thinkletApp:installDebug
 
 生成物: `kmp/thinkletApp/build/outputs/apk/debug/thinkletApp-debug.apk`
 
+### THINKLET SDK AAR の取得
+[GitHub Packages](https://github.com/orgs/FairyDevicesRD/packages?repo_name=thinklet.app.sdk) から `sdk-audio-0.1.6.aar`と`sdk-utils-0.1.6.aar` をダウンロードし `kmp/thinkletApp/libs/` に配置してください。
+  
+### 手動インストール（権限付与つき）
+```bash
+APK=kmp/thinkletApp/build/outputs/apk/debug/thinkletApp-debug.apk
+adb install -g -r "$APK"
+```
+または、
+```bash
+adb install -r kmp/thinkletApp/build/outputs/apk/debug/thinkletApp-debug.apk
+```
+または、
+```bash
+cd kmp
+adb install -r thinkletApp/build/outputs/apk/debug/thinkletApp-debug.apk
+```
+
 ### 権限の付与
 
 THINKLET は画面を持たないため、ADB で権限を付与してから起動します。
@@ -34,7 +52,11 @@ adb shell pm grant com.imageflow.thinklet.app android.permission.RECORD_AUDIO
 配信 URL や自動開始の設定はブロードキャストで更新できます。
 
 ```bash
-adb shell am broadcast   -a com.imageflow.thinklet.SET_CONFIG   --es url http://192.168.1.10:8889/uplink/<deviceId>/whip   --ez autoStart true   --ez autoResume true
+adb shell am broadcast \
+  -a com.imageflow.thinklet.SET_CONFIG \
+  --es url http://192.168.0.5:8889 \
+  --ez autoStart true \
+  --ez autoResume true
 ```
 
 - `url`: WHIP エンドポイント。省略時は `http://192.168.0.5:8889/uplink/<androidId>/whip` が使用されます。
