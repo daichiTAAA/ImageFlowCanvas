@@ -391,6 +391,29 @@ export default function UplinkViewer() {
     [recPlayback, recSegments]
   );
 
+  const filteredSegments = useMemo(() => {
+    const base = Array.isArray(displaySegments) ? displaySegments : [];
+    if (!rangeStartDt && !rangeEndDt) {
+      return base;
+    }
+    const startMs = rangeStartDt ? rangeStartDt.getTime() : null;
+    const endMs = rangeEndDt ? rangeEndDt.getTime() : null;
+    return base.filter((segment: any) => {
+      const raw = segment?.start;
+      if (!raw) return false;
+      const ms = new Date(raw).getTime();
+      if (Number.isNaN(ms)) return false;
+      if (startMs !== null && ms < startMs) return false;
+      if (endMs !== null && ms > endMs) return false;
+      return true;
+    });
+  }, [displaySegments, rangeStartDt, rangeEndDt]);
+
+  const isRangeFilterActive = useMemo(
+    () => Boolean(rangeStartDt || rangeEndDt),
+    [rangeStartDt, rangeEndDt]
+  );
+
   const play = (hlsUrl: string) => {
     setHlsError("");
     const video = videoRef.current;
@@ -896,22 +919,6 @@ export default function UplinkViewer() {
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 {selectedRecordingPath ? (
                   <>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                      選択中: {deriveDeviceId(selectedRecordingPath)} (
-                      {selectedRecordingPath})
-                    </Typography>
-                    {activeRecordingMeta && (
-                      <Typography variant="body2" sx={{ mb: 2 }}>
-                        最新:{" "}
-                        {formatTimestamp(activeRecordingMeta.latest_start)} ／
-                        最古:{" "}
-                        {formatTimestamp(activeRecordingMeta.earliest_start)} ／
-                        総 {activeRecordingMeta.segment_count} 件
-                      </Typography>
-                    )}
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                      表示件数: {displaySegments.length}
-                    </Typography>
                     {recClipStartIso && recClipDuration != null && (
                       <Box sx={{ mb: 2 }}>
                         <Typography variant="body2">
@@ -1141,7 +1148,7 @@ export default function UplinkViewer() {
                         {recError}
                       </Typography>
                     )}
-                    {!recLoading && displaySegments.length > 0 ? (
+                    {!recLoading && filteredSegments.length > 0 ? (
                       <Box
                         sx={{
                           display: "grid",
@@ -1164,7 +1171,7 @@ export default function UplinkViewer() {
                         >
                           操作
                         </Typography>
-                        {displaySegments.map((it: any) => {
+                        {filteredSegments.map((it: any) => {
                           const start = it.start as string;
                           const formattedStart = formatTimestamp(start);
                           const dur = (it as any).duration as
@@ -1287,7 +1294,9 @@ export default function UplinkViewer() {
                     ) : (
                       !recLoading && (
                         <Typography variant="body2" color="text.secondary">
-                          録画が見つかりません。
+                          {displaySegments.length === 0
+                            ? "録画が見つかりません。"
+                            : "指定した期間に一致する録画がありません。"}
                         </Typography>
                       )
                     )}
