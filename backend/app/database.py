@@ -72,6 +72,7 @@ async def init_db():
             InspectionItemExecution,
             InspectionResult,
         )
+        from app.models import thinklet  # ensure THINKLET tables are registered
 
         # Try primary database URL first
         logger.info("Attempting to connect to primary database...")

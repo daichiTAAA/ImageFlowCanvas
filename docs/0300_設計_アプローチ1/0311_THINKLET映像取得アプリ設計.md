@@ -249,10 +249,10 @@ THINKLET SDK（sdk-audio-0.1.6.aar）による5chマイクアレイとXFE技術�
 ## 3.4. 作業制御API統合
 
 ### 3.4.1. Backend API エンドポイント
-- `POST /api/v1/work-sessions/start` - 作業開始通知
-- `POST /api/v1/work-sessions/end` - 作業終了通知  
-- `GET /api/v1/work-sessions/{sessionId}` - セッション状況確認
-- `POST /api/v1/devices/{deviceName}/status` - デバイス状態通知（色名識別）
+- `POST /v1/thinklet/work-sessions/start` - 作業開始通知
+- `POST /v1/thinklet/work-sessions/end` - 作業終了通知  
+- `GET /v1/thinklet/work-sessions/{sessionId}` - セッション状況確認
+- `POST /v1/thinklet/devices/{deviceName}/status` - デバイス状態通知（色名識別）
 
 ### 3.4.2. 作業セッション管理
 - セッションID自動生成・管理
@@ -387,9 +387,9 @@ WORKING_RECORDING（作業中+録画中）
 ```
 
 **バックエンドAPI通信:**
-- **作業開始通知**: `POST /api/v1/work-sessions/start`
-- **作業終了通知**: `POST /api/v1/work-sessions/end`
-- **状態同期**: `GET /api/v1/work-sessions/status`
+- **作業開始通知**: `POST /v1/thinklet/work-sessions/start`
+- **作業終了通知**: `POST /v1/thinklet/work-sessions/end`
+- **状態同期**: `GET /v1/thinklet/work-sessions/status`
 - **エラーハンドリング**: 通信失敗時のローカル保存・後同期
 
 ## 3.3. リアルタイム処理最適化

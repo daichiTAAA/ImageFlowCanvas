@@ -20,6 +20,7 @@ from app.api import (
     inspection_masters,
     inspection_execution,
     mediamtx as mediamtx_api,
+    thinklet,
 )
 from app.services.execution_worker import execution_worker
 from app.database import init_db
@@ -93,15 +94,13 @@ app.include_router(health.router, prefix="/v1", tags=["health"])
 app.include_router(camera_stream.router, prefix="/v1", tags=["camera-stream"])
 app.include_router(websocket.router, prefix="/v1", tags=["websocket"])
 app.include_router(mediamtx_api.router, prefix="/v1/uplink", tags=["uplink"])
+app.include_router(thinklet.router, prefix="/v1/thinklet", tags=["thinklet"])
 app.include_router(auth.router, prefix="/v1/auth", tags=["authentication"])
 app.include_router(pipelines.router, prefix="/v1/pipelines", tags=["pipelines"])
 app.include_router(executions.router, prefix="/v1/executions", tags=["executions"])
 app.include_router(components.router, prefix="/v1/components", tags=["components"])
 app.include_router(files.router, prefix="/v1/files", tags=["files"])
-# Products API aligned with others: mount under /v1/products
 app.include_router(products.router, prefix="/v1/products", tags=["products"])
-# Mirror under /api/v1/products for KMP client default base URL
-app.include_router(products.router, prefix="/api/v1/products", tags=["products"])
 app.include_router(
     grpc_services.router, prefix="/v1/grpc-services", tags=["grpc-services"]
 )

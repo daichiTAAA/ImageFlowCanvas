@@ -1,11 +1,11 @@
 # BLEビーコン連携
 
-| 項目       | 内容                                  |
-| ---------- | ------------------------------------- |
-| 文書名     | BLEビーコン連携                       |
-| バージョン | 1.0                                   |
-| 作成日     | 2025-09-06                            |
-| 対象       | THINKLET（Fairy OS, Android互換）     |
+| 項目       | 内容                              |
+| ---------- | --------------------------------- |
+| 文書名     | BLEビーコン連携                   |
+| バージョン | 1.0                               |
+| 作成日     | 2025-09-06                        |
+| 対象       | THINKLET（Fairy OS, Android互換） |
 
 ---
 
@@ -52,7 +52,7 @@
 2) 指定ゾーンのビーコン識別子（例: Eddystone-UID/EID, iBeacon UUID/Major/Minor）を検出したら、RSSIと時間ヒステリシスで入室判定。
 3) 入室確定時:
    - 端末は即時に録画・配信・音声を停止（ローカル制御）。
-   - Backendに`privacy_suspend`（`/api/v1/uplink/control`）とテレメトリ（`/api/v1/uplink/sessions/{id}/telemetry`）を送信。
+   - Backendに`privacy_suspend`（`/v1/uplink/control`）とテレメトリ（`/v1/uplink/sessions/{id}/telemetry`）を送信。
    - サーバはセッション状態を`SUSPENDED(privacy)`へ遷移し、Ingest/Recorder/配信は保存・配信をブロック（監査ログのみ記録）。
 4) 退出判定（RSSIが下がる等）＋明示操作（ボタン/退出QR）で復帰二重確認→`privacy_resume`。
 
@@ -87,7 +87,7 @@
 - 権限: Android 12+ は `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT`、位置情報（正確なスキャン用）。
 - サービス: フォアグラウンドサービスで `BluetoothLeScanner` を起動、`ScanFilter` に iBeacon/Eddystone シグネチャを設定。
 - 判定: RSSI の移動平均＋ヒステリシスで入退室を安定化。
-- 通知: 入室時にローカル処理停止→`/api/v1/uplink/control`へ`privacy_suspend`、退出時に`privacy_resume`。テレメトリで監査記録。
+- 通知: 入室時にローカル処理停止→`/v1/uplink/control`へ`privacy_suspend`、退出時に`privacy_resume`。テレメトリで監査記録。
 
 擬似コード（概略）:
 ```kotlin
@@ -109,7 +109,7 @@ class PrivacyZoneService : Service() {
       val id = parseBeaconId(result) ?: return
       if (isWhitelisted(id) && enterDetected(result.rssi)) {
         localPrivacySuspend()               // 録画/配信/音声を即時停止
-        postControl("privacy_suspend")     // /api/v1/uplink/control
+        postControl("privacy_suspend")     // /v1/uplink/control
         postTelemetry(/* zone, rssi */)
       }
       if (exitDetected(result.rssi) && confirmUserOrExitQR()) {
@@ -188,5 +188,5 @@ class PrivacyZoneService : Service() {
 
 ## 10. 参考・関連ドキュメント
 - THINKLET仕様: `docs/9000_調査/0010_THINKLET/THINKLET資料.md`（Bluetooth 4.2/BLE 搭載）
-- API: `docs/0300_設計_アプローチ1/0304_API設計.md`（/api/v1/uplink/control, /telemetry, VMS再生制御）
+- API: `docs/0300_設計_アプローチ1/0304_API設計.md`（/v1/uplink/control, /telemetry, VMS再生制御）
 - システム方針: `docs/0300_設計_アプローチ1/0300_システム基本設計.md`（WHEP単一路インジェスト、RBAC、監査）

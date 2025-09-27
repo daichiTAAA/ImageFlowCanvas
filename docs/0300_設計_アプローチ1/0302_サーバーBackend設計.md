@@ -151,11 +151,11 @@ sequenceDiagram
 - 端末・サーバ双方で冪等に処理。`SUSPENDED(privacy)` 中は Ingest/Recorder/配信は破棄・非保存。
 
 ### 2.4.2. 制御エンドポイント（詳細はAPI設計参照）
-- `POST /api/v1/uplink/control`
+- `POST /v1/uplink/control`
   - `action`: `privacy_suspend` | `privacy_resume`
   - `session_id`, `zone_id`, `rssi`, `device_id`, `timestamp`
   - 認可: デバイス自身/管理者のみ。リクエストは監査に記録。
-- `POST /api/v1/uplink/sessions/{id}/telemetry`
+- `POST /v1/uplink/sessions/{id}/telemetry`
   - `event`: `privacy_enter` | `privacy_exit` | `beacon_lost` | `beacon_battery_low`
   - 付帯: `zone_id`, `beacon_id`, `vbatt`, `rssi` 等
 
@@ -322,7 +322,7 @@ Webブラウザ → WebSocket → Backend API → gRPC
 - ソース非依存の映像メタデータ管理（THINKLET/固定カメラ/端末アプリ）
 - インジェスト（WHEP/RTSP）セッション管理および制御連携（APIゲートウェイ）
 - サーバ録画（Remux/Segment）とオブジェクトストレージ保存（MinIO）
-- 検索・参照API（/api/v1/vms/*）と再生チケット発行
+- 検索・参照API（/v1/vms/*）と再生チケット発行
 - 監視・テレメトリ集約とダッシュボード
 - データ保持（オンプレ90日）とクラウド長期アーカイブ（91日以降）
 

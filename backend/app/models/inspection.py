@@ -21,7 +21,12 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
+from typing import TYPE_CHECKING
+
 from app.database import Base
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type hints only
+    from app.models.thinklet import ThinkletDevice
 
 
 class inspectionInstruction(Base):
@@ -121,7 +126,12 @@ class DeviceProcessMapping(Base):
     __tablename__ = "device_process_mappings"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    device_id = Column(String(255), unique=True, nullable=False)
+    device_id = Column(
+        String(128),
+        ForeignKey("thinklet_devices.device_identifier", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
     process_code = Column(
         String(100),
         ForeignKey("process_masters.process_code", ondelete="CASCADE"),
@@ -134,6 +144,13 @@ class DeviceProcessMapping(Base):
         "ProcessMaster",
         back_populates="device_mappings",
         lazy="joined",
+    )
+
+    thinklet_device = relationship(
+        "ThinkletDevice",
+        back_populates="process_mappings",
+        lazy="joined",
+        primaryjoin="ThinkletDevice.device_identifier==DeviceProcessMapping.device_id",
     )
 
     __table_args__ = (

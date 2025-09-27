@@ -1,9 +1,15 @@
-from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+import httpx
 import os
 import re
-import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
+from app.models.thinklet import ThinkletCommandEvent, ThinkletDevice, ThinkletWorkSession
 
 router = APIRouter()
 
@@ -28,6 +34,204 @@ def _playback_public_base() -> str:
     return os.getenv("MEDIAMTX_PLAYBACK_PUBLIC_BASE", "http://localhost:9996").rstrip("/")
 
 
+def _whep_base() -> str:
+    return os.getenv("MEDIAMTX_WHEP_BASE", "http://localhost:8889").rstrip("/")
+
+
+UTC = timezone.utc
+DEFAULT_SESSION_SPAN = timedelta(hours=4)
+EVENT_LOOKBACK = timedelta(minutes=5)
+EVENT_LOOKAHEAD = timedelta(minutes=2)
+
+
+def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+def _parse_timestamp(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _ensure_utc(value)
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=UTC)
+        except (ValueError, OverflowError):
+            return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        return _ensure_utc(parsed)
+    return None
+
+
+def _isoformat(dt: Optional[datetime]) -> Optional[str]:
+    ensured = _ensure_utc(dt)
+    if ensured is None:
+        return None
+    return ensured.isoformat().replace("+00:00", "Z")
+
+
+async def _attach_thinklet_metadata(
+    device_identifier: str,
+    segments: List[Dict[str, Any]],
+    db: AsyncSession,
+) -> None:
+    if not device_identifier or not segments:
+        return
+
+    device_stmt = select(ThinkletDevice).where(
+        ThinkletDevice.device_identifier == device_identifier
+    )
+    device_result = await db.execute(device_stmt)
+    device = device_result.scalar_one_or_none()
+    if device is None:
+        return
+
+    timestamps: List[Tuple[str, datetime]] = []
+    for seg in segments:
+        start_raw = seg.get("start")
+        parsed = _parse_timestamp(start_raw)
+        if parsed is None:
+            continue
+        timestamps.append((start_raw, parsed))
+
+    if not timestamps:
+        return
+
+    earliest = min(ts for _, ts in timestamps) - EVENT_LOOKBACK
+    latest = max(ts for _, ts in timestamps) + EVENT_LOOKAHEAD
+
+    sessions_stmt = (
+        select(ThinkletWorkSession)
+        .where(
+            ThinkletWorkSession.device_id == device.id,
+            ThinkletWorkSession.started_at <= latest,
+            or_(
+                ThinkletWorkSession.ended_at.is_(None),
+                ThinkletWorkSession.ended_at >= earliest,
+            ),
+        )
+        .order_by(ThinkletWorkSession.started_at.asc())
+    )
+    sessions_result = await db.execute(sessions_stmt)
+    sessions = sessions_result.scalars().all()
+
+    events_stmt = (
+        select(ThinkletCommandEvent)
+        .where(
+            ThinkletCommandEvent.device_id == device.id,
+            ThinkletCommandEvent.created_at >= earliest - EVENT_LOOKBACK,
+            ThinkletCommandEvent.created_at <= latest + EVENT_LOOKAHEAD,
+        )
+        .order_by(ThinkletCommandEvent.created_at.asc())
+    )
+    events_result = await db.execute(events_stmt)
+    events = events_result.scalars().all()
+
+    session_windows: List[Tuple[datetime, Optional[datetime], ThinkletWorkSession]] = []
+    for session in sessions:
+        start = _ensure_utc(session.started_at)
+        if start is None:
+            continue
+        end = _ensure_utc(session.ended_at)
+        if end is None:
+            end = start + DEFAULT_SESSION_SPAN
+        session_windows.append((start, end, session))
+
+    event_windows: List[Tuple[datetime, ThinkletCommandEvent]] = []
+    for event in events:
+        created = _ensure_utc(event.created_at)
+        if created is None:
+            continue
+        event_windows.append((created, event))
+
+    event_windows.sort(key=lambda item: item[0])
+
+    for raw_start, start_dt in timestamps:
+        matched_session: Optional[ThinkletWorkSession] = None
+        matched_session_start: Optional[datetime] = None
+        matched_session_end: Optional[datetime] = None
+        for window_start, window_end, session in session_windows:
+            if start_dt < window_start:
+                continue
+            if window_end is not None and start_dt > window_end:
+                continue
+            matched_session = session
+            matched_session_start = window_start
+            matched_session_end = window_end
+        matched_event: Optional[ThinkletCommandEvent] = None
+        matched_event_ts: Optional[datetime] = None
+        for event_time, event in event_windows:
+            if event_time > start_dt + EVENT_LOOKAHEAD:
+                break
+            if event_time < start_dt - EVENT_LOOKBACK:
+                continue
+            if matched_event_ts is None or event_time >= matched_event_ts:
+                matched_event = event
+                matched_event_ts = event_time
+
+        identifier = device.device_identifier or str(device.id)
+        metadata: Dict[str, Any] = {
+            "deviceId": identifier,
+            "deviceIdentifier": identifier,
+            "deviceUuid": str(device.id),
+            "deviceName": device.device_name,
+            "deviceLastState": device.last_state,
+            "deviceLastSeenAt": _isoformat(device.last_seen_at),
+        }
+
+        if matched_session is not None:
+            session_payload: Dict[str, Any] = {
+                "id": str(matched_session.id),
+                "status": matched_session.status,
+                "startedAt": _isoformat(matched_session_start),
+                "endedAt": _isoformat(matched_session.ended_at),
+                "startCommand": matched_session.start_command,
+                "startConfidence": matched_session.start_confidence,
+                "endCommand": matched_session.end_command,
+                "endConfidence": matched_session.end_confidence,
+            }
+            if matched_session.ended_at is None and matched_session_end is not None:
+                session_payload["coverageEnd"] = _isoformat(matched_session_end)
+            metadata["session"] = session_payload
+
+        if matched_event is not None:
+            metadata["lastEvent"] = {
+                "command": matched_event.command,
+                "normalizedCommand": matched_event.normalized_command,
+                "recognizedText": matched_event.recognized_text,
+                "confidence": matched_event.confidence,
+                "source": matched_event.source,
+                "timestamp": _isoformat(matched_event_ts),
+            }
+
+        for seg in segments:
+            if seg.get("start") == raw_start:
+                seg["thinklet"] = metadata
+                seg["thinkletToken"] = (
+                    f"{metadata.get('deviceId','')}|"
+                    f"{metadata.get('deviceName','')}|"
+                    f"{metadata.get('session', {}).get('id', '')}|"
+                    f"{metadata.get('lastEvent', {}).get('timestamp', '')}"
+                )
+                break
+
+    for seg in segments:
+        seg.setdefault("thinkletToken", "")
+
+
 @router.get("/streams", response_model=Dict[str, Any])
 async def list_uplink_streams(page: int = 0, items_per_page: int = 100):
     """List active uplink streams (paths that match uplink/<deviceId>)."""
@@ -46,6 +250,7 @@ async def list_uplink_streams(page: int = 0, items_per_page: int = 100):
     items = data.get("items", [])
     patt = re.compile(r"^(uplink/.+|uplink-.+|[a-f0-9]{16})$")
     hls_base = _mediamtx_playback_base().rstrip("/")
+    whep_base = _whep_base().rstrip("/")
 
     streams: List[Dict[str, Any]] = []
     for it in items:
@@ -62,16 +267,18 @@ async def list_uplink_streams(page: int = 0, items_per_page: int = 100):
             "readers": it.get("readers", 0),
             "publishers": it.get("publishers", 0),
             "hls_url": f"{hls_base}/{name}/index.m3u8",
+            "whep_url": f"{whep_base}/{name}/whep",
         })
 
     return {
         "items": streams,
         "total": len(streams),
         "hls_base": hls_base,
+        "whep_base": whep_base,
     }
 
 
-async def _read_recordings_payload(path: str) -> Dict[str, Any]:
+async def _read_recordings_payload(path: str, db: AsyncSession) -> Dict[str, Any]:
     if not path.startswith("uplink/"):
         raise HTTPException(status_code=404, detail="Path not found or no recordings")
     api = _mediamtx_base()
@@ -94,6 +301,10 @@ async def _read_recordings_payload(path: str) -> Dict[str, Any]:
     for s in segments:
         s["hls_url"] = f"{hls_base}/{path}/index.m3u8"
 
+    # Attach THINKLET metadata based on device identifier and timestamps
+    device_identifier = path.split("/", 1)[1] if "/" in path else path
+    await _attach_thinklet_metadata(device_identifier, segments, db)
+
     pb_priv = _playback_private_base()
     pb_pub = _playback_public_base()
     playback_items: List[Dict[str, Any]] = []
@@ -115,7 +326,10 @@ async def _read_recordings_payload(path: str) -> Dict[str, Any]:
         for s in segments:
             st = s.get("start")
             if st and st in by_start:
-                s["playback_url"] = by_start[st]["url"]
+                target = by_start[st]
+                s["playback_url"] = target.get("url")
+                target.setdefault("thinklet", s.get("thinklet"))
+                target.setdefault("thinkletToken", s.get("thinkletToken", ""))
 
     return {
         "path": path,
@@ -127,13 +341,17 @@ async def _read_recordings_payload(path: str) -> Dict[str, Any]:
 
 
 @router.get("/recordings/{path:path}", response_model=Dict[str, Any])
-async def get_recordings(path: str):
+async def get_recordings(path: str, db: AsyncSession = Depends(get_db)):
     """List recordings for a given uplink path."""
-    return await _read_recordings_payload(path)
+    return await _read_recordings_payload(path, db)
 
 
 @router.get("/recordings", response_model=Dict[str, Any])
-async def list_recordings_index(page: int = 0, items_per_page: int = 200):
+async def list_recordings_index(
+    page: int = 0,
+    items_per_page: int = 200,
+    db: AsyncSession = Depends(get_db),
+):
     """Return a catalog of recordings grouped by path/device."""
     api = _mediamtx_base()
     async with httpx.AsyncClient(timeout=5.0) as client:
@@ -174,6 +392,23 @@ async def list_recordings_index(page: int = 0, items_per_page: int = 200):
                 "segments": segments,
             }
         )
+
+    device_ids = {item["device_id"] for item in catalog if item.get("device_id")}
+    if device_ids:
+        device_stmt = select(ThinkletDevice).where(
+            ThinkletDevice.device_identifier.in_(device_ids)
+        )
+        device_result = await db.execute(device_stmt)
+        device_map = {
+            dev.device_identifier: dev for dev in device_result.scalars().all()
+        }
+        for entry in catalog:
+            identifier = entry.get("device_id")
+            device = device_map.get(identifier)
+            if device:
+                entry["device_name"] = device.device_name
+                entry["device_last_state"] = device.last_state
+                entry["device_last_seen_at"] = _isoformat(device.last_seen_at)
 
     return {
         "items": catalog,

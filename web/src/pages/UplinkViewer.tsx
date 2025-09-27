@@ -35,6 +35,44 @@ type StreamItem = {
   state: string;
   readers: number;
   publishers: number;
+  whep_url?: string;
+};
+
+type ThinkletSegmentMeta = {
+  deviceId?: string;
+  deviceIdentifier?: string;
+  deviceUuid?: string;
+  deviceName?: string;
+  deviceLastState?: string;
+  deviceLastSeenAt?: string;
+  session?: {
+    id?: string;
+    status?: string;
+    startedAt?: string;
+    endedAt?: string | null;
+    coverageEnd?: string | null;
+    startCommand?: string | null;
+    startConfidence?: number | null;
+    endCommand?: string | null;
+    endConfidence?: number | null;
+  } | null;
+  lastEvent?: {
+    command?: string | null;
+    normalizedCommand?: string | null;
+    recognizedText?: string | null;
+    confidence?: number | null;
+    source?: string | null;
+    timestamp?: string | null;
+  } | null;
+};
+
+type RecordingSegment = {
+  start: string;
+  duration?: number;
+  url?: string;
+  playback_url?: string;
+  thinklet?: ThinkletSegmentMeta | null;
+  thinkletToken?: string;
 };
 
 type RecordingIndexSegment = {
@@ -44,6 +82,9 @@ type RecordingIndexSegment = {
 type RecordingIndexItem = {
   path: string;
   device_id: string;
+  device_name?: string | null;
+  device_last_state?: string | null;
+  device_last_seen_at?: string | null;
   segment_count: number;
   latest_start?: string | null;
   earliest_start?: string | null;
@@ -58,6 +99,28 @@ type DeviceProcessLink = {
     process_code?: string;
     process_name?: string;
   } | null;
+};
+
+type DeviceStatusSummary = {
+  deviceId: string;
+  deviceUuid?: string | null;
+  deviceIdentifier?: string | null;
+  deviceName: string;
+  state?: string | null;
+  sessionId?: string | null;
+  batteryLevel?: number | null;
+  temperatureC?: number | null;
+  networkQuality?: string | null;
+  isStreaming: boolean;
+  lastSeenAt?: string | null;
+  processCode?: string | null;
+  processName?: string | null;
+};
+
+type DeviceOption = {
+  deviceId: string;
+  status: DeviceStatusSummary | null;
+  stream: StreamItem | null;
 };
 
 const API_PREFIX = "/api/uplink";
@@ -128,6 +191,30 @@ const areObjectArraysEqual = (prev: any[], next: any[], keys: string[]) => {
   return true;
 };
 
+const serializeDeviceStatuses = (items: DeviceStatusSummary[]) =>
+  items
+    .map((s) =>
+      [
+        s.deviceId ?? "",
+        s.deviceName ?? "",
+        s.deviceUuid ?? "",
+        s.state ?? "",
+        s.sessionId ?? "",
+        s.networkQuality ?? "",
+        s.isStreaming ? "1" : "0",
+        s.processCode ?? "",
+        s.processName ?? "",
+      ].join("|")
+    )
+    .sort()
+    .join("||");
+
+const areDeviceStatusListsEqual = (
+  prev: DeviceStatusSummary[] | undefined,
+  next: DeviceStatusSummary[] | undefined
+) =>
+  serializeDeviceStatuses(prev ?? []) === serializeDeviceStatuses(next ?? []);
+
 export default function UplinkViewer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -138,9 +225,14 @@ export default function UplinkViewer() {
 
   const [deviceId, setDeviceId] = useState("");
   const [streams, setStreams] = useState<StreamItem[]>([]);
-  const [deviceProcessLinks, setDeviceProcessLinks] =
-    useState<DeviceProcessLink[]>([]);
+  const [deviceProcessLinks, setDeviceProcessLinks] = useState<
+    DeviceProcessLink[]
+  >([]);
+  const [deviceStatuses, setDeviceStatuses] = useState<DeviceStatusSummary[]>(
+    []
+  );
   const streamsRef = useRef<StreamItem[]>([]);
+  const deviceStatusesRef = useRef<DeviceStatusSummary[]>([]);
   const [hlsError, setHlsError] = useState("");
   const [mode, setMode] = useState<"hls" | "whep">("whep");
   const [whepStatus, setWhepStatus] = useState("");
@@ -163,8 +255,8 @@ export default function UplinkViewer() {
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState("");
   const [recPath, setRecPath] = useState("");
-  const [recSegments, setRecSegments] = useState<any[]>([]);
-  const [recPlayback, setRecPlayback] = useState<any[]>([]);
+  const [recSegments, setRecSegments] = useState<RecordingSegment[]>([]);
+  const [recPlayback, setRecPlayback] = useState<RecordingSegment[]>([]);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const [rangeStartDt, setRangeStartDt] = useState<Date | null>(null);
@@ -197,8 +289,28 @@ export default function UplinkViewer() {
     streamsRef.current = streams;
   }, [streams]);
 
+  useEffect(() => {
+    deviceStatusesRef.current = deviceStatuses;
+  }, [deviceStatuses]);
+
+  const deviceStatusMap = useMemo(() => {
+    const map: Record<string, DeviceStatusSummary> = {};
+    deviceStatuses.forEach((status) => {
+      const keys = [
+        status?.deviceId,
+        status?.deviceIdentifier,
+        status?.deviceUuid,
+      ].filter((value): value is string => Boolean(value));
+      keys.forEach((key) => {
+        map[key] = status;
+      });
+    });
+    return map;
+  }, [deviceStatuses]);
+
   const deviceProcessMap = useMemo(() => {
-    const map: Record<string, { process_code: string; process_name?: string }> = {};
+    const map: Record<string, { process_code: string; process_name?: string }> =
+      {};
     deviceProcessLinks.forEach((link) => {
       if (!link?.device_id) return;
       map[link.device_id] = {
@@ -206,13 +318,104 @@ export default function UplinkViewer() {
         process_name: link.process?.process_name ?? undefined,
       };
     });
+    deviceStatuses.forEach((status) => {
+      if (!status?.processCode) return;
+      const keys = [
+        status.deviceId,
+        status.deviceIdentifier,
+        status.deviceUuid,
+      ].filter((value): value is string => Boolean(value));
+      keys.forEach((key) => {
+        map[key] = {
+          process_code: status.processCode!,
+          process_name: status.processName ?? undefined,
+        };
+      });
+    });
     return map;
-  }, [deviceProcessLinks]);
+  }, [deviceProcessLinks, deviceStatuses]);
+
+  const streamMap = useMemo(() => {
+    const map: Record<string, StreamItem> = {};
+    streams.forEach((stream) => {
+      if (!stream?.device_id) return;
+      map[stream.device_id] = stream;
+    });
+    return map;
+  }, [streams]);
+
+  const deviceOptions = useMemo(() => {
+    const options: DeviceOption[] = [];
+    const seen = new Set<string>();
+
+    deviceStatuses.forEach((status) => {
+      const key =
+        status?.deviceId ||
+        status?.deviceIdentifier ||
+        status?.deviceUuid ||
+        "";
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      options.push({
+        deviceId: key,
+        status,
+        stream: streamMap[key] ?? null,
+      });
+    });
+
+    streams.forEach((stream) => {
+      const key = stream?.device_id;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      options.push({
+        deviceId: key,
+        status: null,
+        stream,
+      });
+    });
+
+    options.sort((a, b) => {
+      const labelA = (a.status?.deviceName || a.deviceId || "").toLowerCase();
+      const labelB = (b.status?.deviceName || b.deviceId || "").toLowerCase();
+      if (labelA < labelB) return -1;
+      if (labelA > labelB) return 1;
+      return 0;
+    });
+
+    return options;
+  }, [deviceStatuses, streamMap]);
+
+  const selectedDeviceOption = useMemo(
+    () =>
+      deviceOptions.find((option) => option.deviceId === deviceId) ?? null,
+    [deviceId, deviceOptions]
+  );
+
+  useEffect(() => {
+    if (deviceId) return;
+    if (deviceOptions.length === 0) return;
+    const streamingPreferred = deviceOptions.find(
+      (option) => option.status?.isStreaming || option.stream
+    );
+    const next = streamingPreferred || deviceOptions[0];
+    if (next) {
+      setDeviceId(next.deviceId);
+    }
+  }, [deviceId, deviceOptions]);
 
   const selectedDeviceProcess = useMemo(() => {
     if (!deviceId) return null;
-    return deviceProcessMap[deviceId] || null;
-  }, [deviceId, deviceProcessMap]);
+    const fromMap = deviceProcessMap[deviceId];
+    if (fromMap) return fromMap;
+    const status = deviceStatusMap[deviceId];
+    if (status?.processCode) {
+      return {
+        process_code: status.processCode,
+        process_name: status.processName ?? undefined,
+      };
+    }
+    return null;
+  }, [deviceId, deviceProcessMap, deviceStatusMap]);
 
   const timestampFormatter = useMemo(
     () =>
@@ -331,22 +534,138 @@ export default function UplinkViewer() {
           setRecBaseOffsetSec(0);
           setRecSeekPos(0);
         }
-        const nextSegments = Array.isArray(data.segments) ? data.segments : [];
-        const nextPlayback = Array.isArray(data.playback) ? data.playback : [];
+        const segmentsRaw = Array.isArray(data.segments) ? data.segments : [];
+        const playbackRaw = Array.isArray(data.playback) ? data.playback : [];
+
+        const thinkletByStart = new Map<string, ThinkletSegmentMeta | null>();
+        const tokenByStart = new Map<string, string>();
+
+        const mappedSegments: RecordingSegment[] = segmentsRaw
+          .map((seg) => {
+            const rawStart = seg?.start;
+            const start =
+              typeof rawStart === "string"
+                ? rawStart
+                : rawStart != null
+                ? String(rawStart)
+                : "";
+            if (!start) return null;
+            const durationValue = seg?.duration;
+            const duration =
+              typeof durationValue === "number"
+                ? durationValue
+                : durationValue != null
+                ? Number(durationValue)
+                : undefined;
+            const thinklet =
+              (seg?.thinklet as ThinkletSegmentMeta | null) ?? null;
+            const tokenFromBackend =
+              typeof seg?.thinkletToken === "string"
+                ? seg.thinkletToken
+                : undefined;
+            const token = tokenFromBackend
+              ? tokenFromBackend
+              : thinklet
+              ? `${
+                  thinklet.deviceId ??
+                  thinklet.deviceIdentifier ??
+                  thinklet.deviceUuid ??
+                  ""
+                }|${thinklet.session?.id ?? ""}|${
+                  thinklet.lastEvent?.timestamp ?? ""
+                }`
+              : "";
+            thinkletByStart.set(start, thinklet);
+            tokenByStart.set(start, token);
+            return {
+              start,
+              duration,
+              url: typeof seg?.url === "string" ? seg.url : undefined,
+              playback_url:
+                typeof seg?.playback_url === "string"
+                  ? seg.playback_url
+                  : undefined,
+              thinklet,
+              thinkletToken: token,
+            } as RecordingSegment;
+          })
+          .filter(Boolean) as RecordingSegment[];
+
+        const mappedPlayback: RecordingSegment[] = playbackRaw
+          .map((seg) => {
+            const rawStart = seg?.start;
+            const start =
+              typeof rawStart === "string"
+                ? rawStart
+                : rawStart != null
+                ? String(rawStart)
+                : "";
+            if (!start) return null;
+            const durationValue = seg?.duration;
+            const duration =
+              typeof durationValue === "number"
+                ? durationValue
+                : durationValue != null
+                ? Number(durationValue)
+                : undefined;
+            const thinklet =
+              (seg?.thinklet as ThinkletSegmentMeta | null) ??
+              thinkletByStart.get(start) ??
+              null;
+            const tokenFromBackend =
+              typeof seg?.thinkletToken === "string"
+                ? seg.thinkletToken
+                : undefined;
+            const token = tokenFromBackend
+              ? tokenFromBackend
+              : tokenByStart.get(start) ??
+                (thinklet
+                  ? `${
+                      thinklet.deviceId ??
+                      thinklet.deviceIdentifier ??
+                      thinklet.deviceUuid ??
+                      ""
+                    }|${thinklet.session?.id ?? ""}|${
+                      thinklet.lastEvent?.timestamp ?? ""
+                    }`
+                  : "");
+            if (!tokenByStart.has(start)) {
+              tokenByStart.set(start, token);
+            }
+            if (!thinkletByStart.has(start)) {
+              thinkletByStart.set(start, thinklet);
+            }
+            return {
+              start,
+              duration,
+              url: typeof seg?.url === "string" ? seg.url : undefined,
+              playback_url: undefined,
+              thinklet,
+              thinkletToken: token,
+            } as RecordingSegment;
+          })
+          .filter(Boolean) as RecordingSegment[];
+
         setRecSegments((prev) =>
-          areObjectArraysEqual(prev, nextSegments, [
+          areObjectArraysEqual(prev, mappedSegments, [
             "start",
             "duration",
             "url",
             "playback_url",
+            "thinkletToken",
           ])
             ? prev
-            : nextSegments
+            : mappedSegments
         );
         setRecPlayback((prev) =>
-          areObjectArraysEqual(prev, nextPlayback, ["start", "duration", "url"])
+          areObjectArraysEqual(prev, mappedPlayback, [
+            "start",
+            "duration",
+            "url",
+            "thinkletToken",
+          ])
             ? prev
-            : nextPlayback
+            : mappedPlayback
         );
         lastLoadedPathRef.current = safePath;
       } catch (e: any) {
@@ -364,7 +683,9 @@ export default function UplinkViewer() {
 
   const fetchDeviceProcessLinks = useCallback(async () => {
     try {
-      const resp = await inspectionApi.listDeviceProcessLinks({ page_size: 300 });
+      const resp = await inspectionApi.listDeviceProcessLinks({
+        page_size: 300,
+      });
       const items: DeviceProcessLink[] = resp.items || [];
       setDeviceProcessLinks(items);
     } catch (e) {
@@ -379,13 +700,24 @@ export default function UplinkViewer() {
       if (!areStreamListsEqual(streamsRef.current, items)) {
         setStreams(items);
       }
-      if (!deviceId && items.length > 0) {
-        setDeviceId(items[0].device_id);
-      }
     } catch (e) {
       console.error("Failed to fetch streams", e);
     }
-  }, [deviceId]);
+  }, []);
+
+  const fetchDeviceStatuses = useCallback(async () => {
+    try {
+      const resp = await axios.get(`/api/thinklet/devices/status`);
+      const items: DeviceStatusSummary[] = Array.isArray(resp.data)
+        ? resp.data
+        : [];
+      if (!areDeviceStatusListsEqual(deviceStatusesRef.current, items)) {
+        setDeviceStatuses(items);
+      }
+    } catch (e) {
+      console.error("Failed to fetch device statuses", e);
+    }
+  }, []);
 
   const fetchRecordingIndex = useCallback(async () => {
     setRecordingIndexError("");
@@ -411,6 +743,9 @@ export default function UplinkViewer() {
           return {
             path,
             device_id: it.device_id || deriveDeviceId(path),
+            device_name: it.device_name ?? null,
+            device_last_state: it.device_last_state ?? null,
+            device_last_seen_at: it.device_last_seen_at ?? null,
             segment_count:
               typeof it.segment_count === "number"
                 ? it.segment_count
@@ -505,6 +840,12 @@ export default function UplinkViewer() {
   }, [fetchStreams]);
 
   useEffect(() => {
+    fetchDeviceStatuses();
+    const t = setInterval(fetchDeviceStatuses, 5000);
+    return () => clearInterval(t);
+  }, [fetchDeviceStatuses]);
+
+  useEffect(() => {
     fetchDeviceProcessLinks();
     const t = setInterval(fetchDeviceProcessLinks, 60000);
     return () => clearInterval(t);
@@ -519,8 +860,8 @@ export default function UplinkViewer() {
   useEffect(() => {
     if (recordingSelectionMode === "manual") return;
     if (!deviceId) return;
-    const s = streams.find((x) => x.device_id === deviceId);
-    const path = s ? s.path : `uplink/${deviceId}`;
+    const path = selectedDeviceOption?.stream?.path ??
+      (deviceId ? `uplink/${deviceId}` : "");
     if (!path) return;
     if (selectedRecordingPath === path) return;
     setRecordingSelectionMode("auto");
@@ -529,7 +870,7 @@ export default function UplinkViewer() {
     void loadRecordingPath(path, { resetSeek: false });
   }, [
     deviceId,
-    streams,
+    selectedDeviceOption,
     loadRecordingPath,
     recordingSelectionMode,
     selectedRecordingPath,
@@ -562,20 +903,42 @@ export default function UplinkViewer() {
     [recordingIndex, selectedRecordingPath]
   );
 
-  const displaySegments = useMemo(
-    () => (recPlayback.length > 0 ? recPlayback : recSegments) as any[],
+  const displaySegments = useMemo<RecordingSegment[]>(
+    () => (recPlayback.length > 0 ? recPlayback : recSegments),
     [recPlayback, recSegments]
   );
 
+  const sortedDeviceStatuses = useMemo(() => {
+    const clone = [...deviceStatuses];
+    clone.sort((a, b) => {
+    const aKey = (
+      a.deviceName ||
+      a.deviceId ||
+      a.deviceIdentifier ||
+      a.deviceUuid ||
+      ""
+    ).toLowerCase();
+    const bKey = (
+      b.deviceName ||
+      b.deviceId ||
+      b.deviceIdentifier ||
+      b.deviceUuid ||
+      ""
+    ).toLowerCase();
+      return aKey.localeCompare(bKey);
+    });
+    return clone;
+  }, [deviceStatuses]);
+
   const filteredSegments = useMemo(() => {
-    const base = Array.isArray(displaySegments) ? displaySegments : [];
+    const base = displaySegments;
     if (!rangeStartDt && !rangeEndDt) {
       return base;
     }
     const startMs = rangeStartDt ? rangeStartDt.getTime() : null;
     const endMs = rangeEndDt ? rangeEndDt.getTime() : null;
-    return base.filter((segment: any) => {
-      const raw = segment?.start;
+    return base.filter((segment) => {
+      const raw = segment.start;
       if (!raw) return false;
       const ms = new Date(raw).getTime();
       if (Number.isNaN(ms)) return false;
@@ -589,6 +952,11 @@ export default function UplinkViewer() {
     () => Boolean(rangeStartDt || rangeEndDt),
     [rangeStartDt, rangeEndDt]
   );
+
+  const activeStatus = useMemo(() => {
+    if (!deviceId) return null;
+    return deviceStatusMap[deviceId] || null;
+  }, [deviceId, deviceStatusMap]);
 
   const play = (hlsUrl: string) => {
     setHlsError("");
@@ -697,8 +1065,8 @@ export default function UplinkViewer() {
   };
 
   const buildUrlFromDevice = () => {
-    const s = streams.find((x) => x.device_id === deviceId);
-    if (s && s.hls_url) return s.hls_url;
+    const stream = selectedDeviceOption?.stream;
+    if (stream?.hls_url) return stream.hls_url;
     const host = window.location.hostname;
     const port = 8888; // fallback
     return `http://${host}:${port}/${
@@ -707,8 +1075,9 @@ export default function UplinkViewer() {
   };
 
   const buildWhepUrlFromDevice = () => {
-    const s = streams.find((x) => x.device_id === deviceId);
-    const path = s ? s.path : deviceId ? `uplink/${deviceId}` : "";
+    const stream = selectedDeviceOption?.stream;
+    if (stream?.whep_url) return stream.whep_url;
+    const path = stream?.path ?? (deviceId ? `uplink/${deviceId}` : "");
     if (!path) return "";
     const host = window.location.hostname;
     const port = 8889; // MediaMTX WebRTC HTTP port
@@ -855,6 +1224,125 @@ export default function UplinkViewer() {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box sx={{ p: 3 }}>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              カメラステータス
+            </Typography>
+            {sortedDeviceStatuses.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                ステータス情報がありません。
+              </Typography>
+            ) : (
+              <Box sx={{ overflowX: "auto" }}>
+                <Box
+                  component="table"
+                  sx={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    "& th, & td": {
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                      p: 1,
+                      textAlign: "left",
+                      verticalAlign: "top",
+                    },
+                    "& th": {
+                      fontWeight: 600,
+                      color: "text.secondary",
+                    },
+                  }}
+                >
+                  <Box component="thead">
+                    <Box component="tr">
+                      <Box component="th">デバイスID</Box>
+                      <Box component="th">デバイス名</Box>
+                      <Box component="th">ステータス</Box>
+                      <Box component="th">工程</Box>
+                      <Box component="th">ネットワーク</Box>
+                      <Box component="th">最終更新</Box>
+                    </Box>
+                  </Box>
+                  <Box component="tbody">
+                    {sortedDeviceStatuses.map((status) => {
+                      const statusLabel =
+                        status.state ||
+                        (status.isStreaming ? "配信中" : "停止");
+                      const statusColor = status.isStreaming
+                        ? "success.main"
+                        : status.state
+                        ? "text.primary"
+                        : "text.secondary";
+                      const processLabel = status.processCode
+                        ? status.processName
+                          ? `${status.processCode} (${status.processName})`
+                          : status.processCode
+                        : "未登録";
+                      return (
+                        <Box
+                          component="tr"
+                          key={
+                            status.deviceId ||
+                            status.deviceUuid ||
+                            status.deviceName
+                          }
+                          sx={{ "&:last-of-type td": { borderBottom: "none" } }}
+                        >
+                          <Box component="td">
+                            <Typography variant="body2">
+                              {status.deviceId ||
+                                status.deviceIdentifier ||
+                                "-"}
+                            </Typography>
+                            {status.deviceUuid && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                              >
+                                {status.deviceUuid}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Box component="td">{status.deviceName || "-"}</Box>
+                          <Box component="td">
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                color: statusColor,
+                                fontWeight: status.isStreaming
+                                  ? 600
+                                  : undefined,
+                              }}
+                            >
+                              {statusLabel}
+                            </Typography>
+                          </Box>
+                          <Box component="td">{processLabel}</Box>
+                          <Box component="td">
+                            {status.networkQuality || "-"}
+                            {typeof status.batteryLevel === "number" && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                              >
+                                バッテリー: {status.batteryLevel}%
+                              </Typography>
+                            )}
+                          </Box>
+                          <Box component="td">
+                            {formatTimestamp(status.lastSeenAt)}
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
         <Typography variant="h4" gutterBottom>
           カメラ ライブ/録画 再生
         </Typography>
@@ -883,13 +1371,26 @@ export default function UplinkViewer() {
                     setDeviceId(e.target.value);
                   }}
                 >
-                  {streams.map((s) => {
-                    const info = deviceProcessMap[s.device_id];
+                  {deviceOptions.map((option) => {
+                    const info = deviceProcessMap[option.deviceId];
+                    const label =
+                      option.status?.deviceName || option.deviceId || "-";
+                    const streaming =
+                      option.status?.isStreaming || Boolean(option.stream);
                     return (
-                      <MenuItem key={s.path} value={s.device_id}>
+                      <MenuItem key={option.deviceId} value={option.deviceId}>
                         <Box sx={{ display: "flex", flexDirection: "column" }}>
                           <Typography variant="body2" component="span">
-                            {s.device_id}
+                            {label}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color={
+                              streaming ? "success.main" : "text.disabled"
+                            }
+                            component="span"
+                          >
+                            {streaming ? "配信中" : "停止中"}
                           </Typography>
                           {info ? (
                             <Typography
@@ -927,6 +1428,41 @@ export default function UplinkViewer() {
                   <Typography variant="caption" color="text.secondary">
                     {selectedDeviceProcess.process_name}
                   </Typography>
+                )}
+                {activeStatus && (
+                  <>
+                    <Typography
+                      variant="caption"
+                      color={
+                        activeStatus.isStreaming
+                          ? "success.main"
+                          : "text.secondary"
+                      }
+                      display="block"
+                    >
+                      現在:{" "}
+                      {activeStatus.state ||
+                        (activeStatus.isStreaming ? "配信中" : "停止")}
+                    </Typography>
+                    {activeStatus.networkQuality && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                      >
+                        ネットワーク: {activeStatus.networkQuality}
+                      </Typography>
+                    )}
+                    {activeStatus.lastSeenAt && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                      >
+                        最終更新: {formatTimestamp(activeStatus.lastSeenAt)}
+                      </Typography>
+                    )}
+                  </>
                 )}
               </Box>
               <FormControl sx={{ minWidth: 140 }}>
@@ -1028,6 +1564,44 @@ export default function UplinkViewer() {
             <Typography variant="h6" gutterBottom>
               録画一覧と再生
             </Typography>
+            {activeRecordingMeta && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  選択中デバイス:{" "}
+                  {activeRecordingMeta.device_name ||
+                    activeRecordingMeta.device_id}
+                </Typography>
+                {activeRecordingMeta.device_last_state && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                  >
+                    状態: {activeRecordingMeta.device_last_state}
+                  </Typography>
+                )}
+                {activeRecordingMeta.device_last_seen_at && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                  >
+                    最終通信:{" "}
+                    {formatTimestamp(activeRecordingMeta.device_last_seen_at)}
+                  </Typography>
+                )}
+                {activeRecordingMeta.latest_start && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                  >
+                    最新録画:{" "}
+                    {formatTimestamp(activeRecordingMeta.latest_start)}
+                  </Typography>
+                )}
+              </Box>
+            )}
             <Box
               sx={{
                 display: "flex",
@@ -1095,6 +1669,10 @@ export default function UplinkViewer() {
                   filteredRecordingIndex.map((item) => {
                     const isActive = item.path === selectedRecordingPath;
                     const info = deviceProcessMap[item.device_id];
+                    const status = deviceStatusMap[item.device_id];
+                    const statusLabel = status
+                      ? status.state || (status.isStreaming ? "配信中" : "停止")
+                      : null;
                     return (
                       <Box
                         key={item.path}
@@ -1123,6 +1701,15 @@ export default function UplinkViewer() {
                         <Typography variant="subtitle2">
                           {item.device_id || deriveDeviceId(item.path)}
                         </Typography>
+                        {item.device_name && (
+                          <Typography
+                            variant="caption"
+                            sx={{ display: "block" }}
+                            color="text.secondary"
+                          >
+                            デバイス名: {item.device_name}
+                          </Typography>
+                        )}
                         {info && (
                           <Typography
                             variant="caption"
@@ -1131,6 +1718,47 @@ export default function UplinkViewer() {
                           >
                             工程: {info.process_code}
                             {info.process_name ? ` (${info.process_name})` : ""}
+                          </Typography>
+                        )}
+                        {statusLabel && (
+                          <Typography
+                            variant="caption"
+                            sx={{ display: "block" }}
+                            color={
+                              status?.isStreaming
+                                ? "success.main"
+                                : "text.secondary"
+                            }
+                          >
+                            現在: {statusLabel}
+                          </Typography>
+                        )}
+                        {item.device_last_state && !statusLabel && (
+                          <Typography
+                            variant="caption"
+                            sx={{ display: "block" }}
+                            color="text.secondary"
+                          >
+                            状態: {item.device_last_state}
+                          </Typography>
+                        )}
+                        {status?.lastSeenAt && (
+                          <Typography
+                            variant="caption"
+                            sx={{ display: "block" }}
+                            color="text.secondary"
+                          >
+                            最終更新: {formatTimestamp(status.lastSeenAt)}
+                          </Typography>
+                        )}
+                        {item.device_last_seen_at && (
+                          <Typography
+                            variant="caption"
+                            sx={{ display: "block" }}
+                            color="text.secondary"
+                          >
+                            最終通信:{" "}
+                            {formatTimestamp(item.device_last_seen_at)}
                           </Typography>
                         )}
                         <Typography variant="caption" sx={{ display: "block" }}>
@@ -1397,22 +2025,21 @@ export default function UplinkViewer() {
                         >
                           操作
                         </Typography>
-                        {filteredSegments.map((it: any) => {
-                          const start = it.start as string;
+                        {filteredSegments.map((segment) => {
+                          const start = segment.start;
                           const formattedStart = formatTimestamp(start);
-                          const dur = (it as any).duration as
-                            | number
-                            | undefined;
-                          let url = (it as any).url as string | undefined;
-                          if (!url && (it as any).playback_url)
-                            url = (it as any).playback_url as string;
+                          const dur = segment.duration;
+                          let url = segment.url;
+                          if (!url && segment.playback_url)
+                            url = segment.playback_url;
                           if (!url && start) {
                             const loc = window.location;
                             const base = `${loc.protocol}//${loc.hostname}:9996`;
                             const params = new URLSearchParams();
                             params.set("path", recPath);
                             params.set("start", start);
-                            if (dur) params.set("duration", String(dur));
+                            if (dur != null)
+                              params.set("duration", String(dur));
                             if (RECORDING_PLAYBACK_FORMAT) {
                               params.set("format", RECORDING_PLAYBACK_FORMAT);
                             }
@@ -1426,19 +2053,169 @@ export default function UplinkViewer() {
                               (url.includes("?") ? "&" : "?") +
                               `format=${RECORDING_PLAYBACK_FORMAT}`;
                           }
+                          const thinklet = segment.thinklet;
+                          const identifierText =
+                            thinklet?.deviceId || thinklet?.deviceIdentifier;
+                          const deviceLine = thinklet?.deviceName
+                            ? `${thinklet.deviceName}${
+                                identifierText ? ` (${identifierText})` : ""
+                              }`
+                            : identifierText ??
+                              thinklet?.deviceUuid ??
+                              null;
+                          const session = thinklet?.session ?? null;
+                          const lastEvent = thinklet?.lastEvent ?? null;
+                          const sessionLabel = session?.id
+                            ? session.id.length > 8
+                              ? `${session.id.slice(0, 8)}…`
+                              : session.id
+                            : undefined;
+                          const confidencePercent =
+                            typeof lastEvent?.confidence === "number"
+                              ? Math.round(lastEvent.confidence * 100)
+                              : null;
+                          const startConfidencePercent =
+                            typeof session?.startConfidence === "number"
+                              ? Math.round(session.startConfidence * 100)
+                              : null;
+                          const endConfidencePercent =
+                            typeof session?.endConfidence === "number"
+                              ? Math.round(session.endConfidence * 100)
+                              : null;
+                          const sessionEndLabel = session?.endedAt
+                            ? ` ／ 終了 ${formatTimestamp(session.endedAt)}`
+                            : session?.coverageEnd
+                            ? ` ／ 推定終了 ${formatTimestamp(
+                                session.coverageEnd
+                              )}`
+                            : "";
                           return (
                             <React.Fragment key={start}>
-                              <Typography
-                                variant="body2"
-                                title={start || undefined}
-                              >
-                                {formattedStart}
-                              </Typography>
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  title={start || undefined}
+                                >
+                                  {formattedStart}
+                                </Typography>
+                                {deviceLine && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    デバイス: {deviceLine}
+                                  </Typography>
+                                )}
+                                {thinklet?.deviceUuid &&
+                                  thinklet.deviceUuid !== identifierText && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      display="block"
+                                    >
+                                      UUID: {thinklet.deviceUuid}
+                                    </Typography>
+                                  )}
+                                {thinklet?.deviceLastState && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    最終状態: {thinklet.deviceLastState}
+                                    {thinklet.deviceLastSeenAt
+                                      ? `（${formatTimestamp(
+                                          thinklet.deviceLastSeenAt
+                                        )}）`
+                                      : ""}
+                                  </Typography>
+                                )}
+                                {session && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    セッション: {sessionLabel ?? "-"}
+                                    {session.status
+                                      ? ` ／ ${session.status}`
+                                      : ""}
+                                  </Typography>
+                                )}
+                                {session?.startedAt && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    開始 {formatTimestamp(session.startedAt)}
+                                    {sessionEndLabel}
+                                  </Typography>
+                                )}
+                                {session?.startCommand && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    開始コマンド: {session.startCommand}
+                                    {startConfidencePercent != null
+                                      ? `（信頼度 ${startConfidencePercent}%）`
+                                      : ""}
+                                  </Typography>
+                                )}
+                                {session?.endCommand && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    終了コマンド: {session.endCommand}
+                                    {endConfidencePercent != null
+                                      ? `（信頼度 ${endConfidencePercent}%）`
+                                      : ""}
+                                  </Typography>
+                                )}
+                                {lastEvent?.command && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    最終コマンド: {lastEvent.command}
+                                    {confidencePercent != null
+                                      ? `（信頼度 ${confidencePercent}%）`
+                                      : ""}
+                                  </Typography>
+                                )}
+                                {lastEvent?.recognizedText && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    音声: 「{lastEvent.recognizedText}」
+                                  </Typography>
+                                )}
+                                {lastEvent?.timestamp && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    display="block"
+                                  >
+                                    コマンド時刻:{" "}
+                                    {formatTimestamp(lastEvent.timestamp)}
+                                  </Typography>
+                                )}
+                              </Box>
                               <Typography
                                 variant="body2"
                                 sx={{ textAlign: "right" }}
                               >
-                                {dur ? `${dur.toFixed(1)}s` : "-"}
+                                {typeof dur === "number"
+                                  ? `${dur.toFixed(1)}s`
+                                  : "-"}
                               </Typography>
                               <Box
                                 sx={{
@@ -1459,7 +2236,7 @@ export default function UplinkViewer() {
                                       v.src = url;
                                       await v.play();
                                       setRecClipStartIso(start || null);
-                                      setRecClipDuration((dur ?? null) as any);
+                                      setRecClipDuration(dur ?? null);
                                       setRecBaseOffsetSec(0);
                                       setRecSeekPos(0);
                                     } catch (e) {
