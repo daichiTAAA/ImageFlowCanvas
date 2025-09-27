@@ -15,7 +15,7 @@ class NetworkDiagnosticsTest {
         assertEquals("http://192.168.0.5:8000/v1", normalized1)
         assertEquals(null, error1)
         
-        // Test URL with existing /api/v1
+        // Test URL with existing /v1
         val (normalized2, error2) = UrlUtils.validateAndNormalizeBaseUrl("http://10.0.2.2:8000/v1")
         assertEquals("http://10.0.2.2:8000/v1", normalized2)
         assertEquals(null, error2)

@@ -864,7 +864,7 @@ adb logcat | grep -i imageflow
 - UI: `com.imageflow.kmp.ui.placeholder.RootUI`
 
 バックエンドとの接続はプロジェクト全体の設計（docs/0300_設計_アプローチ1）に準拠します。
-- 認証・設定: `POST /api/v1/kmp/devices/register`, `POST /api/v1/kmp/auth/login`, `GET/PUT /api/v1/kmp/config`
+- 認証・設定: `POST /v1/kmp/devices/register`, `POST /v1/kmp/auth/login`, `GET/PUT /v1/kmp/config`
 - リアルタイム通知: `ws://.../ws/system-status`, `ws://.../ws/camera-stream` ほか
 - 高速処理: gRPC 直接呼び出し（フォールバックに Kafka）
 

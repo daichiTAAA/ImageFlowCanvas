@@ -70,4 +70,16 @@ dependencies {
     // Stream WebRTC SDK (brings org.webrtc transitively) + OkHttp for WHIP signaling
     implementation("io.getstream:stream-webrtc-android:1.3.8")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Coroutines & lifecycle helpers for async control/state flows
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+
+    // JSON support for backend payloads
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // THINKLET audio SDKs (local AARs)
+    implementation(files("libs/sdk-audio-0.1.6.aar"))
+    implementation(files("libs/sdk-utils-1.0.1.aar"))
 }

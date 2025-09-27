@@ -63,6 +63,29 @@ adb shell am broadcast \
 - `autoStart`: true の場合、アプリ起動時に自動配信を開始します。
 - `autoResume`: true の場合、内部ロジック（今後拡張予定）で停止後に再開を試みます。
 
+### デバイス名（deviceName）の指定
+
+アプリは初回起動時、端末の `Settings.Secure.ANDROID_ID` を SHA-256 でハッシュし、
+
+1. **トーン語彙**（例: ブライト / クリア / ディープ / スカイ …）
+2. **ベースカラー語彙**（例: レッド / グリーン / ターコイズ / ラベンダー …）
+3. **サフィックス語彙**（例: ゼロ / ワン / アルファ / シグマ …）
+
+の 3 リストからインデックスを選び、`ブライトブルーゼロ` のような 256 × 32 × 16 通りの組み合わせで端末名を生成します。語彙は音声認識しやすいカタカナのみで構成しており、従来あった「チャ」のような誤認識しやすい語は除外しています。同じ端末なら常に同じ名前が割り当てられ、WHIP パス（Android ID）とバックエンドの `device_identifier` の両方で再利用されます。
+
+任意の名称を指定したい場合は、設定ブロードキャストで `deviceName` を明示的に指定してください。指定後は再起動してもハッシュ生成ロジックに戻りません。
+
+```bash
+adb shell am broadcast \
+  -a com.imageflow.thinklet.SET_CONFIG \
+  --es deviceName "KOBALT-01" \
+  --ez autoStart true
+```
+
+- 指定した文字列はそのまま `AppConfig.setDeviceName()` に保存され、以降は再起動しても上書きされません。
+- 再度自動割り当てに戻したい場合は、同じブロードキャストで空文字を送るか、`adb shell pm clear com.imageflow.thinklet.app` でアプリデータをリセットしてください（他の設定も初期化されます）。
+- ハッシュ生成で利用している語彙一覧は `AppConfig.kt` の `toneWords` / `baseWords` / `suffixWords` に定義してあります。音声認識向けの別名を追加したい場合は `VoiceCommandProcessor.DEVICE_ALIASES` に語彙を加えてください。
+
 ## THINKLET起動時の自動立ち上げ
 
 THINKLET Launcher が読み込む `key_config.json` に `launch-app` アクションを設定すると、端末起動直後にキーイベントが入ったタイミングで `thinkletApp` を自動起動できます。以下の手順で設定します。
